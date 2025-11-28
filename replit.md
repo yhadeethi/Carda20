@@ -1,124 +1,84 @@
-# Carda 2.0 - Contact Scanner & AI Intel Assistant
+# Carda 2.0 - Lean Contact Scanner
 
 ## Overview
-Carda 2.0 is a mobile-first contact scanner and AI-powered company intelligence assistant. Users can scan business cards or paste email signatures to extract contact information, then receive AI-generated company insights including snapshots, recent news, and personalized talking points.
+Carda 2.0 is a mobile-first business card scanner with AI-powered company intelligence. Users can scan business cards or paste email signatures to extract contact information, then generate AI-powered company insights.
 
 ## Current State
-- **Status**: MVP Complete
-- **Stack**: React SPA (frontend) + Express.js (backend) + PostgreSQL (database)
-- **AI**: OpenAI via Replit AI Integrations (no API key required)
+- **Status**: MVP Complete (OCR requires API key)
+- **Stack**: React SPA (frontend) + Express.js (backend)
+- **OCR**: OCR.space API (modular, swappable)
+- **Parsing**: Deterministic regex/heuristics (no AI)
+- **Intel**: OpenAI via Replit AI Integrations
+
+## Core Features
+1. **Business Card OCR** - Upload/scan card images, extract text via OCR.space
+2. **Contact Parsing** - Deterministic extraction of name, title, company, email, phone, website, LinkedIn
+3. **Editable Results** - Review and edit extracted fields before saving
+4. **vCard Export** - Download contact as .vcf file
+5. **Company Intel** - AI-generated company snapshots and talking points
 
 ## Project Structure
 
 ### Frontend (`/client/src/`)
-- `App.tsx` - Main app with routing and providers
-- `pages/`
-  - `auth-page.tsx` - Login/register with two-column layout
-  - `home-page.tsx` - Main app with bottom tab navigation
-  - `public-profile-page.tsx` - Public profile view for QR code links
-- `components/`
-  - `scan-tab.tsx` - Scan Card & Paste Text modes with contact extraction
-  - `my-card-tab.tsx` - Profile editing & QR code sharing
-  - `contact-result-card.tsx` - Displays parsed/saved contact info
-  - `company-intel-card.tsx` - AI-generated company intel display
-  - `recent-contacts-list.tsx` - List of recent contacts with details
-- `hooks/`
-  - `use-auth.tsx` - Authentication context and mutations
-  - `use-theme.tsx` - Dark/light theme toggle
-- `lib/`
-  - `protected-route.tsx` - Route protection for authenticated pages
-  - `queryClient.ts` - React Query configuration
+- `App.tsx` - Main app with routing and theme provider
+- `pages/home-page.tsx` - Main scanner page
+- `components/scan-tab.tsx` - Scan/paste modes, contact display, edit, vCard
+- `components/company-intel-card.tsx` - AI-generated intel display
+- `hooks/use-theme.tsx` - Dark/light theme toggle
 
 ### Backend (`/server/`)
 - `index.ts` - Express server entry point
-- `routes.ts` - All API endpoints
-- `auth.ts` - Passport.js authentication setup
-- `storage.ts` - Database storage layer (Drizzle ORM)
-- `db.ts` - PostgreSQL connection
-- `intelService.ts` - OpenAI-powered contact parsing & company intel
+- `routes.ts` - API endpoints (all public, no auth required)
+- `ocrService.ts` - Modular OCR service (OCR.space provider)
+- `parseService.ts` - Deterministic contact parser
+- `intelService.ts` - OpenAI-powered company intel generation
 
-### Shared (`/shared/`)
-- `schema.ts` - Drizzle schemas, Zod validation, TypeScript types
+## API Endpoints (All Public)
 
-## Key Features
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/scan` | POST | Upload image for OCR + parsing |
+| `/api/parse` | POST | Parse contact from pasted text |
+| `/api/vcard` | POST | Generate vCard from contact data |
+| `/api/intel` | POST | Generate AI company intelligence |
 
-### Authentication
-- Email/password registration and login
-- Session-based auth with PostgreSQL session store
-- Auto-generated public profile slug on registration
+## Architecture
 
-### Scan Tab
-- **Scan Card Mode**: Upload business card photo → OCR parsing via OpenAI Vision
-- **Paste Text Mode**: Paste email signature → AI text parsing
-- Contact preview with save functionality
-- Automatic company intel generation after save
+### Modular OCR (server/ocrService.ts)
+```typescript
+interface OCRProvider {
+  name: string;
+  extractText(imageBase64: string): Promise<OCRResult>;
+}
+```
+Currently implements OCR.space. To swap providers:
+1. Create new class implementing `OCRProvider`
+2. Update `initializeOCR()` to use new provider
 
-### My Card Tab
-- Profile editing (name, company, title, contact info, industry, focus topics)
-- QR code generation for public profile URL
-- vCard export for user's own card
-- Public profile link copy/share
-
-### Company Intel
-- AI-generated company snapshots (industry, size, HQ, key products)
-- Recent news with summaries
-- Personalized talking points based on user's industry, location, and focus topics
-- 24-hour intel caching per company
-
-### Public Profiles
-- `/u/:slug` - Public profile page accessible without login
-- vCard download for contact saving
-
-## API Endpoints
-
-### Auth
-- `POST /api/register` - Register new user
-- `POST /api/login` - Login
-- `POST /api/logout` - Logout
-- `GET /api/user` - Get current user
-
-### Profile
-- `GET /api/profile` - Get user profile (auth required)
-- `POST /api/profile` - Update profile (auth required)
-- `GET /api/profile/vcard` - Download user's vCard
-
-### Public Profile
-- `GET /api/public_profile/:slug` - Get public profile
-- `GET /api/public_profile/:slug/vcard` - Download public vCard
-
-### Contacts
-- `POST /api/scan_contact` - OCR scan business card image
-- `POST /api/extract_contact_from_text` - Parse contact from text
-- `POST /api/contacts` - Save contact
-- `GET /api/contacts/recent` - Get recent contacts (last 10)
-- `GET /api/contacts/:id` - Get contact details
-- `GET /api/contacts/:id/vcard` - Download contact vCard
-
-### Intel
-- `POST /api/company_intel` - Generate/fetch company intel
-- `GET /api/contacts/:id/intel` - Get intel for contact's company
-
-## Database Schema
-
-### Tables
-- `users` - User accounts and profile data
-- `contacts` - Saved contacts linked to users
-- `companies` - Company records for intel caching
-- `company_intel` - Cached AI-generated intel (JSON)
+### Deterministic Parsing (server/parseService.ts)
+Uses regex patterns and heuristics:
+- Email: Standard email regex
+- Phone: Multiple formats, output formatted consistently
+- Website: URL detection excluding LinkedIn
+- LinkedIn: LinkedIn profile URL detection
+- Name: Identifies proper names from line structure
+- Title: Matches against common job title keywords
+- Company: Matches company suffixes (Inc, LLC, Corp, etc.)
 
 ## Environment Variables
-- `DATABASE_URL` - PostgreSQL connection string
-- `SESSION_SECRET` - Express session secret
-- `AI_INTEGRATIONS_OPENAI_BASE_URL` - OpenAI API base URL (auto-configured)
-- `AI_INTEGRATIONS_OPENAI_API_KEY` - OpenAI API key (auto-configured)
 
-## Design System
-- Apple HIG inspired with glassmorphism
-- Mobile-first, responsive layout
-- Bottom tab navigation (iOS style)
-- System font stack for native feel
-- Dark mode support
+### Required for OCR
+- `OCR_SPACE_API_KEY` - Get free key at https://ocr.space/ocrapi
+
+### Auto-configured (Replit AI Integrations)
+- `AI_INTEGRATIONS_OPENAI_BASE_URL`
+- `AI_INTEGRATIONS_OPENAI_API_KEY`
 
 ## Running the App
 - `npm run dev` - Start development server (port 5000)
-- `npm run db:push` - Push schema changes to database
+
+## Design
+- Mobile-first, responsive layout
+- Glassmorphism card design
+- System font stack for native feel
+- Dark mode support
