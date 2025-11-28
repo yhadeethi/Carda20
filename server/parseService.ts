@@ -1,4 +1,12 @@
-import { ParsedContact } from "./types";
+export interface ParsedContact {
+  fullName?: string;
+  jobTitle?: string;
+  companyName?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  linkedinUrl?: string;
+}
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
 

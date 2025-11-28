@@ -1,6 +1,15 @@
-import { OCRProvider, OCRResult } from "./types";
+export interface OCRResult {
+  rawText: string;
+  confidence?: number;
+  error?: string;
+}
 
-export class OCRSpaceProvider implements OCRProvider {
+interface OCRProvider {
+  name: string;
+  extractText(imageBase64: string): Promise<OCRResult>;
+}
+
+class OCRSpaceProvider implements OCRProvider {
   name = "ocrspace";
   private apiKey: string;
   private apiUrl = "https://api.ocr.space/parse/image";
@@ -68,4 +77,28 @@ export class OCRSpaceProvider implements OCRProvider {
       };
     }
   }
+}
+
+let currentProvider: OCRProvider | null = null;
+
+export function initializeOCR(): void {
+  const ocrSpaceApiKey = process.env.OCR_SPACE_API_KEY;
+  
+  if (ocrSpaceApiKey) {
+    currentProvider = new OCRSpaceProvider(ocrSpaceApiKey);
+    console.log("OCR initialized with OCR.space provider");
+  } else {
+    console.warn("OCR_SPACE_API_KEY not set - OCR functionality will be unavailable");
+  }
+}
+
+export async function extractTextFromImage(imageBase64: string): Promise<OCRResult> {
+  if (!currentProvider) {
+    return {
+      rawText: "",
+      error: "OCR provider not configured. Please set OCR_SPACE_API_KEY.",
+    };
+  }
+  
+  return currentProvider.extractText(imageBase64);
 }

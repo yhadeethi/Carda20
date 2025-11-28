@@ -25,6 +25,7 @@ export interface IStorage {
   getContactsByUserId(userId: number, limit?: number): Promise<Contact[]>;
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: number, updates: Partial<Contact>): Promise<Contact | undefined>;
+  findDuplicateContact(userId: number, email: string, companyName: string): Promise<Contact | undefined>;
   
   getCompanyByDomain(domain: string): Promise<Company | undefined>;
   getCompanyById(id: number): Promise<Company | undefined>;
@@ -108,6 +109,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(contacts.id, id))
       .returning();
     return contact || undefined;
+  }
+
+  async findDuplicateContact(userId: number, email: string, companyName: string): Promise<Contact | undefined> {
+    if (!email && !companyName) {
+      return undefined;
+    }
+
+    if (email) {
+      const [contact] = await db
+        .select()
+        .from(contacts)
+        .where(and(
+          eq(contacts.userId, userId),
+          eq(contacts.email, email)
+        ))
+        .limit(1);
+      
+      if (contact) return contact;
+    }
+
+    return undefined;
   }
 
   async getCompanyByDomain(domain: string): Promise<Company | undefined> {
