@@ -10,8 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompanyIntelCard } from "@/components/company-intel-card";
 import { CompanyIntelData } from "@shared/schema";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, AlertTriangle, User, Building, Briefcase, Mail, Phone, Globe, Linkedin } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, Linkedin } from "lucide-react";
 
 type ScanMode = "scan" | "paste";
 
@@ -47,7 +46,6 @@ export function ScanTab() {
   
   const [companyIntel, setCompanyIntel] = useState<CompanyIntelData | null>(null);
   const [intelError, setIntelError] = useState<string | null>(null);
-  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -100,7 +98,6 @@ export function ScanTab() {
         title: "Card scanned",
         description: "Contact information extracted successfully",
       });
-      checkDuplicate(data.contact);
     },
     onError: (error: Error) => {
       toast({
@@ -124,7 +121,6 @@ export function ScanTab() {
         title: "Text parsed",
         description: "Contact information extracted successfully",
       });
-      checkDuplicate(data.contact);
     },
     onError: (error: Error) => {
       toast({
@@ -132,23 +128,6 @@ export function ScanTab() {
         description: error.message,
         variant: "destructive",
       });
-    },
-  });
-
-  const duplicateCheckMutation = useMutation({
-    mutationFn: async (contact: ParsedContact) => {
-      const res = await apiRequest("POST", "/api/check_duplicate", {
-        email: contact.email,
-        companyName: contact.companyName,
-      });
-      return res.json() as Promise<{ isDuplicate: boolean; existingContactId?: number }>;
-    },
-    onSuccess: (data) => {
-      if (data.isDuplicate) {
-        setDuplicateWarning("A contact with this email already exists in your collection");
-      } else {
-        setDuplicateWarning(null);
-      }
     },
   });
 
@@ -170,12 +149,6 @@ export function ScanTab() {
       setCompanyIntel(null);
     },
   });
-
-  const checkDuplicate = (contact: ParsedContact) => {
-    if (contact.email || contact.companyName) {
-      duplicateCheckMutation.mutate(contact);
-    }
-  };
 
   const handleScanCard = () => {
     if (selectedFile) {
@@ -244,7 +217,6 @@ export function ScanTab() {
     setRawText(null);
     setCompanyIntel(null);
     setIntelError(null);
-    setDuplicateWarning(null);
     setPastedText("");
     clearImage();
     setIsEditing(false);
@@ -252,7 +224,7 @@ export function ScanTab() {
 
   const isProcessing = scanCardMutation.isPending || parseTextMutation.isPending;
 
-  const currentContact = isEditing ? editedContact : contact;
+  const currentContact = editedContact;
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
@@ -389,12 +361,6 @@ export function ScanTab() {
                   {isEditing ? "Done" : "Edit"}
                 </Button>
               </div>
-              {duplicateWarning && (
-                <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 mt-2">
-                  <AlertTriangle className="w-4 h-4" />
-                  {duplicateWarning}
-                </div>
-              )}
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing ? (

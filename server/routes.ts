@@ -1,12 +1,9 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { storage } from "./storage";
-import { setupAuth, requireAuth } from "./auth";
 import { extractTextFromImage, initializeOCR } from "./ocrService";
-import { parseContact, normalizeForDuplicateCheck, ParsedContact } from "./parseService";
-import { getOrCreateCompanyIntel, IntelContext } from "./intelService";
-import { updateProfileSchema, User } from "@shared/schema";
+import { parseContact, ParsedContact } from "./parseService";
+import { getOrCreateCompanyIntel } from "./intelService";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -61,38 +58,8 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   initializeOCR();
-  setupAuth(app);
 
-  app.get("/api/profile", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const user = req.user as User;
-      const { password: _, ...profile } = user;
-      res.json(profile);
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-      res.status(500).send("Failed to fetch profile");
-    }
-  });
-
-  app.post("/api/profile", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const user = req.user as User;
-      const validatedData = updateProfileSchema.parse(req.body);
-      
-      const updated = await storage.updateUser(user.id, validatedData);
-      if (!updated) {
-        return res.status(404).send("User not found");
-      }
-      
-      const { password: _, ...profile } = updated;
-      res.json(profile);
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      res.status(500).send("Failed to update profile");
-    }
-  });
-
-  app.post("/api/scan", requireAuth, upload.single("image"), async (req: Request, res: Response) => {
+  app.post("/api/scan", upload.single("image"), async (req: Request, res: Response) => {
     try {
       const file = req.file;
       if (!file) {
@@ -118,7 +85,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/parse", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/parse", async (req: Request, res: Response) => {
     try {
       const { text } = req.body;
       if (!text || typeof text !== "string") {
@@ -136,35 +103,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/check_duplicate", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const user = req.user as User;
-      const { email, companyName } = req.body;
-
-      if (!email && !companyName) {
-        return res.json({ isDuplicate: false });
-      }
-
-      const normalizedEmail = normalizeForDuplicateCheck(email);
-      const normalizedCompany = normalizeForDuplicateCheck(companyName);
-
-      const existingContact = await storage.findDuplicateContact(
-        user.id,
-        normalizedEmail,
-        normalizedCompany
-      );
-
-      res.json({
-        isDuplicate: !!existingContact,
-        existingContactId: existingContact?.id,
-      });
-    } catch (error) {
-      console.error("Error checking duplicate:", error);
-      res.status(500).send("Failed to check duplicate");
-    }
-  });
-
-  app.post("/api/vcard", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/vcard", async (req: Request, res: Response) => {
     try {
       const contact: ParsedContact = req.body;
       const vcard = generateVCard(contact);
@@ -179,9 +118,8 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/intel", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/intel", async (req: Request, res: Response) => {
     try {
-      const user = req.user as User;
       const { companyName, email, website } = req.body;
 
       if (!companyName && !email && !website) {
@@ -190,17 +128,10 @@ export async function registerRoutes(
 
       const companyDomain = email || website;
 
-      const userContext: IntelContext = {
-        userIndustry: user.industry || undefined,
-        userCountry: user.country || undefined,
-        userCity: user.city || undefined,
-        userFocusTopics: user.focusTopics || undefined,
-      };
-
       const intel = await getOrCreateCompanyIntel(
         companyName,
         companyDomain,
-        userContext
+        {}
       );
 
       if (!intel) {
@@ -211,30 +142,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting company intel:", error);
       res.status(500).send("Failed to get company intel");
-    }
-  });
-
-  app.post("/api/save_contact", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const user = req.user as User;
-      const contact: ParsedContact = req.body;
-
-      const savedContact = await storage.createContact({
-        userId: user.id,
-        fullName: contact.fullName || null,
-        jobTitle: contact.jobTitle || null,
-        companyName: contact.companyName || null,
-        email: contact.email || null,
-        phone: contact.phone || null,
-        website: contact.website || null,
-        linkedinUrl: contact.linkedinUrl || null,
-        companyDomain: contact.email?.split("@")[1] || null,
-      });
-
-      res.status(201).json(savedContact);
-    } catch (error) {
-      console.error("Error saving contact:", error);
-      res.status(500).send("Failed to save contact");
     }
   });
 
