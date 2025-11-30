@@ -73,12 +73,24 @@ Uses regex patterns and heuristics:
 - **Pre-cleaning**: Removes disclaimer text and empty lines
 - **Email**: Standard email regex
 - **Phone**: Labeled fields (m:, tel:) and pattern matching, international format support
-- **Website**: URL detection excluding LinkedIn, labeled fields (w:)
-- **LinkedIn**: LinkedIn profile URL detection
+- **Website**: 
+  - Validates against 100+ known TLDs plus 2-6 char fallback
+  - Accepts labeled fields (w:, web:, website:)
+  - Rejects name-like patterns (e.g., "francisco.guerrero")
+  - Falls back to email domain when no website found
+- **LinkedIn**: LinkedIn profile URL detection (/in/ and /company/)
 - **Name**: First non-contact line, proper name pattern matching
 - **Title**: Job title keyword matching
 - **Company**: Company suffix detection (Pty Ltd, Inc, LLC, GmbH, etc.)
 - **Address**: Lines between company and contact fields
+
+### Company Intel (server/intelService.ts)
+- Uses OpenAI (gpt-4o) via Replit AI Integrations
+- Caches intel for 24 hours per company domain
+- Fallback behavior when API fails:
+  - Generates generic talking points
+  - Shows warning banner in UI
+  - Detailed error logging for debugging
 
 ## Environment Variables
 
