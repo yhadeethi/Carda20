@@ -9,6 +9,150 @@ export interface ParsedContact {
   address?: string;
 }
 
+export interface SplitAddress {
+  street: string;
+  city: string;
+  state: string;
+  postcode: string;
+  country: string;
+}
+
+/**
+ * Split an AU address string into vCard ADR components
+ * Handles formats like:
+ * - "45B/2 Park Street, Sydney NSW 2000 Australia"
+ * - "Ground Floor, 109 Burwood Road Hawthorn VIC 3122"
+ */
+export function splitAuAddress(address: string | undefined): SplitAddress {
+  if (!address) {
+    return { street: "", city: "", state: "", postcode: "", country: "" };
+  }
+
+  const trimmed = address.replace(/\s+/g, " ").trim();
+
+  // Try to match AU address formats with comma separating street from city
+  // Pattern: "Street Address, City STATE POSTCODE [Country]"
+  let match = trimmed.match(
+    /^(.*?),\s*([A-Za-z ]+)\s+(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+(\d{4})(?:\s+(Australia|AU|AUS))?$/i
+  );
+
+  if (match) {
+    const [, street, city, state, postcode, countryRaw] = match;
+    return {
+      street: street.trim(),
+      city: city.trim(),
+      state: state.trim().toUpperCase(),
+      postcode: postcode.trim(),
+      country: countryRaw ? countryRaw.trim() : "Australia",
+    };
+  }
+
+  // Try format without comma: "Street City STATE POSTCODE [Country]"
+  // This is trickier - try to find where city starts by looking for state code
+  match = trimmed.match(
+    /^(.+?)\s+([A-Za-z]+)\s+(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+(\d{4})(?:\s+(Australia|AU|AUS))?$/i
+  );
+
+  if (match) {
+    const [, streetAndMaybeCity, city, state, postcode, countryRaw] = match;
+    return {
+      street: streetAndMaybeCity.trim(),
+      city: city.trim(),
+      state: state.trim().toUpperCase(),
+      postcode: postcode.trim(),
+      country: countryRaw ? countryRaw.trim() : "Australia",
+    };
+  }
+
+  // Fallback: treat entire string as street
+  return {
+    street: trimmed,
+    city: "",
+    state: "",
+    postcode: "",
+    country: "",
+  };
+}
+
+/**
+ * Check if a string looks like an address (not a company name)
+ */
+export function looksLikeAddress(text: string | undefined): boolean {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  
+  // Heuristics: contains AU state code or postcode or common address words
+  const hasState = /\b(nsw|vic|qld|wa|sa|tas|act|nt)\b/.test(t);
+  const hasPostcode = /\b\d{4}\b/.test(t);
+  const hasAddressWord = /(street|st\.|road|rd\.|ave|avenue|floor|lvl|level|drive|dr\.|boulevard|blvd|lane|ln\.|place|pl\.|way|court|ct\.|terrace|tce|crescent|cres|highway|hwy|parade|pde)/i.test(t);
+  
+  return hasState || hasPostcode || hasAddressWord;
+}
+
+/**
+ * Fix company name when it appears to be an address
+ * Uses email domain to find the real company name in the raw text
+ */
+export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): ParsedContact {
+  // If company doesn't look like an address, leave it
+  if (contact.companyName && !looksLikeAddress(contact.companyName)) {
+    return contact;
+  }
+
+  const lines = rawText
+    .split(/[\n\r]+/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  // Get base domain from email for matching
+  const email = contact.email || "";
+  const domainMatch = email.match(/@([A-Za-z0-9.-]+)/);
+  const baseDomain = domainMatch ? domainMatch[1].split('.')[0].toLowerCase() : null;
+
+  let bestCompany = "";
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    
+    // Skip if this line IS the detected (wrong) company
+    if (contact.companyName && line === contact.companyName) continue;
+    
+    // Skip email, URL, phone lines
+    if (lower.includes("@")) continue;
+    if (lower.startsWith("http") || lower.includes("www.")) continue;
+    if (/^\+?\d[\d\s()-]{6,}/.test(line)) continue;
+    
+    // Skip lines that look like addresses
+    if (looksLikeAddress(line)) continue;
+    
+    // Skip lines that look like job titles
+    if (looksLikeTitle(line)) continue;
+    
+    // Skip lines that look like names (short, title case, 2-4 words)
+    if (isTitleCase(line) && line.split(/\s+/).length <= 3 && line.length < 30) {
+      // Could be a name - check if it has a company suffix
+      if (!hasCompanySuffix(line)) continue;
+    }
+    
+    // If line contains the base domain as words (e.g. "Flow Power" for flowpower.com.au), prefer it
+    if (baseDomain && lower.includes(baseDomain)) {
+      bestCompany = line;
+      break;
+    }
+    
+    // If line has a company suffix, it's likely the company
+    if (hasCompanySuffix(line) && !bestCompany) {
+      bestCompany = line;
+    }
+  }
+
+  if (bestCompany) {
+    contact.companyName = bestCompany;
+  }
+
+  return contact;
+}
+
 // Regex patterns
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
 const PHONE_REGEX = /(?:\+?\d{1,4}[-.\s]?)?(?:\(?\d{1,4}\)?[-.\s]?)?(?:\d{1,4}[-.\s]?){2,4}\d{1,4}/g;
@@ -680,7 +824,7 @@ export function parseContact(rawText: string): ParsedContact {
   const phone = phones[0] ? formatPhone(phones[0]) : undefined;
   const website = websites[0];
   
-  return {
+  let contact: ParsedContact = {
     fullName,
     jobTitle,
     companyName,
@@ -690,6 +834,11 @@ export function parseContact(rawText: string): ParsedContact {
     linkedinUrl,
     address,
   };
+  
+  // Post-process: fix company if it looks like an address
+  contact = fixCompanyIfAddress(contact, rawText);
+  
+  return contact;
 }
 
 export function normalizeForDuplicateCheck(value: string | undefined): string {

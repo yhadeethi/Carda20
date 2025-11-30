@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { extractTextFromImage, initializeOCR } from "./ocrService";
-import { parseContact, ParsedContact } from "./parseService";
+import { parseContact, ParsedContact, splitAuAddress } from "./parseService";
 import { getOrCreateCompanyIntel } from "./intelService";
 
 const upload = multer({
@@ -46,6 +46,15 @@ function generateVCard(contact: ParsedContact): string {
 
   if (contact.linkedinUrl) {
     lines.push(`X-SOCIALPROFILE;TYPE=linkedin:${contact.linkedinUrl}`);
+  }
+
+  // Add address using vCard ADR field format
+  // ADR;TYPE=WORK:;;street;city;state;postcode;country
+  if (contact.address) {
+    const { street, city, state, postcode, country } = splitAuAddress(contact.address);
+    if (street || city || state || postcode || country) {
+      lines.push(`ADR;TYPE=WORK:;;${street};${city};${state};${postcode};${country}`);
+    }
   }
 
   lines.push("END:VCARD");
