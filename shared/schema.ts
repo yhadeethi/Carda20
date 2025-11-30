@@ -146,9 +146,40 @@ export type Company = typeof companies.$inferSelect;
 export type InsertCompanyIntel = z.infer<typeof insertCompanyIntelSchema>;
 export type CompanyIntel = typeof companyIntel.$inferSelect;
 
-// Intel data structure
+// Key Development item for historical company events
+export interface KeyDevelopment {
+  headline: string;
+  approxDate: string;
+  summary: string;
+  note?: string;
+}
+
+// Intel data structure - Focused Sales Brief format
 export interface CompanyIntelData {
-  snapshot: {
+  // 2-3 sentence overview of what the company actually does
+  companySnapshot: string;
+  
+  // Specific reasons this company is relevant to B2B sellers
+  whyTheyMatterToYou: string[];
+  
+  // What someone with this title typically cares about (KPIs, problems, responsibilities)
+  roleInsights: string[];
+  
+  // Short, sharp questions for a first meeting
+  highImpactQuestions: string[];
+  
+  // Potential landmines or sensitive topics (regulation, setbacks, competitors)
+  risksOrSensitivities: string[];
+  
+  // Key historical developments (not live news)
+  keyDevelopments: KeyDevelopment[];
+  
+  // Metadata
+  generatedAt: string;
+  error?: string; // Optional error message when using fallback data
+  
+  // Legacy fields for backwards compatibility (optional)
+  snapshot?: {
     industry?: string;
     founded?: string;
     employees?: string;
@@ -156,14 +187,12 @@ export interface CompanyIntelData {
     description?: string;
     keyProducts?: string[];
   };
-  recentNews: Array<{
+  recentNews?: Array<{
     headline: string;
     date: string;
     summary: string;
   }>;
-  talkingPoints: string[];
-  generatedAt: string;
-  error?: string; // Optional error message when using fallback data
+  talkingPoints?: string[];
 }
 
 // Parsed contact from OCR/text extraction

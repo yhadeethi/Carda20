@@ -57,10 +57,16 @@ function companyNameToDomain(companyName: string): string | null {
   return null;
 }
 
+export interface ContactContext {
+  contactName?: string;
+  contactTitle?: string;
+}
+
 export async function getOrCreateCompanyIntel(
   companyName: string | null,
   companyDomain: string | null,
-  userContext: IntelContext
+  userContext: IntelContext,
+  contactContext?: ContactContext
 ): Promise<CompanyIntelData | null> {
   if (!companyName && !companyDomain) {
     return null;
@@ -82,7 +88,18 @@ export async function getOrCreateCompanyIntel(
         const cacheMaxAge = INTEL_CACHE_HOURS * 60 * 60 * 1000;
         
         if (cacheAge < cacheMaxAge && existingIntel.intelJson) {
-          return existingIntel.intelJson as CompanyIntelData;
+          const cachedIntel = existingIntel.intelJson as CompanyIntelData;
+          
+          // Check if this is legacy intel (missing new sales brief fields)
+          const isLegacyFormat = !cachedIntel.companySnapshot || 
+                                 !cachedIntel.whyTheyMatterToYou || 
+                                 !cachedIntel.roleInsights;
+          
+          if (!isLegacyFormat) {
+            return cachedIntel;
+          }
+          // Legacy format detected - regenerate with new structure
+          console.log(`Intel: Regenerating legacy intel for ${domain} with new sales brief format`);
         }
       }
     } else {
@@ -95,7 +112,8 @@ export async function getOrCreateCompanyIntel(
     const freshIntel = await generateCompanyIntel(
       companyName || company.name || domain,
       domain,
-      userContext
+      userContext,
+      contactContext
     );
 
     if (freshIntel) {
@@ -116,7 +134,8 @@ export async function getOrCreateCompanyIntel(
   const freshIntel = await generateCompanyIntel(
     companyName || "Unknown Company",
     null,
-    userContext
+    userContext,
+    contactContext
   );
 
   return freshIntel;
@@ -128,24 +147,31 @@ export async function getOrCreateCompanyIntel(
 function generateFallbackIntel(
   companyName: string,
   domain: string | null,
+  contactContext?: ContactContext,
   errorReason?: string
 ): CompanyIntelData {
+  const contactTitle = contactContext?.contactTitle || "this professional";
+  
   return {
-    snapshot: {
-      industry: "Unknown",
-      founded: "Unknown",
-      employees: "Unknown",
-      headquarters: "Unknown",
-      description: `${companyName} is a company${domain ? ` (${domain})` : ""}. Additional details could not be retrieved at this time.`,
-      keyProducts: []
-    },
-    recentNews: [],
-    talkingPoints: [
-      `Ask about their role and responsibilities at ${companyName}`,
-      "Inquire about current projects or initiatives they're working on",
-      "Discuss industry trends and challenges they're facing",
-      "Learn about what brought them to the company"
+    companySnapshot: `${companyName} is a company${domain ? ` (${domain})` : ""}. Additional details could not be retrieved at this time.`,
+    whyTheyMatterToYou: [
+      "Research their industry positioning before the meeting",
+      "Look for mutual connections or shared interests",
+      "Check their website and recent announcements"
     ],
+    roleInsights: [
+      `Ask about their specific responsibilities as ${contactTitle}`,
+      "Understand their key priorities and challenges",
+      "Learn about their team structure and reporting lines"
+    ],
+    highImpactQuestions: [
+      `What are your biggest priorities at ${companyName} right now?`,
+      "What challenges are you trying to solve this quarter?",
+      "How do you measure success in your role?",
+      "What would make your life easier?"
+    ],
+    risksOrSensitivities: [],
+    keyDevelopments: [],
     generatedAt: new Date().toISOString(),
     error: errorReason
   };
@@ -154,56 +180,82 @@ function generateFallbackIntel(
 async function generateCompanyIntel(
   companyName: string,
   domain: string | null,
-  userContext: IntelContext
+  userContext: IntelContext,
+  contactContext?: ContactContext
 ): Promise<CompanyIntelData> {
   // Check API configuration
   if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
     console.error("Intel Error: AI_INTEGRATIONS_OPENAI_API_KEY not configured");
-    return generateFallbackIntel(companyName, domain, "API key not configured");
+    return generateFallbackIntel(companyName, domain, contactContext, "API key not configured");
   }
 
   if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
     console.error("Intel Error: AI_INTEGRATIONS_OPENAI_BASE_URL not configured");
-    return generateFallbackIntel(companyName, domain, "API base URL not configured");
+    return generateFallbackIntel(companyName, domain, contactContext, "API base URL not configured");
   }
 
   try {
     const userContextStr = buildUserContextPrompt(userContext);
+    const contactName = contactContext?.contactName || "the contact";
+    const contactTitle = contactContext?.contactTitle || "professional";
     
-    const prompt = `You are a business intelligence analyst helping a sales professional prepare for a meeting.
+    const prompt = `You are a senior sales intelligence analyst preparing a focused briefing for a B2B sales professional.
 
-Company to research: ${companyName}${domain ? ` (${domain})` : ""}
+**Target Company:** ${companyName}${domain ? ` (${domain})` : ""}
+**Contact Name:** ${contactName}
+**Contact Title:** ${contactTitle}
 
 ${userContextStr}
 
-Provide comprehensive company intelligence in JSON format. Be specific, professional, and focus on information that would be valuable for a B2B sales or networking conversation.
+Generate a focused sales brief in JSON format. Be specific, punchy, and actionable. Avoid generic corporate-speak. Everything should be role- and industry-specific.
 
-Return a JSON object with this exact structure:
+Return a JSON object with this EXACT structure:
 {
-  "snapshot": {
-    "industry": "Primary industry sector",
-    "founded": "Year founded or 'Unknown'",
-    "employees": "Employee count estimate (e.g., '50-200')",
-    "headquarters": "City, Country",
-    "description": "2-3 sentence company description",
-    "keyProducts": ["Main product/service 1", "Main product/service 2", "Main product/service 3"]
-  },
-  "recentNews": [
+  "companySnapshot": "2-3 sentences describing what this company actually does and who they serve. Be specific about their market position.",
+  
+  "whyTheyMatterToYou": [
+    "Specific reason this company is relevant to someone selling B2B solutions (use the domain/industry)",
+    "Another angle tied to scale, geography, or strategy",
+    "Optional third angle if relevant"
+  ],
+  
+  "roleInsights": [
+    "What someone with the title '${contactTitle}' at this type of company typically cares about (KPIs, problems, responsibilities)",
+    "Be concrete and role-specific, not generic corporate-speak",
+    "Include technical/operational focus if the role is engineering/operations"
+  ],
+  
+  "highImpactQuestions": [
+    "Short, sharp question the user could literally ask in a first meeting",
+    "Another question that surfaces business pain or priorities",
+    "Another question tying to risk, roadmap, or timelines",
+    "Keep each question 1-2 lines max"
+  ],
+  
+  "risksOrSensitivities": [
+    "Potential landmines or sensitive topics (regulation, recent setbacks, major competitor relationships) if any are known",
+    "Only include if you have specific knowledge; otherwise leave this array empty or very short"
+  ],
+  
+  "keyDevelopments": [
     {
-      "headline": "Recent news headline or company development",
-      "date": "Approximate date (e.g., 'November 2024')",
-      "summary": "Brief 1-sentence summary"
+      "headline": "Important past event or strategic move (may not be recent)",
+      "approxDate": "Month Year (or just Year if approximate)",
+      "summary": "1-2 lines on why this matters for a salesperson",
+      "note": "Based on historical information up to the model's knowledge cutoff"
     }
   ],
-  "talkingPoints": [
-    "Personalized talking point relevant to the user's context",
-    "Another relevant conversation starter",
-    "Industry-specific insight or question"
-  ],
+  
   "generatedAt": "${new Date().toISOString()}"
 }
 
-Generate 2-3 news items and 3-4 talking points. If you don't have specific information about the company, make reasonable inferences based on the industry and company name, but keep the information realistic and useful.`;
+Guidelines:
+- Use short, punchy bullets - not long paragraphs
+- Make everything role- and industry-specific based on the title + company domain
+- highImpactQuestions should be questions you could literally read out in a meeting
+- keyDevelopments is NOT live news - just key historical developments you know about. Limit to 3-4 most important items
+- If you have little reliable info about the company, keep keyDevelopments short or empty rather than guessing
+- risksOrSensitivities should only include specific known issues, not generic warnings`;
 
     console.log(`Intel: Generating intel for ${companyName}${domain ? ` (${domain})` : ""}`);
     
@@ -217,7 +269,7 @@ Generate 2-3 news items and 3-4 talking points. If you don't have specific infor
     const content = response.choices[0]?.message?.content;
     if (!content) {
       console.error("Intel Error: No content in OpenAI response");
-      return generateFallbackIntel(companyName, domain, "No response from AI service");
+      return generateFallbackIntel(companyName, domain, contactContext, "No response from AI service");
     }
 
     console.log(`Intel: Successfully generated intel for ${companyName}`);
@@ -260,7 +312,7 @@ Generate 2-3 news items and 3-4 talking points. If you don't have specific infor
       errorReason = "Could not connect to AI service";
     }
     
-    return generateFallbackIntel(companyName, domain, errorReason);
+    return generateFallbackIntel(companyName, domain, contactContext, errorReason);
   }
 }
 

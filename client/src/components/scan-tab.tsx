@@ -143,6 +143,8 @@ export function ScanTab() {
         companyName: contact.companyName,
         email: contact.email,
         website: contact.website,
+        contactName: contact.fullName,
+        contactTitle: contact.jobTitle,
       });
       return res.json() as Promise<CompanyIntelData>;
     },

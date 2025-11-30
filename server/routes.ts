@@ -120,7 +120,7 @@ export async function registerRoutes(
 
   app.post("/api/intel", async (req: Request, res: Response) => {
     try {
-      const { companyName, email, website } = req.body;
+      const { companyName, email, website, contactName, contactTitle } = req.body;
 
       if (!companyName && !email && !website) {
         return res.status(400).send("Company name, email, or website is required");
@@ -131,7 +131,8 @@ export async function registerRoutes(
       const intel = await getOrCreateCompanyIntel(
         companyName,
         companyDomain,
-        {}
+        {}, // userContext
+        { contactName, contactTitle } // contactContext for role-specific insights
       );
 
       if (!intel) {

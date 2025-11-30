@@ -84,9 +84,17 @@ Uses regex patterns and heuristics:
 - **Company**: Company suffix detection (Pty Ltd, Inc, LLC, GmbH, etc.)
 - **Address**: Lines between company and contact fields
 
-### Company Intel (server/intelService.ts)
+### Company Intel - Focused Sales Brief (server/intelService.ts)
 - Uses OpenAI (gpt-4o) via Replit AI Integrations
 - Caches intel for 24 hours per company domain
+- **New Sales Brief Structure:**
+  - `companySnapshot`: 2-3 sentence overview of what the company does
+  - `whyTheyMatterToYou`: Reasons this company is relevant for B2B sales
+  - `roleInsights`: What the contact's title typically cares about (KPIs, problems)
+  - `highImpactQuestions`: Sharp questions for first meetings
+  - `keyDevelopments`: Historical events (not live news) with approxDate and note
+  - `risksOrSensitivities`: Potential landmines (only shown if non-empty)
+- **Google News Button**: Opens Google News search for the company
 - Fallback behavior when API fails:
   - Generates generic talking points
   - Shows warning banner in UI

@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Collapsible,
@@ -10,18 +9,17 @@ import {
 import { CompanyIntelData } from "@shared/schema";
 import {
   Building2,
-  Newspaper,
-  MessageSquare,
   RefreshCw,
   AlertCircle,
   ChevronDown,
   ChevronUp,
   Sparkles,
-  Calendar,
-  Users,
-  MapPin,
-  Briefcase,
-  Package,
+  Target,
+  User,
+  HelpCircle,
+  AlertTriangle,
+  History,
+  ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -41,8 +39,11 @@ export function CompanyIntelCard({
   companyName,
 }: CompanyIntelCardProps) {
   const [snapshotOpen, setSnapshotOpen] = useState(true);
-  const [newsOpen, setNewsOpen] = useState(true);
-  const [talkingPointsOpen, setTalkingPointsOpen] = useState(true);
+  const [whyMatterOpen, setWhyMatterOpen] = useState(true);
+  const [roleInsightsOpen, setRoleInsightsOpen] = useState(true);
+  const [questionsOpen, setQuestionsOpen] = useState(true);
+  const [developmentsOpen, setDevelopmentsOpen] = useState(true);
+  const [risksOpen, setRisksOpen] = useState(true);
 
   if (isLoading) {
     return (
@@ -53,7 +54,7 @@ export function CompanyIntelCard({
               <Sparkles className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-base">Collecting Intel...</CardTitle>
+              <CardTitle className="text-base">Building Sales Brief...</CardTitle>
               <p className="text-xs text-muted-foreground">
                 {companyName ? `Researching ${companyName}` : "Researching company"}
               </p>
@@ -89,7 +90,7 @@ export function CompanyIntelCard({
               <AlertCircle className="w-6 h-6 text-destructive" />
             </div>
             <div>
-              <p className="font-medium">Unable to gather intel</p>
+              <p className="font-medium">Unable to build sales brief</p>
               <p className="text-sm text-muted-foreground mt-1">
                 We couldn't retrieve company information at this time
               </p>
@@ -142,6 +143,26 @@ export function CompanyIntelCard({
     </CollapsibleTrigger>
   );
 
+  const BulletList = ({ items, testIdPrefix }: { items: string[]; testIdPrefix: string }) => (
+    <div className="mt-2 space-y-2 pl-8">
+      {items.map((item, i) => (
+        <div
+          key={i}
+          className="flex items-start gap-2"
+          data-testid={`${testIdPrefix}-${i}`}
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0 mt-2" />
+          <p className="text-sm">{item}</p>
+        </div>
+      ))}
+    </div>
+  );
+
+  const openGoogleNews = () => {
+    const query = encodeURIComponent(companyName || "");
+    window.open(`https://news.google.com/search?q=${query}`, "_blank");
+  };
+
   return (
     <Card className="glass-subtle">
       <CardHeader className="pb-2">
@@ -151,7 +172,7 @@ export function CompanyIntelCard({
           </div>
           <div>
             <CardTitle className="text-base" data-testid="text-intel-title">
-              Company Intel
+              Sales Brief
             </CardTitle>
             {companyName && (
               <p className="text-xs text-muted-foreground">{companyName}</p>
@@ -185,8 +206,9 @@ export function CompanyIntelCard({
             </div>
           </div>
         )}
+
         {/* Company Snapshot */}
-        {intel.snapshot && (
+        {intel.companySnapshot && (
           <Collapsible open={snapshotOpen} onOpenChange={setSnapshotOpen}>
             <SectionHeader
               icon={Building2}
@@ -195,78 +217,68 @@ export function CompanyIntelCard({
               onToggle={() => setSnapshotOpen(!snapshotOpen)}
             />
             <CollapsibleContent>
-              <div className="mt-2 space-y-3 pl-8">
-                {intel.snapshot.description && (
-                  <p className="text-sm text-muted-foreground" data-testid="text-intel-description">
-                    {intel.snapshot.description}
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  {intel.snapshot.industry && (
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs">{intel.snapshot.industry}</span>
-                    </div>
-                  )}
-                  {intel.snapshot.employees && (
-                    <div className="flex items-center gap-2">
-                      <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs">{intel.snapshot.employees}</span>
-                    </div>
-                  )}
-                  {intel.snapshot.founded && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs">Founded {intel.snapshot.founded}</span>
-                    </div>
-                  )}
-                  {intel.snapshot.headquarters && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs">{intel.snapshot.headquarters}</span>
-                    </div>
-                  )}
-                </div>
-                {intel.snapshot.keyProducts && intel.snapshot.keyProducts.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {intel.snapshot.keyProducts.map((product, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">
-                        <Package className="w-3 h-3 mr-1" />
-                        {product}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+              <div className="mt-2 pl-8">
+                <p className="text-sm text-muted-foreground" data-testid="text-company-snapshot">
+                  {intel.companySnapshot}
+                </p>
               </div>
             </CollapsibleContent>
           </Collapsible>
         )}
 
-        {/* Recent News */}
-        {intel.recentNews && intel.recentNews.length > 0 && (
-          <Collapsible open={newsOpen} onOpenChange={setNewsOpen}>
+        {/* Why They Matter to You */}
+        {intel.whyTheyMatterToYou && intel.whyTheyMatterToYou.length > 0 && (
+          <Collapsible open={whyMatterOpen} onOpenChange={setWhyMatterOpen}>
             <SectionHeader
-              icon={Newspaper}
-              title="Recent News"
-              isOpen={newsOpen}
-              onToggle={() => setNewsOpen(!newsOpen)}
+              icon={Target}
+              title="Why They Matter to You"
+              isOpen={whyMatterOpen}
+              onToggle={() => setWhyMatterOpen(!whyMatterOpen)}
             />
             <CollapsibleContent>
-              <div className="mt-2 space-y-3 pl-8">
-                {intel.recentNews.map((news, i) => (
+              <BulletList items={intel.whyTheyMatterToYou} testIdPrefix="why-matter" />
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* What This Contact Likely Cares About */}
+        {intel.roleInsights && intel.roleInsights.length > 0 && (
+          <Collapsible open={roleInsightsOpen} onOpenChange={setRoleInsightsOpen}>
+            <SectionHeader
+              icon={User}
+              title="What This Contact Likely Cares About"
+              isOpen={roleInsightsOpen}
+              onToggle={() => setRoleInsightsOpen(!roleInsightsOpen)}
+            />
+            <CollapsibleContent>
+              <BulletList items={intel.roleInsights} testIdPrefix="role-insight" />
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* High-Impact Questions */}
+        {intel.highImpactQuestions && intel.highImpactQuestions.length > 0 && (
+          <Collapsible open={questionsOpen} onOpenChange={setQuestionsOpen}>
+            <SectionHeader
+              icon={HelpCircle}
+              title="High-Impact Questions"
+              isOpen={questionsOpen}
+              onToggle={() => setQuestionsOpen(!questionsOpen)}
+            />
+            <CollapsibleContent>
+              <div className="mt-2 space-y-2 pl-8">
+                {intel.highImpactQuestions.map((question, i) => (
                   <div
                     key={i}
-                    className="border-l-2 border-primary/30 pl-3 py-1"
-                    data-testid={`news-item-${i}`}
+                    className="flex items-start gap-2"
+                    data-testid={`question-${i}`}
                   >
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                      <Calendar className="w-3 h-3" />
-                      {news.date}
+                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-xs font-medium text-primary">
+                        {i + 1}
+                      </span>
                     </div>
-                    <p className="text-sm font-medium">{news.headline}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {news.summary}
-                    </p>
+                    <p className="text-sm italic">"{question}"</p>
                   </div>
                 ))}
               </div>
@@ -274,29 +286,91 @@ export function CompanyIntelCard({
           </Collapsible>
         )}
 
-        {/* Talking Points */}
-        {intel.talkingPoints && intel.talkingPoints.length > 0 && (
-          <Collapsible open={talkingPointsOpen} onOpenChange={setTalkingPointsOpen}>
+        {/* Key Developments (may not be up to date) */}
+        {intel.keyDevelopments && intel.keyDevelopments.length > 0 && (
+          <Collapsible open={developmentsOpen} onOpenChange={setDevelopmentsOpen}>
             <SectionHeader
-              icon={MessageSquare}
-              title="Talking Points"
-              isOpen={talkingPointsOpen}
-              onToggle={() => setTalkingPointsOpen(!talkingPointsOpen)}
+              icon={History}
+              title="Key Developments (may not be up to date)"
+              isOpen={developmentsOpen}
+              onToggle={() => setDevelopmentsOpen(!developmentsOpen)}
+            />
+            <CollapsibleContent>
+              <div className="mt-2 space-y-3 pl-8">
+                {intel.keyDevelopments.map((dev, i) => (
+                  <div
+                    key={i}
+                    className="border-l-2 border-primary/30 pl-3 py-1"
+                    data-testid={`development-${i}`}
+                  >
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                      <span>{dev.approxDate}</span>
+                    </div>
+                    <p className="text-sm font-medium">{dev.headline}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {dev.summary}
+                    </p>
+                    {dev.note && (
+                      <p className="text-xs text-muted-foreground/70 mt-1 italic">
+                        {dev.note}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                
+                {/* View Latest News on Google button */}
+                {companyName && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openGoogleNews}
+                    className="gap-2 mt-2"
+                    data-testid="button-google-news"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View latest news on Google
+                  </Button>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Show Google News button even if no developments */}
+        {(!intel.keyDevelopments || intel.keyDevelopments.length === 0) && companyName && (
+          <div className="pl-8">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openGoogleNews}
+              className="gap-2"
+              data-testid="button-google-news"
+            >
+              <ExternalLink className="w-3 h-3" />
+              View latest news on Google
+            </Button>
+          </div>
+        )}
+
+        {/* Watch Outs - only show if non-empty */}
+        {intel.risksOrSensitivities && intel.risksOrSensitivities.length > 0 && (
+          <Collapsible open={risksOpen} onOpenChange={setRisksOpen}>
+            <SectionHeader
+              icon={AlertTriangle}
+              title="Watch Outs"
+              isOpen={risksOpen}
+              onToggle={() => setRisksOpen(!risksOpen)}
             />
             <CollapsibleContent>
               <div className="mt-2 space-y-2 pl-8">
-                {intel.talkingPoints.map((point, i) => (
+                {intel.risksOrSensitivities.map((risk, i) => (
                   <div
                     key={i}
-                    className="flex items-start gap-2"
-                    data-testid={`talking-point-${i}`}
+                    className="flex items-start gap-2 p-2 rounded-md bg-amber-500/5 border border-amber-500/10"
+                    data-testid={`risk-${i}`}
                   >
-                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-medium text-primary">
-                        {i + 1}
-                      </span>
-                    </div>
-                    <p className="text-sm">{point}</p>
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm">{risk}</p>
                   </div>
                 ))}
               </div>
