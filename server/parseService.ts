@@ -92,6 +92,7 @@ export function looksLikeAddress(text: string | undefined): boolean {
 /**
  * Fix company name when it appears to be an address
  * Uses email domain to find the real company name in the raw text
+ * Priority: 1) Domain match (space-insensitive), 2) Company suffix, 3) First safe line
  */
 export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): ParsedContact {
   // If company doesn't look like an address, leave it
@@ -104,15 +105,26 @@ export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): Pa
     .map(l => l.trim())
     .filter(Boolean);
 
-  // Get base domain from email for matching
+  // Get base domain from email for matching (e.g., "flowpower" from flowpower.com.au)
   const email = contact.email || "";
   const domainMatch = email.match(/@([A-Za-z0-9.-]+)/);
   const baseDomain = domainMatch ? domainMatch[1].split('.')[0].toLowerCase() : null;
 
-  let bestCompany = "";
+  // Normalize job title for comparison
+  const jobTitleLower = contact.jobTitle?.trim().toLowerCase() || "";
+
+  // Collect candidate lines
+  interface Candidate {
+    line: string;
+    hasDomainMatch: boolean;
+    hasSuffix: boolean;
+  }
+  
+  const candidates: Candidate[] = [];
 
   for (const line of lines) {
     const lower = line.toLowerCase();
+    const normalizedLine = lower.replace(/\s+/g, ""); // Remove all spaces for domain matching
     
     // Skip if this line IS the detected (wrong) company
     if (contact.companyName && line === contact.companyName) continue;
@@ -121,33 +133,52 @@ export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): Pa
     if (lower.includes("@")) continue;
     if (lower.startsWith("http") || lower.includes("www.")) continue;
     if (/^\+?\d[\d\s()-]{6,}/.test(line)) continue;
+    if (/^m\s*[:|\-]/i.test(line)) continue; // Skip "M: +61..." style lines
     
     // Skip lines that look like addresses
     if (looksLikeAddress(line)) continue;
     
-    // Skip lines that look like job titles
-    if (looksLikeTitle(line)) continue;
+    // Skip lines that ARE the job title (exact match)
+    if (jobTitleLower && lower === jobTitleLower) continue;
     
-    // Skip lines that look like names (short, title case, 2-4 words)
+    // Skip lines that CONTAIN the job title (fuzzy match)
+    if (jobTitleLower && jobTitleLower.length > 10 && lower.includes(jobTitleLower)) continue;
+    
+    // Skip lines that look like job titles (but not if they have company suffix)
+    if (looksLikeTitle(line) && !hasCompanySuffix(line)) continue;
+    
+    // Skip lines that look like names (short, title case, 2-4 words) unless they have company suffix
     if (isTitleCase(line) && line.split(/\s+/).length <= 3 && line.length < 30) {
-      // Could be a name - check if it has a company suffix
       if (!hasCompanySuffix(line)) continue;
     }
     
-    // If line contains the base domain as words (e.g. "Flow Power" for flowpower.com.au), prefer it
-    if (baseDomain && lower.includes(baseDomain)) {
-      bestCompany = line;
-      break;
-    }
+    // Check if line matches domain (space-insensitive)
+    // "flow power pty ltd" → "flowpowerptyltd" includes "flowpower" ✓
+    const hasDomainMatch = baseDomain ? normalizedLine.includes(baseDomain) : false;
     
-    // If line has a company suffix, it's likely the company
-    if (hasCompanySuffix(line) && !bestCompany) {
-      bestCompany = line;
-    }
+    // Check if line has company suffix
+    const hasSuffix = hasCompanySuffix(line);
+    
+    candidates.push({ line, hasDomainMatch, hasSuffix });
   }
 
-  if (bestCompany) {
-    contact.companyName = bestCompany;
+  // Priority 1: Domain match (strongest signal)
+  const domainMatch2 = candidates.find(c => c.hasDomainMatch);
+  if (domainMatch2) {
+    contact.companyName = domainMatch2.line;
+    return contact;
+  }
+  
+  // Priority 2: Company suffix match (strong signal)
+  const suffixMatch = candidates.find(c => c.hasSuffix);
+  if (suffixMatch) {
+    contact.companyName = suffixMatch.line;
+    return contact;
+  }
+  
+  // Priority 3: First safe line (last resort fallback)
+  if (candidates.length > 0) {
+    contact.companyName = candidates[0].line;
   }
 
   return contact;

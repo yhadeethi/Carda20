@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompanyIntelCard } from "@/components/company-intel-card";
 import { CompanyIntelData } from "@shared/schema";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, Linkedin } from "lucide-react";
+import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, Linkedin, MapPin } from "lucide-react";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
 type ScanMode = "scan" | "paste";
@@ -23,6 +23,7 @@ interface ParsedContact {
   phone?: string;
   website?: string;
   linkedinUrl?: string;
+  address?: string;
 }
 
 interface ScanResult {
@@ -484,6 +485,15 @@ export function ScanTab() {
                       data-testid="input-edit-linkedin"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Address</Label>
+                    <Input
+                      value={editedContact?.address || ""}
+                      onChange={(e) => handleFieldChange("address", e.target.value)}
+                      placeholder="123 Main Street, City, State 1234"
+                      data-testid="input-edit-address"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3 min-w-0">
@@ -524,6 +534,17 @@ export function ScanTab() {
                       <a href={`tel:${currentContact.phone}`} className="text-primary hover:underline truncate" data-testid="text-contact-phone">
                         {currentContact.phone}
                       </a>
+                    </div>
+                  )}
+                  {currentContact?.address && (
+                    <div className="flex items-start gap-3 min-w-0">
+                      <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <span 
+                        className="text-sm leading-snug break-words" 
+                        data-testid="text-contact-address"
+                      >
+                        {currentContact.address}
+                      </span>
                     </div>
                   )}
                   {currentContact?.website && (
