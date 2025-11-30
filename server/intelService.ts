@@ -122,11 +122,51 @@ export async function getOrCreateCompanyIntel(
   return freshIntel;
 }
 
+/**
+ * Generate fallback intel when API fails
+ */
+function generateFallbackIntel(
+  companyName: string,
+  domain: string | null,
+  errorReason?: string
+): CompanyIntelData {
+  return {
+    snapshot: {
+      industry: "Unknown",
+      founded: "Unknown",
+      employees: "Unknown",
+      headquarters: "Unknown",
+      description: `${companyName} is a company${domain ? ` (${domain})` : ""}. Additional details could not be retrieved at this time.`,
+      keyProducts: []
+    },
+    recentNews: [],
+    talkingPoints: [
+      `Ask about their role and responsibilities at ${companyName}`,
+      "Inquire about current projects or initiatives they're working on",
+      "Discuss industry trends and challenges they're facing",
+      "Learn about what brought them to the company"
+    ],
+    generatedAt: new Date().toISOString(),
+    error: errorReason
+  };
+}
+
 async function generateCompanyIntel(
   companyName: string,
   domain: string | null,
   userContext: IntelContext
-): Promise<CompanyIntelData | null> {
+): Promise<CompanyIntelData> {
+  // Check API configuration
+  if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
+    console.error("Intel Error: AI_INTEGRATIONS_OPENAI_API_KEY not configured");
+    return generateFallbackIntel(companyName, domain, "API key not configured");
+  }
+
+  if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
+    console.error("Intel Error: AI_INTEGRATIONS_OPENAI_BASE_URL not configured");
+    return generateFallbackIntel(companyName, domain, "API base URL not configured");
+  }
+
   try {
     const userContextStr = buildUserContextPrompt(userContext);
     
@@ -165,26 +205,62 @@ Return a JSON object with this exact structure:
 
 Generate 2-3 news items and 3-4 talking points. If you don't have specific information about the company, make reasonable inferences based on the industry and company name, but keep the information realistic and useful.`;
 
+    console.log(`Intel: Generating intel for ${companyName}${domain ? ` (${domain})` : ""}`);
+    
     const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o", // Using gpt-4o for more reliable responses
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-      max_completion_tokens: 2048,
+      max_tokens: 2048,
     });
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      console.error("No content in OpenAI response");
-      return null;
+      console.error("Intel Error: No content in OpenAI response");
+      return generateFallbackIntel(companyName, domain, "No response from AI service");
     }
 
+    console.log(`Intel: Successfully generated intel for ${companyName}`);
+    
     const intel = JSON.parse(content) as CompanyIntelData;
     intel.generatedAt = new Date().toISOString();
     
     return intel;
-  } catch (error) {
-    console.error("Error generating company intel:", error);
-    return null;
+  } catch (error: unknown) {
+    // Detailed error logging
+    const err = error as { status?: number; message?: string; code?: string; response?: { status?: number; data?: unknown } };
+    
+    console.error("Intel Error: Failed to generate company intel");
+    console.error("  Company:", companyName);
+    console.error("  Domain:", domain);
+    
+    if (err.status) {
+      console.error("  HTTP Status:", err.status);
+    }
+    if (err.response?.status) {
+      console.error("  Response Status:", err.response.status);
+    }
+    if (err.code) {
+      console.error("  Error Code:", err.code);
+    }
+    if (err.message) {
+      console.error("  Error Message:", err.message);
+    }
+    
+    // Determine user-friendly error reason
+    let errorReason = "AI service temporarily unavailable";
+    
+    if (err.status === 401 || err.response?.status === 401) {
+      errorReason = "API authentication failed";
+    } else if (err.status === 429 || err.response?.status === 429) {
+      errorReason = "Rate limit exceeded - please try again later";
+    } else if (err.status === 500 || err.response?.status === 500) {
+      errorReason = "AI service error - please try again";
+    } else if (err.code === "ECONNREFUSED" || err.code === "ETIMEDOUT") {
+      errorReason = "Could not connect to AI service";
+    }
+    
+    return generateFallbackIntel(companyName, domain, errorReason);
   }
 }
 

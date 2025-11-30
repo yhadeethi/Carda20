@@ -161,6 +161,30 @@ export function CompanyIntelCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Fallback warning banner */}
+        {intel.error && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Limited intel available
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {intel.error}. Showing generic talking points.
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRetry}
+                className="gap-1 mt-2 h-7 px-2 text-xs"
+                data-testid="button-retry-intel-inline"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Try Again
+              </Button>
+            </div>
+          </div>
+        )}
         {/* Company Snapshot */}
         {intel.snapshot && (
           <Collapsible open={snapshotOpen} onOpenChange={setSnapshotOpen}>

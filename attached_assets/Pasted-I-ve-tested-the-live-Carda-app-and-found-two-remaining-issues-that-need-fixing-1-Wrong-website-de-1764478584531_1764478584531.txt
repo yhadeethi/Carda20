@@ -1,0 +1,144 @@
+I’ve tested the live Carda app and found two remaining issues that need fixing.
+
+1) Wrong website detected from card / email
+
+Example: business card for Francisco Guerrero (Hitachi).
+
+Card text includes:
+
+Email: francisco.guerrero@hitachienergy.com
+
+Website: www.hitachienergy.com
+
+The app extracted:
+
+Website: francisco.guerrero (this is wrong – looks like part of the email or a username, not a URL)
+
+Please tighten the website parsing rules:
+
+Website must look like a real URL
+
+Prefer lines that:
+
+Start with w: / web: / website:
+
+OR start with http://, https://, www.
+
+OR contain a domain-like pattern: something.tld (e.g. .com, .net, .org, .io, .co, etc.)
+
+Reject candidates that:
+
+Have no dot at all (like francisco.guerrero), OR
+
+Contain spaces in the middle, OR
+
+Are clearly just the local part of an email.
+
+Fallback from email domain
+
+If no explicit website is found:
+
+Take the domain from the email address (text after @), e.g. hitachienergy.com.
+
+Strip any trailing punctuation.
+
+If it doesn’t start with http or www, set website to https:// + domain.
+
+This should ensure that for francisco.guerrero@hitachienergy.com we get:
+
+Website: https://hitachienergy.com or https://www.hitachienergy.com.
+
+LinkedIn vs Website
+
+Any URL containing linkedin.com (or labeled “LinkedIn”) should go to the LinkedIn field, not the website field.
+
+If you encounter a bare username like francisco.guerrero without a dot, don’t treat it as website. At most treat it as a potential LinkedIn handle, but only if it’s explicitly labeled.
+
+Please update the parsing logic so the Francisco Guerrero card yields:
+
+Company: Hitachi Energy Power Conversion Solutions
+
+Email: francisco.guerrero@hitachienergy.com
+
+Phone: +34 676 181 790
+
+Website: https://www.hitachienergy.com
+ (or derived from the domain as above)
+
+2) Company Intel – spinner then “Unable to gather intel”
+
+On the Pat Savage / StorEnergy contact:
+
+Contact parsing is correct (name, title, company, phone, email, website all good).
+
+When I click Generate Company Intel, it spins for a long time then shows:
+
+“Unable to gather intel – We couldn’t retrieve company information at this time.”
+
+“Retry Intel” just repeats the same behavior.
+
+This suggests the intel backend is failing silently (likely OpenAI or whatever LLM / news API call you’re using).
+
+Please do the following:
+
+Check and log the actual error
+
+Wrap the intel-generation code (the API call to OpenAI / news / search) in a try/catch.
+
+Log the full error to the server console, including:
+
+HTTP status
+
+Error message / body
+
+Make sure the frontend gets a clear error code/message instead of just a generic failure.
+
+Verify API configuration
+
+Confirm that:
+
+The OpenAI (or other LLM) API key is correctly set in Replit Secrets and available in the published deployment.
+
+Any other external API keys (news/search) used by the intel module are also set and not mocked.
+
+Test the intel generator server-side with a simple hard-coded example (e.g. company = “Apple Inc.”) to ensure it returns a valid intel payload.
+
+Robust fallback behavior
+
+If external APIs fail (network error, rate limit, missing key, etc.):
+
+The user should still get some basic intel generated purely from the data we already have:
+
+e.g. a short description like:
+
+“You’re speaking with [title] at [company] based in [country/region, if known].”
+
+3–4 generic but useful talking points derived from the role + industry.
+
+Only show the “Unable to gather intel” card when there is a hard failure and no intel at all can be produced.
+
+In the error card, optionally show a short reason string from the backend (e.g. “API key missing” or “rate limited”) for debugging.
+
+Keep the contract the same for the frontend
+
+The frontend should continue to receive:
+
+companySnapshot
+
+recentNews
+
+talkingPoints
+
+On partial failures, send empty arrays where necessary but still return a valid JSON response rather than throwing.
+
+Goal:
+
+Website field should reliably show a real company domain, not random usernames.
+
+Generate Company Intel should either return useful intel or a clear, debug-friendly error, not just spin and die.
+
+Please implement these fixes and republish so I can retest with:
+
+The Hitachi card photo
+
+The Pat Savage email signature

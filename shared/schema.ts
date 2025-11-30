@@ -163,6 +163,7 @@ export interface CompanyIntelData {
   }>;
   talkingPoints: string[];
   generatedAt: string;
+  error?: string; // Optional error message when using fallback data
 }
 
 // Parsed contact from OCR/text extraction

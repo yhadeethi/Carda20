@@ -12,8 +12,36 @@ export interface ParsedContact {
 // Regex patterns
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
 const PHONE_REGEX = /(?:\+?\d{1,4}[-.\s]?)?(?:\(?\d{1,4}\)?[-.\s]?)?(?:\d{1,4}[-.\s]?){2,4}\d{1,4}/g;
-const WEBSITE_REGEX = /(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+(?:\/[^\s]*)?/gi;
-const LINKEDIN_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+\/?/gi;
+const LINKEDIN_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/(?:in|company)\/[a-zA-Z0-9_-]+\/?/gi;
+
+// Common TLDs for website detection (expanded list covering most real-world cases)
+const VALID_TLDS = [
+  // Generic TLDs
+  "com", "org", "net", "io", "co", "ai", "app", "dev", "tech", "biz", "info",
+  "edu", "gov", "mil", "int", "pro", "name", "aero", "coop", "museum",
+  // New gTLDs (popular ones)
+  "solutions", "services", "consulting", "digital", "agency", "studio", "design",
+  "systems", "cloud", "software", "online", "store", "shop", "energy", "global",
+  "group", "holdings", "capital", "finance", "ventures", "partners", "legal",
+  "media", "marketing", "technology", "engineering", "construction", "health",
+  "education", "academy", "institute", "foundation", "center", "centre",
+  "network", "zone", "world", "life", "work", "space", "site", "website",
+  "company", "business", "enterprises", "industries", "international",
+  // Country code TLDs
+  "au", "uk", "de", "fr", "es", "it", "nl", "be", "ch", "at", "nz", "ca", "us",
+  "jp", "cn", "kr", "sg", "hk", "tw", "in", "pk", "ae", "sa", "za", "br", "mx",
+  "ar", "cl", "co", "pe", "ve", "ru", "pl", "cz", "hu", "ro", "bg", "ua", "tr",
+  "gr", "pt", "se", "no", "fi", "dk", "ie", "is", "il", "eg", "ng", "ke", "gh",
+  "my", "ph", "th", "vn", "id", "bd",
+  // Compound TLDs
+  "com.au", "co.uk", "co.nz", "com.br", "co.za", "co.in", "com.sg", "com.hk",
+  "co.jp", "co.kr", "com.mx", "com.ar", "co.th", "com.my", "com.ph", "co.id",
+  "org.uk", "org.au", "net.au", "gov.au", "edu.au", "ac.uk", "gov.uk",
+  // Misc popular
+  "eu", "asia", "me", "tv", "cc", "ws", "fm", "ly", "to", "gg", "xyz", "club",
+  "link", "click", "news", "live", "one", "plus", "today", "tips", "guide",
+  "blog", "video", "photos", "games", "tools", "reviews", "directory"
+];
 
 // Field label patterns (for labeled lines like "m:", "e:", "w:")
 const FIELD_LABEL_REGEX = /^(?:m|mobile|t|tel|telephone|p|phone|ph|f|fax|e|email|w|web|website|a|address|linkedin)\s*[:|\-]/i;
@@ -188,33 +216,138 @@ function formatPhone(phone: string): string {
 }
 
 /**
+ * Check if a string looks like a valid website URL
+ */
+function isValidWebsite(candidate: string): boolean {
+  // Must not contain spaces
+  if (/\s/.test(candidate)) return false;
+  
+  // Must not look like an email address
+  if (/@/.test(candidate)) return false;
+  
+  // Must not be a LinkedIn URL (those go to LinkedIn field)
+  if (/linkedin\.com/i.test(candidate)) return false;
+  
+  // Clean up for validation
+  let cleaned = candidate.toLowerCase().trim();
+  cleaned = cleaned.replace(/^(https?:\/\/)?(www\.)?/, "");
+  cleaned = cleaned.split("/")[0]; // Just get the domain part
+  cleaned = cleaned.split("?")[0]; // Remove query params
+  
+  // Must have at least one dot
+  if (!cleaned.includes(".")) return false;
+  
+  // Must have a valid TLD
+  const parts = cleaned.split(".");
+  const tld = parts.slice(-1)[0];
+  const tld2 = parts.slice(-2).join(".");
+  
+  // Check against known TLDs first
+  let hasValidTld = VALID_TLDS.includes(tld) || VALID_TLDS.includes(tld2);
+  
+  // Also accept any 2-6 character alphabetic TLD as potentially valid
+  // This catches newer gTLDs we don't have in the list
+  if (!hasValidTld && /^[a-z]{2,6}$/.test(tld)) {
+    hasValidTld = true;
+  }
+  
+  if (!hasValidTld) return false;
+  
+  // Domain part (before TLD) must not be just a name pattern (e.g., francisco.guerrero)
+  // Valid domains have meaningful names, not just firstName.lastName patterns
+  const domainPart = parts.slice(0, -1).join(".");
+  
+  // Reject if it looks like a person's name (two lowercase name-like parts)
+  if (parts.length === 2 && /^[a-z]+$/.test(parts[0]) && parts[0].length <= 15) {
+    // Could be a name like "francisco.guerrero" - check if TLD is actually a name-like word
+    const potentialLastName = parts[1];
+    // Common surnames that are NOT TLDs
+    const nameLikePatterns = /^(guerrero|smith|johnson|williams|brown|jones|garcia|miller|davis|rodriguez|martinez|hernandez|lopez|gonzalez|wilson|anderson|thomas|taylor|moore|jackson|martin|lee|perez|thompson|white|harris|sanchez|clark|ramirez|lewis|robinson|walker|young|allen|king|wright|scott|torres|nguyen|hill|flores|green|adams|nelson|baker|hall|rivera|campbell|mitchell|carter|roberts|savage|chen|wang|zhang|liu|singh|kumar|patel|sharma)$/i;
+    if (nameLikePatterns.test(potentialLastName)) return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Extract domain from email address
+ */
+function extractDomainFromEmail(email: string): string | null {
+  if (!email || !email.includes("@")) return null;
+  const domain = email.split("@")[1]?.toLowerCase();
+  if (domain && domain.includes(".")) {
+    return domain;
+  }
+  return null;
+}
+
+/**
  * Extract websites from text (excluding LinkedIn)
  */
-function extractWebsites(text: string, lines: string[]): string[] {
+function extractWebsites(text: string, lines: string[], email?: string): string[] {
   const websites: string[] = [];
   
-  // First, look for labeled website lines
+  // Pattern to find potential URLs
+  const URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+(?:\/[^\s]*)?/gi;
+  
+  // First priority: look for labeled website lines
   for (const line of lines) {
     if (/^(?:w|web|website)\s*[:|\-]/i.test(line)) {
-      const urlMatch = line.match(WEBSITE_REGEX);
-      if (urlMatch) {
-        websites.push(...urlMatch.filter(u => !u.includes("linkedin.com")));
+      // Extract the value after the label
+      const valueMatch = line.match(/^(?:w|web|website)\s*[:|\-]\s*(.+)/i);
+      if (valueMatch && valueMatch[1]) {
+        const value = valueMatch[1].trim();
+        const urlMatch = value.match(URL_PATTERN);
+        if (urlMatch) {
+          for (const url of urlMatch) {
+            if (isValidWebsite(url)) {
+              websites.push(url);
+            }
+          }
+        } else if (isValidWebsite(value)) {
+          // The whole value might be a URL without http://
+          websites.push(value);
+        }
       }
     }
   }
   
-  // Also extract from full text
-  const textMatches = text.match(WEBSITE_REGEX) || [];
-  websites.push(...textMatches.filter(u => !u.includes("linkedin.com")));
+  // Second priority: look for explicit URLs (starting with http:// or https:// or www.)
+  const explicitUrlPattern = /(?:https?:\/\/|www\.)[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+(?:\/[^\s]*)?/gi;
+  const explicitMatches = text.match(explicitUrlPattern) || [];
+  for (const url of explicitMatches) {
+    if (isValidWebsite(url)) {
+      websites.push(url);
+    }
+  }
+  
+  // Third priority: look for domain-like patterns with valid TLDs
+  const domainPattern = /\b[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?\b/gi;
+  const domainMatches = text.match(domainPattern) || [];
+  for (const domain of domainMatches) {
+    if (isValidWebsite(domain) && !websites.some(w => w.includes(domain))) {
+      websites.push(domain);
+    }
+  }
+  
+  // Fallback: if no website found, derive from email domain
+  if (websites.length === 0 && email) {
+    const emailDomain = extractDomainFromEmail(email);
+    if (emailDomain) {
+      websites.push(emailDomain);
+    }
+  }
   
   // Clean up and dedupe
   return websites
-    .filter(url => !url.match(EMAIL_REGEX)) // Exclude things that look like emails
     .map(url => {
-      if (!url.startsWith("http")) {
-        return `https://${url}`;
+      let cleaned = url.trim();
+      // Remove trailing punctuation
+      cleaned = cleaned.replace(/[.,;:!?]+$/, "");
+      if (!cleaned.startsWith("http")) {
+        return `https://${cleaned.startsWith("www.") ? cleaned : `www.${cleaned}`}`;
       }
-      return url;
+      return cleaned;
     })
     .filter((url, i, arr) => arr.indexOf(url) === i);
 }
@@ -437,11 +570,11 @@ export function parseContact(rawText: string): ParsedContact {
   
   // Extract structured data
   const emails = extractEmails(fullText);
-  const phones = extractPhones(fullText, lines);
-  const websites = extractWebsites(fullText, lines);
-  const linkedinUrl = extractLinkedIn(fullText);
-  
   const email = emails[0];
+  
+  const phones = extractPhones(fullText, lines);
+  const websites = extractWebsites(fullText, lines, email);
+  const linkedinUrl = extractLinkedIn(fullText);
   
   // Extract name first (usually first line)
   const { name: fullName, nameIndex } = extractName(lines, email);
