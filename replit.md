@@ -4,7 +4,7 @@
 Carda 2.0 is a mobile-first business card scanner with AI-powered company intelligence. Users can scan business cards or paste email signatures to extract contact information, then generate AI-powered company insights.
 
 ## Current State
-- **Status**: MVP Complete with image compression and improved parsing
+- **Status**: MVP Complete with AU address extraction, email truncation, and My QR feature
 - **Stack**: React SPA (frontend) + Express.js (backend)
 - **OCR**: OCR.space API (modular, swappable)
 - **Parsing**: Deterministic regex/heuristics (no AI)
@@ -19,9 +19,14 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
    - Smart email signature parsing with disclaimer detection
    - Labeled field detection (m:, e:, w: prefixes)
    - Company suffix detection (Pty Ltd, Inc, LLC, etc.)
+   - **AU-aware address extraction**: Prioritizes office address over registered address for Australian business cards with multiple locations
 3. **Editable Results** - Review and edit extracted fields before saving
 4. **vCard Export** - Download contact as .vcf file
 5. **Company Intel** - AI-generated company snapshots and talking points
+6. **My QR** - Personal QR code feature for quick contact sharing
+   - Profile saved to localStorage (persists between sessions)
+   - vCard 3.0 format QR code generation
+   - Accessible from header QR button
 
 ## Project Structure
 
