@@ -20,7 +20,8 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
    - Labeled field detection (m:, e:, w: prefixes)
    - Company suffix detection (Pty Ltd, Inc, LLC, etc.)
    - **AU-aware address extraction**: Prioritizes office address over registered address for Australian business cards with multiple locations
-   - **Company/address separation**: Detects and fixes when company name incorrectly contains address text, using email domain matching
+   - **Company/address separation**: Detects and fixes when company name incorrectly contains address text, using space-insensitive email domain matching
+   - **Job title protection**: Prevents job title lines from being selected as company name
 3. **Editable Results** - Review and edit extracted fields before saving
 4. **vCard Export** - Download contact as .vcf file
 5. **Company Intel** - AI-generated company snapshots and talking points
