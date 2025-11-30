@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompanyIntelCard } from "@/components/company-intel-card";
 import { CompanyIntelData } from "@shared/schema";
 import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, Linkedin } from "lucide-react";
+import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
 type ScanMode = "scan" | "paste";
 
@@ -46,6 +47,7 @@ export function ScanTab() {
   
   const [companyIntel, setCompanyIntel] = useState<CompanyIntelData | null>(null);
   const [intelError, setIntelError] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -78,6 +80,10 @@ export function ScanTab() {
       });
       if (!res.ok) {
         const text = await res.text();
+        // Parse OCR.space specific errors
+        if (text.includes("File size exceeds") || text.includes("maximum size limit")) {
+          throw new Error("This photo is too large for the scanner. Please retake the photo a bit further away or crop it.");
+        }
         throw new Error(text || "Failed to scan card");
       }
       return res.json() as Promise<ScanResult>;
@@ -150,9 +156,48 @@ export function ScanTab() {
     },
   });
 
-  const handleScanCard = () => {
-    if (selectedFile) {
-      scanCardMutation.mutate(selectedFile);
+  const handleScanCard = async () => {
+    if (!selectedFile) return;
+    
+    try {
+      setIsCompressing(true);
+      const result = await compressImageForOCR(selectedFile);
+      
+      if (result.wasCompressed) {
+        toast({
+          title: "Image optimized",
+          description: `Compressed from ${formatFileSize(result.originalSize)} to ${formatFileSize(result.compressedSize)}`,
+        });
+      }
+      
+      scanCardMutation.mutate(result.file);
+    } catch (error) {
+      // Check if it's a CompressionError (our custom error)
+      if (error instanceof CompressionError) {
+        if (error.type === 'still_too_large') {
+          toast({
+            title: "Image too large",
+            description: error.message,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Image processing failed",
+            description: error.message || "Could not process this image. Please try a different photo.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Generic error - could be a DOM exception or other unexpected error
+        console.error("Unexpected error during compression:", error);
+        toast({
+          title: "Something went wrong",
+          description: "Could not process this image. Please try a different photo.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsCompressing(false);
     }
   };
 
@@ -222,7 +267,7 @@ export function ScanTab() {
     setIsEditing(false);
   };
 
-  const isProcessing = scanCardMutation.isPending || parseTextMutation.isPending;
+  const isProcessing = isCompressing || scanCardMutation.isPending || parseTextMutation.isPending;
 
   const currentContact = editedContact;
 
@@ -297,7 +342,12 @@ export function ScanTab() {
                   disabled={!selectedFile || isProcessing}
                   data-testid="button-scan"
                 >
-                  {scanCardMutation.isPending ? (
+                  {isCompressing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Optimizing image...
+                    </>
+                  ) : scanCardMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Scanning...

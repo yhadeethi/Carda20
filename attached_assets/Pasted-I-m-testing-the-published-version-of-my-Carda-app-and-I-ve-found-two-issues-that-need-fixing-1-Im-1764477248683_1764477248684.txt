@@ -1,0 +1,131 @@
+I’m testing the published version of my Carda app and I’ve found two issues that need fixing:
+
+1) Image scan fails – OCR.space file size limit
+
+When I scan a business card photo from my phone, I get this error:
+
+{"error":"File size exceeds the maximum size limit. Maximum size limit 1024 KB"}
+
+This is the OCR.space free-tier 1 MB limit. Please update the app so that:
+
+Client-side resize/compression before upload
+
+Before sending any image to OCR.space, automatically:
+
+Resize it so the longest side is around 1200–1600 px (keep aspect ratio).
+
+Compress so the final file is ≤ 1 MB.
+
+This should happen in the browser so the user doesn’t have to manually edit the image.
+
+Graceful error handling
+
+If for some reason the image still exceeds the limit or compression fails:
+
+Show a friendly error like:
+“This photo is too large for the scanner. Please retake the photo a bit further away or crop it. Max size 1 MB.”
+
+Don’t just show the raw JSON error to the user.
+
+Keep it modular
+
+Put the resize/compress logic in a small helper so we can later swap OCR providers without rewriting everything.
+
+2) “Paste Text” parsing accuracy for email signatures
+
+The “Paste Text” mode works but isn’t parsing email signatures accurately, especially the company name and fields like phone/website.
+
+Example signature I tested:
+
+Pat Savage
+Senior Project Engineer
+
+StorEnergy Pty Ltd
+Gateway, Level 31, 1 Macquarie Place
+Sydney NSW 2000
+m: +61 414 781 890
+e: pat.savage@stor-energy.com
+w: https://stor-energy.com
+
+
+The parser should reliably produce:
+
+Name: Pat Savage
+
+Title: Senior Project Engineer
+
+Company: StorEnergy Pty Ltd
+
+Mobile: +61 414 781 890
+
+Email: pat.savage@stor-energy.com
+
+Website: https://stor-energy.com
+
+Address: “Gateway, Level 31, 1 Macquarie Place, Sydney NSW 2000”
+
+Please improve the parsing logic using deterministic rules (not just a generic AI guess):
+
+Pre-cleaning
+
+Split text into lines and trim whitespace.
+
+Remove empty lines.
+
+Ignore lines after obvious disclaimer triggers like:
+
+“IMPORTANT NOTICE”
+
+“This e-mail message is intended”
+
+“CONFIDENTIALITY NOTICE”
+
+This keeps only the actual signature block.
+
+Name & Title detection
+
+Assume the first non-empty line is the full name.
+
+Assume the next non-empty line is the job title if it does NOT look like a company name:
+
+i.e. it does not contain words like: Pty, Ltd, Inc, LLC, GmbH, BV, S.A., Corp, etc.
+
+Company detection
+
+Look at the lines following the name/title.
+
+Choose the first line that:
+
+Contains one of the company suffixes above, OR
+
+Is in Title Case and does not start with m:, t:, p:, e:, w: or similar field labels.
+
+Map that line to the company field.
+
+Phone / Email / Website
+
+For the remaining lines:
+
+Email: use a standard email regex.
+
+Website: use a URL regex (including http/https and bare domains).
+
+Phone: detect lines starting with m:, mobile, t:, tel, p:, phone, or any line that contains a phone number pattern (multiple digits, optional +, spaces, parentheses).
+
+Address / Notes
+
+Any lines between the company line and the first contact detail line (m:, e:, w: etc.) should be concatenated into an address field (or notes if you don’t want a dedicated address field yet).
+
+UI behavior
+
+Keep all fields editable exactly as now.
+
+If the parser cannot confidently determine the company name, still prefill a best guess but we can optionally show a subtle hint like “Check company name” (only if it’s easy; otherwise just rely on editable fields).
+
+Goal:
+
+Image scanning should “just work” with normal phone photos (no manual resizing).
+
+“Paste Text” should feel reliable for standard corporate email signatures, especially correctly picking up company, phone, email, and website.
+
+Please implement both improvements and keep the code organized so parsing rules and OCR provider can be evolved later.

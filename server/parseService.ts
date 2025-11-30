@@ -6,81 +6,210 @@ export interface ParsedContact {
   phone?: string;
   website?: string;
   linkedinUrl?: string;
+  address?: string;
 }
 
+// Regex patterns
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
-
-const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,4}/g;
-
-const WEBSITE_REGEX = /(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(?:\/[^\s]*)?/gi;
-
+const PHONE_REGEX = /(?:\+?\d{1,4}[-.\s]?)?(?:\(?\d{1,4}\)?[-.\s]?)?(?:\d{1,4}[-.\s]?){2,4}\d{1,4}/g;
+const WEBSITE_REGEX = /(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+(?:\/[^\s]*)?/gi;
 const LINKEDIN_REGEX = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+\/?/gi;
 
-const COMMON_TITLES = [
-  "ceo", "cto", "cfo", "coo", "cmo", "cio", "cpo",
-  "president", "vice president", "vp",
-  "director", "manager", "lead", "head",
-  "engineer", "developer", "designer", "architect",
-  "analyst", "consultant", "specialist", "coordinator",
-  "executive", "officer", "partner", "founder", "co-founder",
-  "sales", "marketing", "hr", "finance", "operations",
-  "senior", "junior", "principal", "associate", "assistant",
+// Field label patterns (for labeled lines like "m:", "e:", "w:")
+const FIELD_LABEL_REGEX = /^(?:m|mobile|t|tel|telephone|p|phone|ph|f|fax|e|email|w|web|website|a|address|linkedin)\s*[:|\-]/i;
+
+// Disclaimer triggers - stop parsing when we see these
+const DISCLAIMER_TRIGGERS = [
+  "important notice",
+  "this e-mail message is intended",
+  "this email message is intended",
+  "confidentiality notice",
+  "disclaimer",
+  "this message is confidential",
+  "if you are not the intended recipient",
+  "this communication is intended",
+  "please consider the environment",
+  "this email and any attachments",
+  "privilege and confidential",
+  "unauthorized use",
 ];
 
+// Company suffixes to identify company names
 const COMPANY_SUFFIXES = [
+  "pty ltd", "pty. ltd.", "pty. ltd",
   "inc", "inc.", "incorporated",
-  "llc", "l.l.c.",
+  "llc", "l.l.c.", "l.l.c",
   "ltd", "ltd.", "limited",
   "corp", "corp.", "corporation",
   "co", "co.", "company",
-  "gmbh", "ag", "sa", "nv", "bv",
-  "plc", "pty", "pte",
-  "group", "holdings", "partners",
+  "gmbh", "ag", "sa", "s.a.", "nv", "bv", "b.v.",
+  "plc", "pte", "pte.", "pte ltd",
+  "group", "holdings", "partners", "partnership",
+  "associates", "consulting", "services", "solutions",
+  "international", "enterprises", "industries",
 ];
 
-function cleanText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
+// Common job title keywords
+const TITLE_KEYWORDS = [
+  "ceo", "cto", "cfo", "coo", "cmo", "cio", "cpo", "chro",
+  "president", "vice president", "vp", "svp", "evp",
+  "director", "managing director", "md",
+  "manager", "general manager", "gm",
+  "lead", "head", "chief",
+  "engineer", "developer", "programmer", "architect", "designer",
+  "analyst", "consultant", "specialist", "coordinator", "administrator",
+  "executive", "officer", "partner", "founder", "co-founder", "owner",
+  "sales", "marketing", "hr", "finance", "operations", "legal",
+  "senior", "junior", "principal", "associate", "assistant",
+  "project", "product", "program", "account", "client", "customer",
+  "advisor", "strategist", "researcher", "scientist",
+];
+
+/**
+ * Pre-clean raw text: split lines, trim, remove empty, stop at disclaimers
+ */
+function preCleanText(text: string): string[] {
+  const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 0);
+  
+  // Find where disclaimer starts and cut off there
+  const cleanedLines: string[] = [];
+  for (const line of lines) {
+    const lowerLine = line.toLowerCase();
+    const isDisclaimer = DISCLAIMER_TRIGGERS.some(trigger => lowerLine.includes(trigger));
+    if (isDisclaimer) break;
+    cleanedLines.push(line);
+  }
+  
+  return cleanedLines;
 }
 
+/**
+ * Check if a line looks like a field label (m:, e:, w:, etc.)
+ */
+function hasFieldLabel(line: string): boolean {
+  return FIELD_LABEL_REGEX.test(line);
+}
+
+/**
+ * Check if line contains a company suffix
+ */
+function hasCompanySuffix(line: string): boolean {
+  const lowerLine = line.toLowerCase();
+  return COMPANY_SUFFIXES.some(suffix => {
+    // Check for suffix at word boundary
+    const regex = new RegExp(`\\b${suffix.replace(/\./g, '\\.?')}\\b`, 'i');
+    return regex.test(lowerLine);
+  });
+}
+
+/**
+ * Check if line looks like a job title
+ */
+function looksLikeTitle(line: string): boolean {
+  const lowerLine = line.toLowerCase();
+  return TITLE_KEYWORDS.some(keyword => lowerLine.includes(keyword));
+}
+
+/**
+ * Check if line is in Title Case (most words start with uppercase)
+ */
+function isTitleCase(line: string): boolean {
+  const words = line.split(/\s+/).filter(w => w.length > 2);
+  if (words.length === 0) return false;
+  const titleCaseWords = words.filter(w => /^[A-Z]/.test(w));
+  return titleCaseWords.length / words.length >= 0.6;
+}
+
+/**
+ * Extract all emails from text
+ */
 function extractEmails(text: string): string[] {
   const matches = text.match(EMAIL_REGEX) || [];
   return Array.from(new Set(matches.map(e => e.toLowerCase())));
 }
 
-function extractPhones(text: string): string[] {
-  const matches = text.match(PHONE_REGEX) || [];
-  return matches
-    .map(p => p.replace(/[^\d+]/g, ""))
-    .filter(p => p.length >= 7 && p.length <= 15)
+/**
+ * Extract all phone numbers from text
+ */
+function extractPhones(text: string, lines: string[]): string[] {
+  const phones: string[] = [];
+  
+  // First, look for labeled phone lines
+  for (const line of lines) {
+    const lowerLine = line.toLowerCase();
+    if (/^(?:m|mobile|t|tel|telephone|p|phone|ph)\s*[:|\-]/i.test(line)) {
+      const phoneMatch = line.match(PHONE_REGEX);
+      if (phoneMatch) {
+        phones.push(...phoneMatch);
+      }
+    }
+  }
+  
+  // Also extract from full text
+  const textMatches = text.match(PHONE_REGEX) || [];
+  phones.push(...textMatches);
+  
+  // Clean and dedupe
+  return phones
+    .map(p => p.replace(/[^\d+\s()-]/g, "").trim())
+    .filter(p => {
+      const digits = p.replace(/\D/g, "");
+      return digits.length >= 7 && digits.length <= 15;
+    })
     .filter((p, i, arr) => arr.indexOf(p) === i);
 }
 
+/**
+ * Format phone number for display
+ */
 function formatPhone(phone: string): string {
-  const digits = phone.replace(/[^\d+]/g, "");
+  // Keep original formatting if it looks good
+  const cleaned = phone.replace(/[^\d+\s()-]/g, "").trim();
   
-  if (digits.startsWith("+")) {
-    if (digits.length === 12 && digits.startsWith("+1")) {
-      return `+1 (${digits.slice(2, 5)}) ${digits.slice(5, 8)}-${digits.slice(8)}`;
-    }
-    return digits;
+  // If it starts with +, keep international format
+  if (cleaned.startsWith("+")) {
+    return cleaned;
   }
   
+  const digits = cleaned.replace(/\D/g, "");
+  
+  // US format: 10 digits
   if (digits.length === 10) {
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   }
   
+  // US with country code: 11 digits starting with 1
   if (digits.length === 11 && digits.startsWith("1")) {
     return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
   }
   
-  return digits;
+  // Return cleaned version for other formats
+  return cleaned;
 }
 
-function extractWebsites(text: string): string[] {
-  const matches = text.match(WEBSITE_REGEX) || [];
-  return matches
-    .filter(url => !url.includes("linkedin.com"))
-    .filter(url => !url.match(EMAIL_REGEX))
+/**
+ * Extract websites from text (excluding LinkedIn)
+ */
+function extractWebsites(text: string, lines: string[]): string[] {
+  const websites: string[] = [];
+  
+  // First, look for labeled website lines
+  for (const line of lines) {
+    if (/^(?:w|web|website)\s*[:|\-]/i.test(line)) {
+      const urlMatch = line.match(WEBSITE_REGEX);
+      if (urlMatch) {
+        websites.push(...urlMatch.filter(u => !u.includes("linkedin.com")));
+      }
+    }
+  }
+  
+  // Also extract from full text
+  const textMatches = text.match(WEBSITE_REGEX) || [];
+  websites.push(...textMatches.filter(u => !u.includes("linkedin.com")));
+  
+  // Clean up and dedupe
+  return websites
+    .filter(url => !url.match(EMAIL_REGEX)) // Exclude things that look like emails
     .map(url => {
       if (!url.startsWith("http")) {
         return `https://${url}`;
@@ -90,6 +219,9 @@ function extractWebsites(text: string): string[] {
     .filter((url, i, arr) => arr.indexOf(url) === i);
 }
 
+/**
+ * Extract LinkedIn URL from text
+ */
 function extractLinkedIn(text: string): string | undefined {
   const matches = text.match(LINKEDIN_REGEX) || [];
   if (matches.length > 0 && matches[0]) {
@@ -102,69 +234,95 @@ function extractLinkedIn(text: string): string | undefined {
   return undefined;
 }
 
-function extractName(lines: string[], email?: string): string | undefined {
-  const skipPatterns = [
-    /^(?:tel|phone|mobile|fax|email|www|http|linkedin)/i,
-    /@/,
-    /^\+?\d/,
-    /\.com|\.org|\.net|\.io/i,
-  ];
-  
-  for (const line of lines) {
-    const cleaned = cleanText(line);
+/**
+ * Extract name - assume first non-contact, non-company line is the name
+ */
+function extractName(lines: string[], email?: string): { name?: string; nameIndex: number } {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const cleaned = line.trim();
     
-    if (cleaned.length < 2 || cleaned.length > 50) continue;
+    // Skip empty or too short/long
+    if (cleaned.length < 2 || cleaned.length > 60) continue;
     
-    if (skipPatterns.some(p => p.test(cleaned))) continue;
+    // Skip if it has field labels
+    if (hasFieldLabel(cleaned)) continue;
     
-    const lowerLine = cleaned.toLowerCase();
-    const hasTitle = COMMON_TITLES.some(t => lowerLine.includes(t));
-    const hasCompanySuffix = COMPANY_SUFFIXES.some(s => lowerLine.includes(s));
+    // Skip if it contains email, phone pattern, or URL
+    if (/@/.test(cleaned)) continue;
+    if (/^\+?\d/.test(cleaned)) continue;
+    if (/https?:\/\/|www\./i.test(cleaned)) continue;
+    if (/\.com|\.org|\.net|\.io|\.au|\.uk/i.test(cleaned)) continue;
     
-    if (hasTitle || hasCompanySuffix) continue;
+    // Skip if it looks like a company
+    if (hasCompanySuffix(cleaned)) continue;
     
+    // Skip if it looks like a job title
+    if (looksLikeTitle(cleaned)) continue;
+    
+    // Check if it looks like a proper name (2-4 words, capitalized)
     const words = cleaned.split(/\s+/);
-    if (words.length >= 2 && words.length <= 4) {
-      const allWordsLookLikeNames = words.every(w => 
-        /^[A-Z][a-z]+$/.test(w) || 
-        /^[A-Z]\.?$/.test(w) ||
-        /^[A-Z][a-z]*-[A-Z][a-z]+$/.test(w)
+    if (words.length >= 1 && words.length <= 4) {
+      const allWordsCapitalized = words.every(w => 
+        /^[A-Z][a-z''-]*$/.test(w) || // Standard name
+        /^[A-Z]\.?$/.test(w) || // Initial
+        /^[A-Z][a-z]+-[A-Z][a-z]+$/.test(w) || // Hyphenated
+        /^O'[A-Z][a-z]+$/.test(w) || // O'Brien style
+        /^Mc[A-Z][a-z]+$/.test(w) || // McName style
+        /^Mac[A-Z][a-z]+$/.test(w) // MacName style
       );
       
-      if (allWordsLookLikeNames) {
-        return cleaned;
+      if (allWordsCapitalized) {
+        return { name: cleaned, nameIndex: i };
       }
     }
   }
   
+  // Fallback: try to derive from email
   if (email) {
     const localPart = email.split("@")[0];
     const nameParts = localPart.split(/[._-]/).filter(p => p.length > 1);
     if (nameParts.length >= 2) {
-      return nameParts
+      const derivedName = nameParts
         .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
         .join(" ");
+      return { name: derivedName, nameIndex: -1 };
     }
   }
   
-  return undefined;
+  return { name: undefined, nameIndex: -1 };
 }
 
-function extractJobTitle(lines: string[], nameFound?: string): string | undefined {
-  for (const line of lines) {
-    const cleaned = cleanText(line);
-    const lowerLine = cleaned.toLowerCase();
+/**
+ * Extract job title - look for title keywords after name
+ */
+function extractJobTitle(lines: string[], nameIndex: number, companyName?: string): string | undefined {
+  // Look at lines after the name
+  const startIndex = nameIndex >= 0 ? nameIndex + 1 : 0;
+  
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    const cleaned = line.trim();
     
-    if (nameFound && cleaned === nameFound) continue;
+    // Skip empty or too short/long
+    if (cleaned.length < 3 || cleaned.length > 100) continue;
     
-    if (cleaned.length < 3 || cleaned.length > 80) continue;
+    // Skip field labels
+    if (hasFieldLabel(cleaned)) continue;
     
-    if (/@|www\.|\.com|^\+?\d/.test(cleaned)) continue;
+    // Skip if contains email/phone/URL
+    if (/@/.test(cleaned)) continue;
+    if (/^\+?\d/.test(cleaned)) continue;
+    if (/https?:\/\/|www\./i.test(cleaned)) continue;
     
-    const hasTitle = COMMON_TITLES.some(t => lowerLine.includes(t));
-    const hasCompanySuffix = COMPANY_SUFFIXES.some(s => lowerLine.includes(s));
+    // Skip if it's the company name
+    if (companyName && cleaned.toLowerCase() === companyName.toLowerCase()) continue;
     
-    if (hasTitle && !hasCompanySuffix) {
+    // If it has company suffix, it's not a title
+    if (hasCompanySuffix(cleaned)) continue;
+    
+    // Check if it looks like a job title
+    if (looksLikeTitle(cleaned)) {
       return cleaned;
     }
   }
@@ -172,60 +330,132 @@ function extractJobTitle(lines: string[], nameFound?: string): string | undefine
   return undefined;
 }
 
-function extractCompanyName(lines: string[], nameFound?: string, titleFound?: string): string | undefined {
-  for (const line of lines) {
-    const cleaned = cleanText(line);
-    const lowerLine = cleaned.toLowerCase();
+/**
+ * Extract company name - look for company suffixes or Title Case after name/title
+ */
+function extractCompanyName(lines: string[], nameIndex: number, titleLine?: string): { company?: string; companyIndex: number } {
+  const startIndex = nameIndex >= 0 ? nameIndex + 1 : 0;
+  
+  // First pass: look for lines with company suffixes
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    const cleaned = line.trim();
     
-    if (nameFound && cleaned === nameFound) continue;
-    if (titleFound && cleaned === titleFound) continue;
+    // Skip the title line
+    if (titleLine && cleaned === titleLine) continue;
     
-    if (cleaned.length < 2 || cleaned.length > 80) continue;
+    // Skip field labels
+    if (hasFieldLabel(cleaned)) continue;
     
-    if (/@|^\+?\d/.test(cleaned)) continue;
+    // Skip email/phone/URL
+    if (/@/.test(cleaned)) continue;
+    if (/^\+?\d/.test(cleaned)) continue;
+    if (/https?:\/\/|www\./i.test(cleaned)) continue;
     
-    const hasCompanySuffix = COMPANY_SUFFIXES.some(s => lowerLine.includes(s));
-    
-    if (hasCompanySuffix) {
-      return cleaned;
+    // Check for company suffix
+    if (hasCompanySuffix(cleaned)) {
+      return { company: cleaned, companyIndex: i };
     }
   }
   
-  for (const line of lines) {
-    const cleaned = cleanText(line);
+  // Second pass: look for Title Case lines that could be company names
+  for (let i = startIndex; i < Math.min(startIndex + 5, lines.length); i++) {
+    const line = lines[i];
+    const cleaned = line.trim();
     
-    if (nameFound && cleaned === nameFound) continue;
-    if (titleFound && cleaned === titleFound) continue;
+    // Skip the title line
+    if (titleLine && cleaned === titleLine) continue;
     
-    if (cleaned.length < 2 || cleaned.length > 60) continue;
+    // Skip field labels
+    if (hasFieldLabel(cleaned)) continue;
     
-    if (/@|www\.|\.com|^\+?\d/.test(cleaned)) continue;
+    // Skip email/phone/URL
+    if (/@/.test(cleaned)) continue;
+    if (/^\+?\d/.test(cleaned)) continue;
+    if (/https?:\/\/|www\./i.test(cleaned)) continue;
     
-    const words = cleaned.split(/\s+/);
-    if (words.length <= 4) {
-      const hasCapitals = words.some(w => /^[A-Z]/.test(w));
-      if (hasCapitals) {
-        return cleaned;
+    // Skip if it looks like a job title
+    if (looksLikeTitle(cleaned)) continue;
+    
+    // Check if Title Case and reasonable length
+    if (isTitleCase(cleaned) && cleaned.length >= 3 && cleaned.length <= 60) {
+      const words = cleaned.split(/\s+/);
+      if (words.length <= 6) {
+        return { company: cleaned, companyIndex: i };
       }
     }
   }
   
+  return { company: undefined, companyIndex: -1 };
+}
+
+/**
+ * Extract address - lines between company and contact fields
+ */
+function extractAddress(lines: string[], companyIndex: number): string | undefined {
+  if (companyIndex < 0) return undefined;
+  
+  const addressParts: string[] = [];
+  
+  for (let i = companyIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const cleaned = line.trim();
+    
+    // Stop if we hit a field label (m:, e:, w:, etc.)
+    if (hasFieldLabel(cleaned)) break;
+    
+    // Stop if we hit email/phone/URL
+    if (/@/.test(cleaned)) break;
+    if (/https?:\/\/|www\./i.test(cleaned)) break;
+    
+    // Stop if line is mostly digits (phone)
+    const digits = cleaned.replace(/\D/g, "");
+    if (digits.length >= 7 && digits.length / cleaned.replace(/\s/g, "").length > 0.5) break;
+    
+    // This looks like an address part
+    if (cleaned.length > 0 && cleaned.length <= 100) {
+      addressParts.push(cleaned);
+    }
+    
+    // Limit address to 3 lines
+    if (addressParts.length >= 3) break;
+  }
+  
+  if (addressParts.length > 0) {
+    return addressParts.join(", ");
+  }
+  
   return undefined;
 }
 
+/**
+ * Main parsing function
+ */
 export function parseContact(rawText: string): ParsedContact {
-  const lines = rawText.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 0);
+  const lines = preCleanText(rawText);
+  const fullText = lines.join("\n");
   
-  const emails = extractEmails(rawText);
-  const phones = extractPhones(rawText);
-  const websites = extractWebsites(rawText);
-  const linkedinUrl = extractLinkedIn(rawText);
+  // Extract structured data
+  const emails = extractEmails(fullText);
+  const phones = extractPhones(fullText, lines);
+  const websites = extractWebsites(fullText, lines);
+  const linkedinUrl = extractLinkedIn(fullText);
   
   const email = emails[0];
-  const fullName = extractName(lines, email);
-  const jobTitle = extractJobTitle(lines, fullName);
-  const companyName = extractCompanyName(lines, fullName, jobTitle);
   
+  // Extract name first (usually first line)
+  const { name: fullName, nameIndex } = extractName(lines, email);
+  
+  // Extract company (to help with title detection)
+  const { company: companyName, companyIndex } = extractCompanyName(lines, nameIndex);
+  
+  // Extract job title (after name, before or separate from company)
+  const jobTitle = extractJobTitle(lines, nameIndex, companyName);
+  
+  // Extract address (between company and contact fields)
+  const address = extractAddress(lines, companyIndex);
+  
+  // Format phone
   const phone = phones[0] ? formatPhone(phones[0]) : undefined;
   const website = websites[0];
   
@@ -237,6 +467,7 @@ export function parseContact(rawText: string): ParsedContact {
     phone,
     website,
     linkedinUrl,
+    address,
   };
 }
 
