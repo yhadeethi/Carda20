@@ -182,201 +182,204 @@ export function CompanyIntelCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Fallback warning banner */}
-        {intel.error && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm text-amber-700 dark:text-amber-300">
-                Limited intel available
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {intel.error}. Showing generic talking points.
-              </p>
+        {/* Sales Brief wrapper - single vertical rail for consistent alignment */}
+        <div className="sales-brief-wrapper w-full space-y-4">
+          {/* Fallback warning banner */}
+          {intel.error && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  Limited intel available
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {intel.error}. Showing generic talking points.
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRetry}
+                  className="gap-1 mt-2 h-7 px-2 text-xs"
+                  data-testid="button-retry-intel-inline"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Company Snapshot */}
+          {intel.companySnapshot && (
+            <Collapsible open={snapshotOpen} onOpenChange={setSnapshotOpen}>
+              <SectionHeader
+                icon={Building2}
+                title="Company Snapshot"
+                isOpen={snapshotOpen}
+                onToggle={() => setSnapshotOpen(!snapshotOpen)}
+              />
+              <CollapsibleContent>
+                <div className="mt-2 pl-8">
+                  <p className="text-sm text-muted-foreground" data-testid="text-company-snapshot">
+                    {intel.companySnapshot}
+                  </p>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Why They Matter to You */}
+          {intel.whyTheyMatterToYou && intel.whyTheyMatterToYou.length > 0 && (
+            <Collapsible open={whyMatterOpen} onOpenChange={setWhyMatterOpen}>
+              <SectionHeader
+                icon={Target}
+                title="Why They Matter to You"
+                isOpen={whyMatterOpen}
+                onToggle={() => setWhyMatterOpen(!whyMatterOpen)}
+              />
+              <CollapsibleContent>
+                <BulletList items={intel.whyTheyMatterToYou} testIdPrefix="why-matter" />
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* What This Contact Likely Cares About */}
+          {intel.roleInsights && intel.roleInsights.length > 0 && (
+            <Collapsible open={roleInsightsOpen} onOpenChange={setRoleInsightsOpen}>
+              <SectionHeader
+                icon={User}
+                title="What This Contact Likely Cares About"
+                isOpen={roleInsightsOpen}
+                onToggle={() => setRoleInsightsOpen(!roleInsightsOpen)}
+              />
+              <CollapsibleContent>
+                <BulletList items={intel.roleInsights} testIdPrefix="role-insight" />
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* High-Impact Questions */}
+          {intel.highImpactQuestions && intel.highImpactQuestions.length > 0 && (
+            <Collapsible open={questionsOpen} onOpenChange={setQuestionsOpen}>
+              <SectionHeader
+                icon={HelpCircle}
+                title="High-Impact Questions"
+                isOpen={questionsOpen}
+                onToggle={() => setQuestionsOpen(!questionsOpen)}
+              />
+              <CollapsibleContent>
+                <div className="mt-2 space-y-2 pl-8">
+                  {intel.highImpactQuestions.map((question, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2"
+                      data-testid={`question-${i}`}
+                    >
+                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-medium text-primary">
+                          {i + 1}
+                        </span>
+                      </div>
+                      <p className="text-sm italic">"{question}"</p>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Key Developments (may not be up to date) */}
+          {intel.keyDevelopments && intel.keyDevelopments.length > 0 && (
+            <Collapsible open={developmentsOpen} onOpenChange={setDevelopmentsOpen}>
+              <SectionHeader
+                icon={History}
+                title="Key Developments (may not be up to date)"
+                isOpen={developmentsOpen}
+                onToggle={() => setDevelopmentsOpen(!developmentsOpen)}
+              />
+              <CollapsibleContent>
+                <div className="mt-2 space-y-3 pl-8">
+                  {intel.keyDevelopments.map((dev, i) => (
+                    <div
+                      key={i}
+                      className="border-l-2 border-primary/30 pl-3 py-1"
+                      data-testid={`development-${i}`}
+                    >
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                        <span>{dev.approxDate}</span>
+                      </div>
+                      <p className="text-sm font-medium">{dev.headline}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {dev.summary}
+                      </p>
+                      {dev.note && (
+                        <p className="text-xs text-muted-foreground/70 mt-1 italic">
+                          {dev.note}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  
+                  {/* View Latest News on Google button */}
+                  {companyName && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={openGoogleNews}
+                      className="gap-2 mt-2"
+                      data-testid="button-google-news"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      View latest news on Google
+                    </Button>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Show Google News button even if no developments */}
+          {(!intel.keyDevelopments || intel.keyDevelopments.length === 0) && companyName && (
+            <div className="pl-8">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={onRetry}
-                className="gap-1 mt-2 h-7 px-2 text-xs"
-                data-testid="button-retry-intel-inline"
+                onClick={openGoogleNews}
+                className="gap-2"
+                data-testid="button-google-news"
               >
-                <RefreshCw className="w-3 h-3" />
-                Try Again
+                <ExternalLink className="w-3 h-3" />
+                View latest news on Google
               </Button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Company Snapshot */}
-        {intel.companySnapshot && (
-          <Collapsible open={snapshotOpen} onOpenChange={setSnapshotOpen}>
-            <SectionHeader
-              icon={Building2}
-              title="Company Snapshot"
-              isOpen={snapshotOpen}
-              onToggle={() => setSnapshotOpen(!snapshotOpen)}
-            />
-            <CollapsibleContent>
-              <div className="mt-2 pl-8">
-                <p className="text-sm text-muted-foreground" data-testid="text-company-snapshot">
-                  {intel.companySnapshot}
-                </p>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
-        {/* Why They Matter to You */}
-        {intel.whyTheyMatterToYou && intel.whyTheyMatterToYou.length > 0 && (
-          <Collapsible open={whyMatterOpen} onOpenChange={setWhyMatterOpen}>
-            <SectionHeader
-              icon={Target}
-              title="Why They Matter to You"
-              isOpen={whyMatterOpen}
-              onToggle={() => setWhyMatterOpen(!whyMatterOpen)}
-            />
-            <CollapsibleContent>
-              <BulletList items={intel.whyTheyMatterToYou} testIdPrefix="why-matter" />
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
-        {/* What This Contact Likely Cares About */}
-        {intel.roleInsights && intel.roleInsights.length > 0 && (
-          <Collapsible open={roleInsightsOpen} onOpenChange={setRoleInsightsOpen}>
-            <SectionHeader
-              icon={User}
-              title="What This Contact Likely Cares About"
-              isOpen={roleInsightsOpen}
-              onToggle={() => setRoleInsightsOpen(!roleInsightsOpen)}
-            />
-            <CollapsibleContent>
-              <BulletList items={intel.roleInsights} testIdPrefix="role-insight" />
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
-        {/* High-Impact Questions */}
-        {intel.highImpactQuestions && intel.highImpactQuestions.length > 0 && (
-          <Collapsible open={questionsOpen} onOpenChange={setQuestionsOpen}>
-            <SectionHeader
-              icon={HelpCircle}
-              title="High-Impact Questions"
-              isOpen={questionsOpen}
-              onToggle={() => setQuestionsOpen(!questionsOpen)}
-            />
-            <CollapsibleContent>
-              <div className="mt-2 space-y-2 pl-8">
-                {intel.highImpactQuestions.map((question, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-2"
-                    data-testid={`question-${i}`}
-                  >
-                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-medium text-primary">
-                        {i + 1}
-                      </span>
+          {/* Watch Outs - only show if non-empty */}
+          {intel.risksOrSensitivities && intel.risksOrSensitivities.length > 0 && (
+            <Collapsible open={risksOpen} onOpenChange={setRisksOpen}>
+              <SectionHeader
+                icon={AlertTriangle}
+                title="Watch Outs"
+                isOpen={risksOpen}
+                onToggle={() => setRisksOpen(!risksOpen)}
+              />
+              <CollapsibleContent>
+                <div className="mt-2 space-y-2 pl-8">
+                  {intel.risksOrSensitivities.map((risk, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 p-2 rounded-md bg-amber-500/5 border border-amber-500/10"
+                      data-testid={`risk-${i}`}
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm">{risk}</p>
                     </div>
-                    <p className="text-sm italic">"{question}"</p>
-                  </div>
-                ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
-        {/* Key Developments (may not be up to date) */}
-        {intel.keyDevelopments && intel.keyDevelopments.length > 0 && (
-          <Collapsible open={developmentsOpen} onOpenChange={setDevelopmentsOpen}>
-            <SectionHeader
-              icon={History}
-              title="Key Developments (may not be up to date)"
-              isOpen={developmentsOpen}
-              onToggle={() => setDevelopmentsOpen(!developmentsOpen)}
-            />
-            <CollapsibleContent>
-              <div className="mt-2 space-y-3 pl-8">
-                {intel.keyDevelopments.map((dev, i) => (
-                  <div
-                    key={i}
-                    className="border-l-2 border-primary/30 pl-3 py-1"
-                    data-testid={`development-${i}`}
-                  >
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                      <span>{dev.approxDate}</span>
-                    </div>
-                    <p className="text-sm font-medium">{dev.headline}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {dev.summary}
-                    </p>
-                    {dev.note && (
-                      <p className="text-xs text-muted-foreground/70 mt-1 italic">
-                        {dev.note}
-                      </p>
-                    )}
-                  </div>
-                ))}
-                
-                {/* View Latest News on Google button */}
-                {companyName && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={openGoogleNews}
-                    className="gap-2 mt-2"
-                    data-testid="button-google-news"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    View latest news on Google
-                  </Button>
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
-        {/* Show Google News button even if no developments */}
-        {(!intel.keyDevelopments || intel.keyDevelopments.length === 0) && companyName && (
-          <div className="pl-8">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={openGoogleNews}
-              className="gap-2"
-              data-testid="button-google-news"
-            >
-              <ExternalLink className="w-3 h-3" />
-              View latest news on Google
-            </Button>
-          </div>
-        )}
-
-        {/* Watch Outs - only show if non-empty */}
-        {intel.risksOrSensitivities && intel.risksOrSensitivities.length > 0 && (
-          <Collapsible open={risksOpen} onOpenChange={setRisksOpen}>
-            <SectionHeader
-              icon={AlertTriangle}
-              title="Watch Outs"
-              isOpen={risksOpen}
-              onToggle={() => setRisksOpen(!risksOpen)}
-            />
-            <CollapsibleContent>
-              <div className="mt-2 space-y-2 pl-8">
-                {intel.risksOrSensitivities.map((risk, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-2 p-2 rounded-md bg-amber-500/5 border border-amber-500/10"
-                    data-testid={`risk-${i}`}
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm">{risk}</p>
-                  </div>
-                ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

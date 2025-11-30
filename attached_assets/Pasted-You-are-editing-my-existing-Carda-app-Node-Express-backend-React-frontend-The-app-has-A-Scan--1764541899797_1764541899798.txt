@@ -1,0 +1,312 @@
+You are editing my existing Carda app (Node/Express backend + React frontend).
+The app has:
+
+A Scan flow (image + OCR → contact + intel)
+
+An Intel / Sales Brief tab
+
+A My Card / Profile area with my own details
+
+I want you to implement the following changes.
+
+1. Fix address extraction from OCR (backend)
+
+In the /api/scan route, I already log rawText and build a contact object.
+Here is a real rawText example that currently produces a bad address:
+
+Yaseen Al-hadeethi
+Project Sales Director - MEA
+Energy Storage & Optimization
+Mob. +61 (0)426 781 334
+yaseen.al-hadeethi@wartsila.com
+Wärtsilä Energy Storage Australia Pty Ltd
+Registered address:
+Sydney office address:
+48 Huntingwood Drive,
+45B/2 Park Street,
+Huntingwood NSW 2148
+Sydney NSW 2000
+Australia
+Australia
+www.wartsila.com
+WÄRTSILÄ
+
+
+At the moment, contact.address ends up as:
+
+"address": "Registered address:, Sydney office address:, 48 Huntingwood Drive,"
+
+
+This is wrong. I need a smarter AU-aware address extractor that:
+
+Works directly on rawText.
+
+Detects Australian-style address lines containing:
+
+A state code: NSW, VIC, QLD, WA, SA, TAS, ACT, NT
+
+A 4-digit postcode
+
+Handles multiple addresses (registered + office) in the same card.
+
+Picks the office / working address as the final contact.address, not the registered address.
+
+Never includes label text like “Registered address:” or “Sydney office address:” in the final value.
+
+Implement a helper like this on the backend (shared util or in the scan file):
+
+function extractBestAddress(rawText) {
+  const lines = rawText
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  const addresses = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    const hasState = /\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/.test(line);
+    const hasPostcode = /\b\d{4}\b/.test(line);
+    if (!hasState || !hasPostcode) continue;
+
+    const placeLine = line;
+    const streetLine = lines[i - 1] || "";
+    const countryLine =
+      lines[i + 1] && /australia/i.test(lines[i + 1]) ? lines[i + 1] : "";
+
+    const labelLine = (lines[i - 2] || "").toLowerCase();
+    const isOffice = labelLine.includes("office address");
+    const isRegistered = labelLine.includes("registered address");
+
+    const full = `${streetLine} ${placeLine} ${countryLine}`.replace(/\s+,/g, ",").trim();
+
+    addresses.push({
+      full,
+      score: (isOffice ? 100 : 0) + (isRegistered ? 10 : 0),
+    });
+  }
+
+  if (!addresses.length) return null;
+  addresses.sort((a, b) => b.score - a.score);
+  return addresses[0].full;
+}
+
+
+Then, in /api/scan:
+
+After you have rawText and before returning the contact, call:
+
+const bestAddress = extractBestAddress(rawText);
+if (bestAddress) {
+  contact.address = bestAddress;
+}
+
+
+Do not prepend label words into contact.address.
+
+For the Yaseen example above, the final contact.address must be:
+
+45B/2 Park Street, Sydney NSW 2000 Australia
+
+
+Keep all other existing contact parsing logic unchanged.
+
+2. Fix email overflow + alignment in contact/intel UI (frontend)
+
+In the React UI, the main issues:
+
+The email address in the contact header overflows out of the card to the right.
+
+The Sales Brief sections (Company Snapshot, Why They Matter to You, etc.) are slightly misaligned horizontally – some cards appear narrower or shifted.
+
+I want you to:
+
+2.1 Email overflow in the contact header
+
+In the component that renders the contact header (name, job title, company, phone, email):
+
+Wrap the email in a dedicated element with a class, for example:
+
+<div className="contact-header-text">
+  {/* other text fields */}
+  <div className="email-text" title={contact.email}>
+    {contact.email}
+  </div>
+</div>
+
+
+Make sure the flex child that contains the text uses:
+
+.contact-header-text {
+  min-width: 0;
+}
+
+
+This is important inside flex so text can shrink.
+
+Add CSS for the email:
+
+.email-text {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+This should stop the email from overflowing while still showing the full value on hover via title.
+
+2.2 Single vertical “rail” for Sales Brief sections
+
+For all Sales Brief sections (Company Snapshot, Why They Matter to You, What This Contact Likely Cares About, High Impact Questions, Key Developments, Watch Outs):
+
+Wrap them in a single main container with a fixed max width, e.g. if using Tailwind:
+
+<div className="sales-brief-wrapper max-w-3xl mx-auto px-4">
+  {/* all sections go inside here */}
+</div>
+
+
+Ensure every section (and card) respects this same wrapper so they all line up in one clean column.
+
+Reuse the same card component / styling for:
+
+Key Developments items
+
+The Watch Outs box
+
+So that they share identical horizontal padding and width. The Watch Outs card should no longer look narrower or offset compared to the Key Developments cards.
+
+Remove any extra margins/padding that make any of the Sales Brief cards stick out or be misaligned horizontally.
+
+Do not change the structure of the content, just align and standardise the layout so everything sits on one consistent vertical rail.
+
+3. Add “My QR” feature for the user’s own details
+
+I want a QR code feature that shares my details (the user of the app), so that others can easily add me as a contact by scanning.
+
+This should be based on the My Card / Profile data, not on the last scanned contact.
+
+3.1 Use the existing My Card / Profile
+
+Assume there is (or create if needed) a My Card / Profile screen that holds my details:
+
+full name
+
+job title
+
+company
+
+phone
+
+email
+
+address fields (street, city, state, postcode, country)
+
+On that screen:
+
+Add a clear primary button:
+
+[ Show My QR ]
+
+
+Clicking this opens a modal (or drawer) that displays a large QR code for my vCard.
+
+3.2 QR library and vCard helper
+
+Install and use a QR React component library such as qrcode.react.
+If needed, run: npm install qrcode.react
+
+Create a helper function on the frontend, e.g. generateVCardFromProfile(profile):
+
+function generateVCardFromProfile(profile) {
+  const {
+    fullName = "",
+    companyName = "",
+    jobTitle = "",
+    phone = "",
+    email = "",
+    street = "",
+    city = "",
+    state = "",
+    postcode = "",
+    country = "",
+  } = profile || {};
+
+  return [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    `FN:${fullName}`,
+    `ORG:${companyName}`,
+    `TITLE:${jobTitle}`,
+    phone ? `TEL;TYPE=CELL:${phone}` : "",
+    email ? `EMAIL:${email}` : "",
+    // ADR format: ADR;TYPE=WORK:;;street;city;state;postcode;country
+    (street || city || state || postcode || country)
+      ? `ADR;TYPE=WORK:;;${street};${city};${state};${postcode};${country}`
+      : "",
+    "END:VCARD",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+
+In the QR modal component, use:
+
+import { QRCodeCanvas } from "qrcode.react"; // or appropriate import
+
+const vcard = generateVCardFromProfile(profile);
+
+<QRCodeCanvas value={vcard} size={192} />
+
+
+Under the QR, add a short hint text like:
+
+“Ask them to scan this to save your contact details.”
+
+3.3 Quick access from the Scan screen
+
+On the Scan screen (the main screen used in real life), add a shortcut to the same QR:
+
+Add a small QR icon button in the top-right of the Scan screen header (or a small pill at the bottom) with label/icon like:
+
+Icon: QR symbol
+
+Tooltip / aria-label: “Show My QR”
+
+Clicking that should open the exact same “My QR” modal used on the Profile / My Card screen, using the same profile data and generateVCardFromProfile helper.
+
+This way the user can:
+
+Open the app on Scan (default).
+
+Tap the QR icon once.
+
+Turn the phone around for someone else to scan and instantly save their contact.
+
+4. Final checks
+
+After implementing:
+
+Re-scan the Yaseen card and confirm:
+
+contact.address comes back as a full, clean office address like
+45B/2 Park Street, Sydney NSW 2000 Australia
+
+It no longer includes label text.
+
+Confirm in the UI:
+
+The email in the contact header stays inside the card and shows “…” when too long, with full address on hover.
+
+All Sales Brief sections (snapshot, why they matter, role insights, questions, key developments, watch outs) align on the same vertical column with consistent widths and padding.
+
+Confirm the QR feature:
+
+“My Card / Profile” screen has a Show My QR button that opens a modal with a working QR code.
+
+The Scan screen has a QR shortcut that opens the same modal.
+
+Scanning the QR with a normal iOS/Android camera is recognised as a contact (vCard) and allows saving the profile.

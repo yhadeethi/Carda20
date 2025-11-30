@@ -1,5 +1,6 @@
 import { useTheme } from "@/hooks/use-theme";
 import { ScanTab } from "@/components/scan-tab";
+import { MyQRModal } from "@/components/my-qr-modal";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Moon, Sun } from "lucide-react";
 
@@ -15,18 +16,21 @@ export default function HomePage() {
           </div>
           <span className="font-semibold text-lg">Carda</span>
         </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={toggleTheme}
-          data-testid="button-theme-toggle"
-        >
-          {theme === "dark" ? (
-            <Sun className="w-4 h-4" />
-          ) : (
-            <Moon className="w-4 h-4" />
-          )}
-        </Button>
+        <div className="flex items-center gap-1">
+          <MyQRModal />
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={toggleTheme}
+            data-testid="button-theme-toggle"
+          >
+            {theme === "dark" ? (
+              <Sun className="w-4 h-4" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto">

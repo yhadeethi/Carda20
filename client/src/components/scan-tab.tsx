@@ -486,51 +486,63 @@ export function ScanTab() {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 min-w-0">
                   {currentContact?.fullName && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="font-medium" data-testid="text-contact-name">{currentContact.fullName}</span>
+                      <span className="font-medium truncate" data-testid="text-contact-name">{currentContact.fullName}</span>
                     </div>
                   )}
                   {currentContact?.jobTitle && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <Briefcase className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span data-testid="text-contact-title">{currentContact.jobTitle}</span>
+                      <span className="truncate" data-testid="text-contact-title">{currentContact.jobTitle}</span>
                     </div>
                   )}
                   {currentContact?.companyName && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <Building className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span data-testid="text-contact-company">{currentContact.companyName}</span>
+                      <span className="truncate" data-testid="text-contact-company">{currentContact.companyName}</span>
                     </div>
                   )}
                   {currentContact?.email && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <a href={`mailto:${currentContact.email}`} className="text-primary hover:underline" data-testid="text-contact-email">
+                      <a 
+                        href={`mailto:${currentContact.email}`} 
+                        className="text-primary hover:underline text-sm truncate" 
+                        title={currentContact.email}
+                        data-testid="text-contact-email"
+                      >
                         {currentContact.email}
                       </a>
                     </div>
                   )}
                   {currentContact?.phone && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <a href={`tel:${currentContact.phone}`} className="text-primary hover:underline" data-testid="text-contact-phone">
+                      <a href={`tel:${currentContact.phone}`} className="text-primary hover:underline truncate" data-testid="text-contact-phone">
                         {currentContact.phone}
                       </a>
                     </div>
                   )}
                   {currentContact?.website && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <a href={currentContact.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" data-testid="text-contact-website">
+                      <a 
+                        href={currentContact.website} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-primary hover:underline truncate"
+                        title={currentContact.website}
+                        data-testid="text-contact-website"
+                      >
                         {currentContact.website.replace(/^https?:\/\//, "")}
                       </a>
                     </div>
                   )}
                   {currentContact?.linkedinUrl && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <Linkedin className="w-4 h-4 text-muted-foreground shrink-0" />
                       <a href={currentContact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" data-testid="text-contact-linkedin">
                         LinkedIn Profile

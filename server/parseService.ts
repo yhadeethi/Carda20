@@ -523,9 +523,94 @@ function extractCompanyName(lines: string[], nameIndex: number, titleLine?: stri
 }
 
 /**
- * Extract address - lines between company and contact fields
+ * Australian-aware address extraction
+ * Handles business cards with multiple addresses (registered + office)
+ * Picks office/working address over registered address
  */
-function extractAddress(lines: string[], companyIndex: number): string | undefined {
+function extractBestAUAddress(rawText: string): string | null {
+  const lines = rawText
+    .split(/[\n\r]+/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  interface AddressCandidate {
+    full: string;
+    score: number;
+  }
+
+  const addresses: AddressCandidate[] = [];
+
+  // AU state codes
+  const AU_STATES = /\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/;
+  const AU_POSTCODE = /\b\d{4}\b/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Must have an AU state code and 4-digit postcode
+    const hasState = AU_STATES.test(line);
+    const hasPostcode = AU_POSTCODE.test(line);
+    if (!hasState || !hasPostcode) continue;
+
+    // This line contains "City STATE POSTCODE"
+    const placeLine = line;
+    
+    // Street line is typically the line before
+    const streetLine = lines[i - 1] || "";
+    
+    // Country line is typically the line after (if it says Australia)
+    const countryLine =
+      lines[i + 1] && /australia/i.test(lines[i + 1]) ? lines[i + 1] : "";
+
+    // Check label 2 lines up to determine address type
+    const labelLine = (lines[i - 2] || "").toLowerCase();
+    const isOffice = labelLine.includes("office address") || 
+                     labelLine.includes("office:") ||
+                     labelLine.includes("sydney office") ||
+                     labelLine.includes("melbourne office") ||
+                     labelLine.includes("brisbane office");
+    const isRegistered = labelLine.includes("registered address") || 
+                         labelLine.includes("registered:");
+
+    // Skip lines that look like labels (not actual street addresses)
+    if (/^(registered|office|sydney|melbourne|brisbane)\s*(address)?:?$/i.test(streetLine)) {
+      continue;
+    }
+
+    // Build full address, cleaning up spacing
+    const full = `${streetLine} ${placeLine} ${countryLine}`
+      .replace(/\s+,/g, ",")
+      .replace(/,\s*,/g, ",")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // Score: prefer office (100) over registered (10) over unknown (50)
+    const score = isOffice ? 100 : (isRegistered ? 10 : 50);
+
+    addresses.push({ full, score });
+  }
+
+  if (!addresses.length) return null;
+  
+  // Sort by score descending (office first)
+  addresses.sort((a, b) => b.score - a.score);
+  return addresses[0].full;
+}
+
+/**
+ * Extract address - lines between company and contact fields
+ * Uses AU-aware extraction first, falls back to generic
+ */
+function extractAddress(lines: string[], companyIndex: number, rawText?: string): string | undefined {
+  // Try AU-aware extraction first (works for AU business cards with multiple addresses)
+  if (rawText) {
+    const auAddress = extractBestAUAddress(rawText);
+    if (auAddress) {
+      return auAddress;
+    }
+  }
+  
+  // Fall back to generic extraction
   if (companyIndex < 0) return undefined;
   
   const addressParts: string[] = [];
@@ -544,6 +629,9 @@ function extractAddress(lines: string[], companyIndex: number): string | undefin
     // Stop if line is mostly digits (phone)
     const digits = cleaned.replace(/\D/g, "");
     if (digits.length >= 7 && digits.length / cleaned.replace(/\s/g, "").length > 0.5) break;
+    
+    // Skip label lines
+    if (/^(registered|office|sydney|melbourne)\s*(address)?:?$/i.test(cleaned)) continue;
     
     // This looks like an address part
     if (cleaned.length > 0 && cleaned.length <= 100) {
@@ -585,8 +673,8 @@ export function parseContact(rawText: string): ParsedContact {
   // Extract job title (after name, before or separate from company)
   const jobTitle = extractJobTitle(lines, nameIndex, companyName);
   
-  // Extract address (between company and contact fields)
-  const address = extractAddress(lines, companyIndex);
+  // Extract address (between company and contact fields, uses AU-aware extraction)
+  const address = extractAddress(lines, companyIndex, rawText);
   
   // Format phone
   const phone = phones[0] ? formatPhone(phones[0]) : undefined;
