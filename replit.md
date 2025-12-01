@@ -17,9 +17,11 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
    - Progressive JPEG quality reduction
 2. **Contact Parsing** - Deterministic extraction of name, title, company, email, phone, website, LinkedIn, address
    - Smart email signature parsing with disclaimer detection
-   - Labeled field detection (m:, e:, w: prefixes)
+   - **Salutation detection**: Skips common email sign-offs (Regards, Best regards, Cheers, etc.) to prevent name extraction errors
+   - Labeled field detection (m:, e:, w:, m. prefixes)
    - Company suffix detection (Pty Ltd, Inc, LLC, etc.)
-   - **AU-aware address extraction**: Prioritizes office address over registered address for Australian business cards with multiple locations
+   - **AU-aware address extraction**: Case-insensitive state detection (Vic, VIC, vic all work), street line joining, defaults country to "Australia"
+   - **Domain-derived company names**: When no explicit company found, derives from email domain (flowpower.com.au → "Flow Power")
    - **Company/address separation**: Detects and fixes when company name incorrectly contains address text, using space-insensitive email domain matching
    - **Job title protection**: Prevents job title lines from being selected as company name
 3. **Editable Results** - Review and edit extracted fields before saving
@@ -90,6 +92,12 @@ Uses regex patterns and heuristics:
 - **Title**: Job title keyword matching
 - **Company**: Company suffix detection (Pty Ltd, Inc, LLC, GmbH, etc.)
 - **Address**: Lines between company and contact fields
+
+### Email Signature Parsing Features
+- **preCleanText**: Strips salutations at start and disclaimer text at end
+- **deriveCompanyFromDomain**: Extracts clean company names from email domains (flowpower.com.au → "Flow Power")
+- **fixCompanyIfAddress**: Uses space-insensitive domain matching and skips job title lines during candidate evaluation
+- **Phone detection**: Handles multiple formats including "m:", "m.", "m-", "mobile:" patterns
 
 ### Company Intel - Focused Sales Brief (server/intelService.ts)
 - Uses OpenAI (gpt-4o) via Replit AI Integrations
