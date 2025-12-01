@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { QrCode, User, Save, Check, Building2, Phone, Mail, MapPin, Globe, Briefcase } from "lucide-react";
+import { QrCode, User, Save, Check, Building2, Phone, Mail, MapPin, Globe, Briefcase, Linkedin } from "lucide-react";
+import { SiLinkedin } from "react-icons/si";
 import { useMyProfile, generateVCardFromProfile, MyProfile } from "@/hooks/use-my-profile";
 import { useToast } from "@/hooks/use-toast";
 
@@ -204,6 +205,23 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   placeholder="https://example.com"
                   data-testid="input-my-website"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1">
+                  <SiLinkedin className="w-3 h-3 text-[#0A66C2]" /> LinkedIn
+                </Label>
+                <div className="relative">
+                  <SiLinkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0A66C2]" />
+                  <Input
+                    type="url"
+                    value={formData.linkedinUrl}
+                    onChange={(e) => handleInputChange("linkedinUrl", e.target.value)}
+                    placeholder="https://www.linkedin.com/in/username"
+                    className="pl-10"
+                    data-testid="input-my-linkedin"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">

@@ -102,6 +102,7 @@ export function generateVCardFromProfile(profile: MyProfile): string {
     postcode = "",
     country = "",
     website = "",
+    linkedinUrl = "",
   } = profile || {};
 
   const { firstName, lastName } = splitName(fullName);
@@ -113,14 +114,32 @@ export function generateVCardFromProfile(profile: MyProfile): string {
     fullName ? `FN:${fullName}` : "",
     jobTitle ? `TITLE:${jobTitle}` : "",
     companyName ? `ORG:${companyName}` : "",
-    phone ? `TEL;TYPE=mobile:${phone}` : "",
-    email ? `EMAIL:${email}` : "",
-    (street || city || state || postcode || country)
-      ? `ADR;TYPE=WORK:;;${street};${city};${state};${postcode};${country}`
-      : "",
-    website ? `URL:${website}` : "",
-    "END:VCARD",
   ];
+
+  // LinkedIn as primary URL (item1) if present
+  if (linkedinUrl) {
+    lines.push(`item1.URL;type=pref:${linkedinUrl}`);
+    lines.push("item1.X-ABLabel:LinkedIn");
+  }
+
+  // Website as secondary URL (item2) if LinkedIn exists, otherwise as primary URL
+  if (website) {
+    if (linkedinUrl) {
+      lines.push(`item2.URL;type=WORK:${website}`);
+      lines.push("item2.X-ABLabel:Work Website");
+    } else {
+      lines.push(`URL:${website}`);
+    }
+  }
+
+  // Add remaining fields
+  if (phone) lines.push(`TEL;TYPE=mobile:${phone}`);
+  if (email) lines.push(`EMAIL:${email}`);
+  if (street || city || state || postcode || country) {
+    lines.push(`ADR;TYPE=WORK:;;${street};${city};${state};${postcode};${country}`);
+  }
+
+  lines.push("END:VCARD");
 
   return lines.filter(Boolean).join("\n");
 }
