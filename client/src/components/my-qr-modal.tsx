@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { QrCode, User, Save, Check, Building2, Phone, Mail, MapPin, Globe, Briefcase, Linkedin } from "lucide-react";
+import { QrCode, User, Save, Check, Building2, Phone, Mail, MapPin, Globe, Briefcase, X } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { useMyProfile, generateVCardFromProfile, MyProfile } from "@/hooks/use-my-profile";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +18,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
   const { profile, setProfile, hasProfile, isLoaded } = useMyProfile();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"qr" | "edit">(hasProfile ? "qr" : "edit");
+  const [activeTab, setActiveTab] = useState<"qr" | "edit">("qr");
   const [formData, setFormData] = useState<MyProfile>(profile);
   const [saved, setSaved] = useState(false);
 
@@ -68,70 +67,92 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <QrCode className="w-5 h-5" />
-            My QR Code
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-lg w-full p-0 gap-0">
+        <div className="flex flex-col max-h-[90vh]">
+          {/* Header with title and close button */}
+          <header className="shrink-0 px-4 pt-4 pb-2 border-b flex items-center justify-between">
+            <h2 className="font-semibold text-base flex items-center gap-2">
+              <QrCode className="w-5 h-5" />
+              My QR Code
+            </h2>
+          </header>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "qr" | "edit")}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="qr" className="gap-2" data-testid="tab-my-qr">
+          {/* Tabs row */}
+          <div className="shrink-0 px-4 pt-3 pb-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("qr")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === "qr"
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              }`}
+              data-testid="tab-my-qr"
+            >
               <QrCode className="w-4 h-4" />
               My QR
-            </TabsTrigger>
-            <TabsTrigger value="edit" className="gap-2" data-testid="tab-edit-profile">
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("edit")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === "edit"
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              }`}
+              data-testid="tab-edit-profile"
+            >
               <User className="w-4 h-4" />
               Edit Card
-            </TabsTrigger>
-          </TabsList>
+            </button>
+          </div>
 
-          <TabsContent value="qr" className="mt-4">
-            {hasProfile ? (
-              <div className="flex flex-col items-center gap-4">
-                <Card className="p-4 bg-white">
-                  <QRCodeSVG
-                    value={vcard}
-                    size={200}
-                    level="M"
-                    includeMargin
-                    data-testid="qr-code-display"
-                  />
-                </Card>
-                <div className="text-center">
-                  <p className="font-medium" data-testid="text-qr-name">{profile.fullName || "Your Name"}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {profile.jobTitle && profile.companyName
-                      ? `${profile.jobTitle} at ${profile.companyName}`
-                      : profile.jobTitle || profile.companyName || ""}
-                  </p>
-                </div>
-                <p className="text-xs text-muted-foreground text-center px-4">
-                  Ask them to scan this to save your contact details.
-                </p>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center mb-4">
-                  <User className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <p className="font-medium">No profile yet</p>
-                <p className="text-sm text-muted-foreground mt-1 mb-4">
-                  Add your details to generate a QR code
-                </p>
-                <Button onClick={() => setActiveTab("edit")} data-testid="button-add-profile">
-                  Add My Details
-                </Button>
-              </div>
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto px-4 pt-2 pb-24">
+            {activeTab === "qr" && (
+              <>
+                {hasProfile ? (
+                  <div className="flex flex-col items-center gap-4 py-4">
+                    <Card className="p-4 bg-white">
+                      <QRCodeSVG
+                        value={vcard}
+                        size={200}
+                        level="M"
+                        includeMargin
+                        data-testid="qr-code-display"
+                      />
+                    </Card>
+                    <div className="text-center">
+                      <p className="font-medium" data-testid="text-qr-name">{profile.fullName || "Your Name"}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {profile.jobTitle && profile.companyName
+                          ? `${profile.jobTitle} at ${profile.companyName}`
+                          : profile.jobTitle || profile.companyName || ""}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center px-4">
+                      Ask them to scan this to save your contact details.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center mb-4">
+                      <User className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <p className="font-medium">No profile yet</p>
+                    <p className="text-sm text-muted-foreground mt-1 mb-4">
+                      Add your details to generate a QR code
+                    </p>
+                    <Button onClick={() => setActiveTab("edit")} data-testid="button-add-profile">
+                      Add My Details
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
-          </TabsContent>
 
-          <TabsContent value="edit" className="mt-4 flex-1 flex flex-col min-h-0 overflow-hidden -mx-6 -mb-6">
-            {/* Scrollable form area - contains ALL fields including Address */}
-            <main className="flex-1 overflow-y-auto px-6 pt-2 pb-28">
-              <div className="grid gap-3">
+            {activeTab === "edit" && (
+              <div className="grid gap-3 py-2">
                 {/* Full Name */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
@@ -266,7 +287,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
-                {/* Country - LAST field before save bar */}
+                {/* Country - LAST field */}
                 <Input
                   value={formData.country}
                   onChange={(e) => handleInputChange("country", e.target.value)}
@@ -274,12 +295,14 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   data-testid="input-my-country"
                 />
               </div>
-            </main>
+            )}
+          </div>
 
-            {/* Sticky bottom save bar - LAST element, outside scrollable area */}
+          {/* Footer with Save button – ONLY when Edit tab is active */}
+          {activeTab === "edit" && (
             <footer 
-              className="shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-6 pt-3 z-20"
-              style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
+              className="shrink-0 border-t px-4 py-3 bg-white dark:bg-slate-900"
+              style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
             >
               <button
                 type="button"
@@ -301,8 +324,8 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                 )}
               </button>
             </footer>
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

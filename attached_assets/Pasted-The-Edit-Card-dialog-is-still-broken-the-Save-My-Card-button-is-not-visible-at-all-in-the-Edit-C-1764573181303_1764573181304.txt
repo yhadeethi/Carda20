@@ -1,0 +1,71 @@
+The Edit Card dialog is still broken – the “Save My Card” button is not visible at all in the Edit Card tab.
+I want you to completely rewrite the layout of the My QR / Edit Card dialog so it follows this exact structure, and then hook it back to the existing save handler.
+
+Find the component that renders the dialog for “My QR Code” with the tabs “My QR” and “Edit Card” (for example MyQrDialog, MyQrModal, MyQrCodeDialog, etc.).
+
+Replace its JSX with the following layout (keep my existing state and handlers like isOpen, setIsOpen, activeTab, handleSave, etc.):
+
+<Dialog open={isOpen} onOpenChange={setIsOpen}>
+  <DialogContent className="max-w-lg w-full p-0">
+    <div className="flex flex-col max-h-[90vh]">
+      {/* Header with title, tabs and close button */}
+      <header className="shrink-0 px-4 pt-4 pb-2 border-b flex items-center justify-between">
+        <h2 className="font-semibold text-base">My QR Code</h2>
+        {/* existing close button if any */}
+      </header>
+
+      {/* Tabs row */}
+      <div className="shrink-0 px-4 pt-2 pb-1 flex gap-2">
+        {/* existing tab buttons for My QR / Edit Card – keep the logic, just keep them here */}
+      </div>
+
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto px-4 pt-2 pb-24">
+        {activeTab === 'qr' && (
+          <MyQrView />  {/* reuse existing QR view content */}
+        )}
+
+        {activeTab === 'edit' && (
+          <EditCardForm />  {/* ALL form fields go here:
+                              Full Name, Job Title, Company,
+                              Phone, Email, Website, LinkedIn,
+                              Address, City, State, Postcode, Country */}
+        )}
+      </div>
+
+      {/* Footer with Save button – ONLY when Edit tab is active */}
+      {activeTab === 'edit' && (
+        <footer className="shrink-0 border-t px-4 py-3 bg-white">
+          <button
+            type="button"
+            onClick={handleSave}  // reuse existing save logic
+            className="w-full rounded-xl py-3 text-base font-medium bg-slate-900 text-white"
+          >
+            Save My Card
+          </button>
+        </footer>
+      )}
+    </div>
+  </DialogContent>
+</Dialog>
+
+
+Important rules:
+
+Do not use overflow-hidden on DialogContent or on the outer <div> – only use max-h-[90vh] flex flex-col there.
+
+The only scrollable area must be the middle <div className="flex-1 overflow-y-auto px-4 pt-2 pb-24">.
+
+All form fields, including Address / City / State / Postcode / Country, must be inside EditCardForm in that scrollable area (NOT below the footer).
+
+The footer with the Save button must be rendered after the scrollable area and must only show when activeTab === 'edit'.
+
+After updating, test on an iPhone-size viewport:
+
+In the Edit Card tab, you can scroll all the way to the Country field.
+
+The Save My Card button is always visible at the very bottom of the dialog.
+
+Tapping Save still runs the same save logic and closes the dialog / switches back to My QR as before.
+
+Implement these changes exactly as described and don’t remove the Save button under any condition when Edit Card is active.
