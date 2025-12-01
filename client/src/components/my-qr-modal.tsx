@@ -128,8 +128,8 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
             )}
           </TabsContent>
 
-          <TabsContent value="edit" className="mt-4 min-h-screen flex flex-col -mx-6 -mb-6">
-            <main className="flex-1 overflow-y-auto px-4 pb-32">
+          <TabsContent value="edit" className="mt-4 flex-1 flex flex-col min-h-0 -mx-6 -mb-6">
+            <div className="flex-1 overflow-y-auto px-6 pb-28">
               <div className="grid gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
@@ -265,16 +265,17 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   data-testid="input-my-country"
                 />
               </div>
-            </main>
+            </div>
 
             <div 
-              className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-4 pt-3 z-20"
+              className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-6 pt-3 z-20"
               style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
             >
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={!formData.fullName && !formData.email && !formData.phone}
-                className="w-full rounded-xl py-3 font-medium bg-black text-white dark:bg-white dark:text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full rounded-xl py-3 text-base font-medium bg-slate-900 text-white dark:bg-white dark:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="button-save-my-card"
               >
                 {saved ? (
