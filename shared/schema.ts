@@ -204,6 +204,8 @@ export interface ParsedContact {
   phone?: string;
   website?: string;
   linkedinUrl?: string;
+  linkedinSearchUrl?: string;  // Google search URL when no direct LinkedIn found
+  address?: string;
   companyDomain?: string;
 }
 

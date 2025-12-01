@@ -232,6 +232,24 @@ function deriveWebsite(email: string | undefined, rawText: string | undefined): 
 }
 
 /**
+ * Generate a Google search URL for finding someone's LinkedIn profile
+ * @param fullName The person's full name
+ * @param companyName The person's company name
+ * @returns A Google search URL for "fullName companyName LinkedIn"
+ */
+function generateLinkedInSearchUrl(fullName?: string, companyName?: string): string {
+  const parts: string[] = [];
+  if (fullName) parts.push(fullName);
+  if (companyName) parts.push(companyName);
+  parts.push("LinkedIn");
+  
+  const query = parts.join(" ");
+  const encodedQuery = encodeURIComponent(query);
+  
+  return `https://www.google.com/search?q=${encodedQuery}`;
+}
+
+/**
  * Fix company name when it appears to be an address, URL, same as name, or is missing
  * Uses email domain to find the real company name in the raw text
  * Priority: 1) Line with domain match + company suffix, 2) Company suffix line, 3) Derived from domain, 4) First safe line
@@ -1218,6 +1236,12 @@ export function parseContact(rawText: string): ParsedContact {
     }
   }
   
+  // Generate LinkedIn search URL if no direct LinkedIn URL found
+  let linkedinSearchUrl: string | undefined;
+  if (!linkedinUrl && (fullName || companyName)) {
+    linkedinSearchUrl = generateLinkedInSearchUrl(fullName, companyName);
+  }
+
   let contact: ParsedContact = {
     fullName,
     jobTitle,
@@ -1226,6 +1250,7 @@ export function parseContact(rawText: string): ParsedContact {
     phone,
     website,
     linkedinUrl,
+    linkedinSearchUrl,
     address,
   };
   
