@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompanyIntelCard } from "@/components/company-intel-card";
 import { CompanyIntelData } from "@shared/schema";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, Linkedin, MapPin } from "lucide-react";
+import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search } from "lucide-react";
+import { SiLinkedin } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
 type ScanMode = "scan" | "paste";
@@ -23,6 +24,7 @@ interface ParsedContact {
   phone?: string;
   website?: string;
   linkedinUrl?: string;
+  linkedinSearchUrl?: string;
   address?: string;
 }
 
@@ -564,10 +566,72 @@ export function ScanTab() {
                   )}
                   {currentContact?.linkedinUrl && (
                     <div className="flex items-center gap-3 min-w-0">
-                      <Linkedin className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <SiLinkedin className="w-4 h-4 text-[#0A66C2] shrink-0" />
                       <a href={currentContact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" data-testid="text-contact-linkedin">
                         LinkedIn Profile
                       </a>
+                    </div>
+                  )}
+                  
+                  {/* Action Row */}
+                  {(currentContact?.phone || currentContact?.email || currentContact?.linkedinUrl || currentContact?.linkedinSearchUrl) && (
+                    <div className="flex items-center gap-2 pt-3 mt-3 border-t flex-wrap" data-testid="action-row">
+                      {currentContact?.phone && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="gap-1.5"
+                          data-testid="button-action-call"
+                        >
+                          <a href={`tel:${currentContact.phone}`}>
+                            <Phone className="w-3.5 h-3.5" />
+                            Call
+                          </a>
+                        </Button>
+                      )}
+                      {currentContact?.email && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="gap-1.5"
+                          data-testid="button-action-email"
+                        >
+                          <a href={`mailto:${currentContact.email}`}>
+                            <Mail className="w-3.5 h-3.5" />
+                            Email
+                          </a>
+                        </Button>
+                      )}
+                      {currentContact?.linkedinUrl ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="gap-1.5"
+                          data-testid="button-action-linkedin"
+                        >
+                          <a href={currentContact.linkedinUrl} target="_blank" rel="noopener noreferrer">
+                            <SiLinkedin className="w-3.5 h-3.5 text-[#0A66C2]" />
+                            LinkedIn
+                          </a>
+                        </Button>
+                      ) : currentContact?.linkedinSearchUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="gap-1.5"
+                          data-testid="button-action-search-linkedin"
+                        >
+                          <a href={currentContact.linkedinSearchUrl} target="_blank" rel="noopener noreferrer">
+                            <SiLinkedin className="w-3.5 h-3.5 text-muted-foreground" />
+                            <Search className="w-2.5 h-2.5 -ml-0.5" />
+                            Search LinkedIn
+                          </a>
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
