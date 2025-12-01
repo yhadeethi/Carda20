@@ -128,161 +128,168 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
             )}
           </TabsContent>
 
-          <TabsContent value="edit" className="mt-4 space-y-4">
-            <div className="grid gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1">
-                  <User className="w-3 h-3" /> Full Name
-                </Label>
-                <Input
-                  value={formData.fullName}
-                  onChange={(e) => handleInputChange("fullName", e.target.value)}
-                  placeholder="John Doe"
-                  data-testid="input-my-name"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
+          <TabsContent value="edit" className="mt-4 min-h-screen flex flex-col -mx-6 -mb-6">
+            <main className="flex-1 overflow-y-auto px-4 pb-32">
+              <div className="grid gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
-                    <Briefcase className="w-3 h-3" /> Job Title
+                    <User className="w-3 h-3" /> Full Name
                   </Label>
                   <Input
-                    value={formData.jobTitle}
-                    onChange={(e) => handleInputChange("jobTitle", e.target.value)}
-                    placeholder="VP of Sales"
-                    data-testid="input-my-title"
+                    value={formData.fullName}
+                    onChange={(e) => handleInputChange("fullName", e.target.value)}
+                    placeholder="John Doe"
+                    data-testid="input-my-name"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1">
+                      <Briefcase className="w-3 h-3" /> Job Title
+                    </Label>
+                    <Input
+                      value={formData.jobTitle}
+                      onChange={(e) => handleInputChange("jobTitle", e.target.value)}
+                      placeholder="VP of Sales"
+                      data-testid="input-my-title"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1">
+                      <Building2 className="w-3 h-3" /> Company
+                    </Label>
+                    <Input
+                      value={formData.companyName}
+                      onChange={(e) => handleInputChange("companyName", e.target.value)}
+                      placeholder="Acme Corp"
+                      data-testid="input-my-company"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1">
+                      <Phone className="w-3 h-3" /> Phone
+                    </Label>
+                    <Input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      placeholder="+1 555-0123"
+                      data-testid="input-my-phone"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1">
+                      <Mail className="w-3 h-3" /> Email
+                    </Label>
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => handleInputChange("email", e.target.value)}
+                      placeholder="john@acme.com"
+                      data-testid="input-my-email"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
-                    <Building2 className="w-3 h-3" /> Company
+                    <Globe className="w-3 h-3" /> Website
                   </Label>
-                  <Input
-                    value={formData.companyName}
-                    onChange={(e) => handleInputChange("companyName", e.target.value)}
-                    placeholder="Acme Corp"
-                    data-testid="input-my-company"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    <Phone className="w-3 h-3" /> Phone
-                  </Label>
-                  <Input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                    placeholder="+1 555-0123"
-                    data-testid="input-my-phone"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    <Mail className="w-3 h-3" /> Email
-                  </Label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                    placeholder="john@acme.com"
-                    data-testid="input-my-email"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1">
-                  <Globe className="w-3 h-3" /> Website
-                </Label>
-                <Input
-                  type="url"
-                  value={formData.website}
-                  onChange={(e) => handleInputChange("website", e.target.value)}
-                  placeholder="https://example.com"
-                  data-testid="input-my-website"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1">
-                  <SiLinkedin className="w-3 h-3 text-[#0A66C2]" /> LinkedIn
-                </Label>
-                <div className="relative">
-                  <SiLinkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0A66C2]" />
                   <Input
                     type="url"
-                    value={formData.linkedinUrl}
-                    onChange={(e) => handleInputChange("linkedinUrl", e.target.value)}
-                    placeholder="https://www.linkedin.com/in/username"
-                    className="pl-10"
-                    data-testid="input-my-linkedin"
+                    value={formData.website}
+                    onChange={(e) => handleInputChange("website", e.target.value)}
+                    placeholder="https://example.com"
+                    data-testid="input-my-website"
                   />
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> Address
-                </Label>
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    <SiLinkedin className="w-3 h-3 text-[#0A66C2]" /> LinkedIn
+                  </Label>
+                  <div className="relative">
+                    <SiLinkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0A66C2]" />
+                    <Input
+                      type="url"
+                      value={formData.linkedinUrl}
+                      onChange={(e) => handleInputChange("linkedinUrl", e.target.value)}
+                      placeholder="https://www.linkedin.com/in/username"
+                      className="pl-10"
+                      data-testid="input-my-linkedin"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Address
+                  </Label>
+                  <Input
+                    value={formData.street}
+                    onChange={(e) => handleInputChange("street", e.target.value)}
+                    placeholder="123 Main Street"
+                    data-testid="input-my-street"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <Input
+                    value={formData.city}
+                    onChange={(e) => handleInputChange("city", e.target.value)}
+                    placeholder="City"
+                    data-testid="input-my-city"
+                  />
+                  <Input
+                    value={formData.state}
+                    onChange={(e) => handleInputChange("state", e.target.value)}
+                    placeholder="State"
+                    data-testid="input-my-state"
+                  />
+                  <Input
+                    value={formData.postcode}
+                    onChange={(e) => handleInputChange("postcode", e.target.value)}
+                    placeholder="Postcode"
+                    data-testid="input-my-postcode"
+                  />
+                </div>
+
                 <Input
-                  value={formData.street}
-                  onChange={(e) => handleInputChange("street", e.target.value)}
-                  placeholder="123 Main Street"
-                  data-testid="input-my-street"
+                  value={formData.country}
+                  onChange={(e) => handleInputChange("country", e.target.value)}
+                  placeholder="Country"
+                  data-testid="input-my-country"
                 />
               </div>
+            </main>
 
-              <div className="grid grid-cols-3 gap-2">
-                <Input
-                  value={formData.city}
-                  onChange={(e) => handleInputChange("city", e.target.value)}
-                  placeholder="City"
-                  data-testid="input-my-city"
-                />
-                <Input
-                  value={formData.state}
-                  onChange={(e) => handleInputChange("state", e.target.value)}
-                  placeholder="State"
-                  data-testid="input-my-state"
-                />
-                <Input
-                  value={formData.postcode}
-                  onChange={(e) => handleInputChange("postcode", e.target.value)}
-                  placeholder="Postcode"
-                  data-testid="input-my-postcode"
-                />
-              </div>
-
-              <Input
-                value={formData.country}
-                onChange={(e) => handleInputChange("country", e.target.value)}
-                placeholder="Country"
-                data-testid="input-my-country"
-              />
-            </div>
-
-            <Button 
-              onClick={handleSave} 
-              className="w-full"
-              disabled={!formData.fullName && !formData.email && !formData.phone}
-              data-testid="button-save-my-card"
+            <div 
+              className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-4 pt-3 z-20"
+              style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
             >
-              {saved ? (
-                <>
-                  <Check className="mr-2 h-4 w-4" />
-                  Saved!
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save My Card
-                </>
-              )}
-            </Button>
+              <button
+                onClick={handleSave}
+                disabled={!formData.fullName && !formData.email && !formData.phone}
+                className="w-full rounded-xl py-3 font-medium bg-black text-white dark:bg-white dark:text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="button-save-my-card"
+              >
+                {saved ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Saved!
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <Save className="h-4 w-4" />
+                    Save My Card
+                  </span>
+                )}
+              </button>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
