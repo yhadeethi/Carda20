@@ -96,8 +96,12 @@ Uses regex patterns and heuristics:
 ### Email Signature Parsing Features
 - **preCleanText**: Strips salutations at start and disclaimer text at end
 - **deriveCompanyFromDomain**: Extracts clean company names from email domains (flowpower.com.au → "Flow Power")
-- **fixCompanyIfAddress**: Uses space-insensitive domain matching and skips job title lines during candidate evaluation
+- **deriveWebsite**: Extracts website from email domain only (never local-part), checks for explicit URL lines first
+- **fixCompanyIfAddress**: Uses space-insensitive domain matching, skips job title lines, requires suffix for validation
+- **isSameAsName**: Detects when company matches contact's name (uses Unicode normalization for accented names)
+- **extractGenericAddress**: Handles international addresses (French CEDEX, European postcodes, etc.)
 - **Phone detection**: Handles multiple formats including "m:", "m.", "m-", "mobile:" patterns
+- **Name extraction**: Supports ALL CAPS surnames (LADOUX) and accented names (Clément, José, François)
 
 ### Company Intel - Focused Sales Brief (server/intelService.ts)
 - Uses OpenAI (gpt-4o) via Replit AI Integrations
