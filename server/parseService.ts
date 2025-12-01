@@ -172,24 +172,90 @@ export function looksLikeAddress(text: string | undefined): boolean {
   // Heuristics: contains AU state code or postcode or common address words
   const hasState = /\b(nsw|vic|qld|wa|sa|tas|act|nt)\b/.test(t);
   const hasPostcode = /\b\d{4}\b/.test(t);
-  const hasAddressWord = /(street|st\.|road|rd\.|ave|avenue|floor|lvl|level|drive|dr\.|boulevard|blvd|lane|ln\.|place|pl\.|way|court|ct\.|terrace|tce|crescent|cres|highway|hwy|parade|pde)/i.test(t);
+  const hasAddressWord = /(street|st\.|road|rd\.|ave|avenue|floor|lvl|level|drive|dr\.|boulevard|blvd|lane|ln\.|place|pl\.|way|court|ct\.|terrace|tce|crescent|cres|highway|hwy|parade|pde|bouvets|rue|via|plaza|cs\s*\d+)/i.test(t);
   
   return hasState || hasPostcode || hasAddressWord;
 }
 
 /**
- * Fix company name when it appears to be an address, URL, or is missing
+ * Check if company name is the same as the contact's name (invalid)
+ */
+function isSameAsName(candidate: string | undefined, fullName: string | undefined): boolean {
+  if (!candidate || !fullName) return false;
+  
+  // Normalize: lowercase, remove accents, remove non-alphanumeric
+  const normalize = (s: string): string =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // remove accents
+      .replace(/[^a-z0-9]+/g, "");     // strip spaces/punct
+  
+  return normalize(candidate) === normalize(fullName);
+}
+
+/**
+ * Derive website from email domain or explicit URL in text
+ * NEVER derives from local part of email (before @)
+ */
+function deriveWebsite(email: string | undefined, rawText: string | undefined): string {
+  const lines = rawText
+    ? rawText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean)
+    : [];
+
+  // 1) Prefer explicit website line in the signature
+  for (const line of lines) {
+    // Look for explicit URLs
+    const urlMatch = line.match(/https?:\/\/[^\s]+|www\.[^\s]+/i);
+    if (urlMatch) {
+      let url = urlMatch[0];
+      // Skip LinkedIn
+      if (/linkedin\.com/i.test(url)) continue;
+      // Add protocol if missing
+      if (!/^https?:\/\//i.test(url)) {
+        url = "https://" + url;
+      }
+      return url;
+    }
+  }
+
+  // 2) Fallback: build from email domain (NOT local part)
+  if (!email) return "";
+  const parts = email.split("@");
+  if (parts.length !== 2) return "";
+  const domain = parts[1].toLowerCase();
+  
+  // Don't create websites for generic email providers
+  if (GENERIC_EMAIL_DOMAINS.includes(domain)) return "";
+
+  return "https://www." + domain;
+}
+
+/**
+ * Fix company name when it appears to be an address, URL, same as name, or is missing
  * Uses email domain to find the real company name in the raw text
- * Priority: 1) Line with domain match + company suffix, 2) Derived from domain, 3) Company suffix line, 4) First safe line
+ * Priority: 1) Line with domain match + company suffix, 2) Company suffix line, 3) Derived from domain, 4) First safe line
  */
 export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): ParsedContact {
-  // Determine if we need to fix the company
-  const companyIsBad = 
-    !contact.companyName || 
-    looksLikeAddress(contact.companyName) ||
-    looksLikeUrl(contact.companyName);
+  const currentCompany = contact.companyName || "";
+  const fullName = contact.fullName || "";
+  
+  // Check if company is invalid for various reasons
+  const companyLooksLikeAddress = looksLikeAddress(currentCompany);
+  const companyIsSameAsName = isSameAsName(currentCompany, fullName);
+  const companyLooksLikeUrl = looksLikeUrl(currentCompany);
+  const companyHasSuffix = hasCompanySuffix(currentCompany);
+  
+  // Company is valid if it has a company suffix (strongest signal)
+  // Otherwise, we should try to find a better match
+  const hasValidCompany =
+    currentCompany &&
+    companyHasSuffix && // Must have company suffix to be considered valid
+    !companyLooksLikeAddress &&
+    !companyIsSameAsName &&
+    !companyLooksLikeUrl;
     
-  if (!companyIsBad) {
+  if (hasValidCompany) {
     return contact;
   }
 
@@ -233,12 +299,23 @@ export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): Pa
   
   const candidates: Candidate[] = [];
 
+  // Normalize full name for comparison
+  const fullNameLower = fullName.trim().toLowerCase();
+  const fullNameNormalized = fullNameLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
+
   for (const line of lines) {
     const lower = line.toLowerCase();
     const normalizedLine = lower.replace(/\s+/g, ""); // Remove all spaces for domain matching
     
     // Skip if this line IS the detected (wrong) company
-    if (contact.companyName && line === contact.companyName) continue;
+    if (currentCompany && line === currentCompany) continue;
+    
+    // Skip lines that match the contact's name
+    if (fullNameLower && lower === fullNameLower) continue;
+    if (fullNameNormalized) {
+      const lineNormalized = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
+      if (lineNormalized === fullNameNormalized) continue;
+    }
     
     // Skip email lines
     if (lower.includes("@")) continue;
@@ -248,9 +325,11 @@ export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): Pa
     if (/^w\.\s*/i.test(line)) continue; // Skip "w. flowpower.com.au" style lines
     if (/^e\.\s*/i.test(line)) continue; // Skip "e. email@..." style lines
     
-    // Skip phone lines (various formats: +61..., m. 0432..., m: 0432..., etc.)
+    // Skip phone lines (various formats: +61..., m. 0432..., m: 0432..., Mobile..., Mob:..., etc.)
     if (/^\+?\d[\d\s()-]{6,}/.test(line)) continue;
     if (/^m\s*[.:|\-]/i.test(line)) continue; // Skip "m. 0432...", "m: +61...", etc.
+    if (/^mob\s*[.:|\-]/i.test(line)) continue; // Skip "Mob: +33...", etc.
+    if (/^mobile\s*[.:|\-\(]/i.test(line)) continue; // Skip "Mobile (Australia) +61...", etc.
     
     // Skip lines that look like addresses
     if (looksLikeAddress(line)) continue;
@@ -286,30 +365,31 @@ export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): Pa
     return contact;
   }
 
-  // Priority 2: Line with domain match only
-  const domainOnlyMatch = candidates.find(c => c.hasDomainMatch);
-  if (domainOnlyMatch) {
-    contact.companyName = domainOnlyMatch.line;
-    return contact;
-  }
-  
-  // Priority 3: Company suffix line (strong signal)
+  // Priority 2: Company suffix line (strong signal - explicit company name)
   const suffixMatch = candidates.find(c => c.hasSuffix);
   if (suffixMatch) {
     contact.companyName = suffixMatch.line;
     return contact;
   }
   
-  // Priority 4: Derive company name from domain
-  // This is the fallback when there's no explicit company line
+  // Priority 3: Derive company name from domain
+  // This is preferred over generic candidate lines to avoid department names
   const derivedCompany = deriveCompanyFromDomain(candidateDomain);
   if (derivedCompany) {
     contact.companyName = derivedCompany;
     return contact;
   }
   
-  // Priority 5: First safe line (last resort fallback)
-  if (candidates.length > 0) {
+  // Priority 4: Line with domain match only (but no suffix)
+  const domainOnlyMatch = candidates.find(c => c.hasDomainMatch);
+  if (domainOnlyMatch) {
+    contact.companyName = domainOnlyMatch.line;
+    return contact;
+  }
+  
+  // Priority 5: First safe line (last resort fallback - rarely used)
+  // Skip this if we have domain derivation available
+  if (candidates.length > 0 && !baseDomain) {
     contact.companyName = candidates[0].line;
   }
 
@@ -409,6 +489,20 @@ const COMPANY_SUFFIXES = [
   "group", "holdings", "partners", "partnership",
   "associates", "consulting", "services", "solutions",
   "international", "enterprises", "industries",
+];
+
+// Generic email domains - don't derive websites or companies from these
+const GENERIC_EMAIL_DOMAINS = [
+  "gmail.com",
+  "hotmail.com",
+  "outlook.com",
+  "yahoo.com",
+  "icloud.com",
+  "live.com",
+  "aol.com",
+  "mail.com",
+  "protonmail.com",
+  "zoho.com",
 ];
 
 // Common job title keywords
@@ -599,25 +693,37 @@ function isValidWebsite(candidate: string): boolean {
   // Check against known TLDs first
   let hasValidTld = VALID_TLDS.includes(tld) || VALID_TLDS.includes(tld2);
   
-  // Also accept any 2-6 character alphabetic TLD as potentially valid
-  // This catches newer gTLDs we don't have in the list
-  if (!hasValidTld && /^[a-z]{2,6}$/.test(tld)) {
+  // For unknown TLDs, only accept if they're 3+ characters (2-char TLDs must be in list)
+  // This prevents "peter.yu" from being treated as a valid domain
+  if (!hasValidTld && /^[a-z]{3,6}$/.test(tld)) {
     hasValidTld = true;
   }
   
   if (!hasValidTld) return false;
   
-  // Domain part (before TLD) must not be just a name pattern (e.g., francisco.guerrero)
-  // Valid domains have meaningful names, not just firstName.lastName patterns
-  const domainPart = parts.slice(0, -1).join(".");
-  
-  // Reject if it looks like a person's name (two lowercase name-like parts)
-  if (parts.length === 2 && /^[a-z]+$/.test(parts[0]) && parts[0].length <= 15) {
-    // Could be a name like "francisco.guerrero" - check if TLD is actually a name-like word
-    const potentialLastName = parts[1];
-    // Common surnames that are NOT TLDs
-    const nameLikePatterns = /^(guerrero|smith|johnson|williams|brown|jones|garcia|miller|davis|rodriguez|martinez|hernandez|lopez|gonzalez|wilson|anderson|thomas|taylor|moore|jackson|martin|lee|perez|thompson|white|harris|sanchez|clark|ramirez|lewis|robinson|walker|young|allen|king|wright|scott|torres|nguyen|hill|flores|green|adams|nelson|baker|hall|rivera|campbell|mitchell|carter|roberts|savage|chen|wang|zhang|liu|singh|kumar|patel|sharma)$/i;
-    if (nameLikePatterns.test(potentialLastName)) return false;
+  // Reject if it looks like a person's name (firstName.lastName pattern)
+  // e.g., "peter.yu", "john.smith", "francisco.guerrero"
+  if (parts.length === 2) {
+    const firstName = parts[0].toLowerCase();
+    const lastName = parts[1].toLowerCase();
+    
+    // If first part looks like a first name (all lowercase, 2-15 chars) and 
+    // the second part is short (2-10 chars), it's likely a name, not a domain
+    if (/^[a-z]{2,15}$/.test(firstName) && /^[a-z]{2,10}$/.test(lastName)) {
+      // Common first names
+      const commonFirstNames = /^(peter|john|james|david|michael|robert|william|richard|joseph|thomas|charles|daniel|matthew|mark|paul|steven|andrew|kenneth|joshua|kevin|brian|edward|ronald|timothy|jason|jeffrey|ryan|jacob|gary|nicholas|eric|jonathan|stephen|larry|justin|scott|brandon|benjamin|samuel|gregory|alexander|patrick|frank|raymond|jack|dennis|jerry|tyler|aaron|jose|adam|nathan|henry|douglas|zachary|joe|kyle|noah|ethan|jeremy|walter|christian|keith|roger|terry|austin|sean|gerald|carl|dylan|harold|jordan|jesse|bryan|lawrence|arthur|gabriel|bruce|logan|billy|albert|willie|eugene|russell|louis|philip|vincent|bobby|johnny|bradley|roy|eugene|clarence|randy|barry|travis|phillip|howard|shawn|micheal|derrick|andre|marcus|oscar|alex|angel|diego|ivan|edgar|sergio|fernando|eduardo|carlos|jorge|hector|rafael|victor|miguel|mario|antonio|francisco|juan|manuel|jose|ricardo|luis|pedro|javier|enrique|andres|roberto|raul|arturo|jaime|felipe|alfonso|gerardo|cesar|marco|gustavo|santiago|nicolas|sebastian|mateo|diego)$/i;
+      // Common last names / short surnames
+      const commonLastNames = /^(yu|li|wu|xu|hu|ma|zhang|wang|chen|liu|yang|zhao|huang|zhou|sun|he|lin|guo|luo|wei|lee|kim|park|choi|jung|kang|cho|yoon|jang|song|shin|han|oh|seo|yun|kwon|moon|jeon|bae|baek|ko|nam|smith|johnson|williams|brown|jones|garcia|miller|davis|rodriguez|martinez|hernandez|lopez|gonzalez|wilson|anderson|thomas|taylor|moore|jackson|martin|lee|perez|thompson|white|harris|sanchez|clark|ramirez|lewis|robinson|walker|young|allen|king|wright|scott|torres|nguyen|hill|flores|green|adams|nelson|baker|hall|rivera|campbell|mitchell|carter|roberts|chen|wang|zhang|liu|singh|kumar|patel|sharma|savage)$/i;
+      
+      if (commonFirstNames.test(firstName) || commonLastNames.test(lastName)) {
+        return false;
+      }
+      
+      // Also reject any firstName.lastName where lastName is 2-3 chars (very likely a name)
+      if (lastName.length <= 3) {
+        return false;
+      }
+    }
   }
   
   return true;
@@ -747,7 +853,7 @@ function extractName(lines: string[], email?: string): { name?: string; nameInde
     // Skip if it looks like a job title
     if (looksLikeTitle(cleaned)) continue;
     
-    // Check if it looks like a proper name (2-4 words, capitalized)
+    // Check if it looks like a proper name (1-4 words, capitalized)
     const words = cleaned.split(/\s+/);
     if (words.length >= 1 && words.length <= 4) {
       const allWordsCapitalized = words.every(w => 
@@ -756,7 +862,9 @@ function extractName(lines: string[], email?: string): { name?: string; nameInde
         /^[A-Z][a-z]+-[A-Z][a-z]+$/.test(w) || // Hyphenated
         /^O'[A-Z][a-z]+$/.test(w) || // O'Brien style
         /^Mc[A-Z][a-z]+$/.test(w) || // McName style
-        /^Mac[A-Z][a-z]+$/.test(w) // MacName style
+        /^Mac[A-Z][a-z]+$/.test(w) || // MacName style
+        /^[A-Z]+$/.test(w) || // ALL CAPS surname (LADOUX, SMITH)
+        /^[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ''-]*$/.test(w) // Accented names (Clément, José, François)
       );
       
       if (allWordsCapitalized) {
@@ -989,54 +1097,85 @@ function extractBestAUAddress(rawText: string): string | null {
 }
 
 /**
+ * Extract international/generic address from raw text
+ * Used as fallback when AU-specific address extraction returns null
+ */
+function extractGenericAddress(rawText: string): string | null {
+  const lines = rawText
+    .split(/[\n\r]+/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  // Address keywords covering multiple countries
+  const addressKeywords = /(street|st\.|road|rd\.|boulevard|blvd|bouvets|avenue|ave|rue|place|via|plaza|cs\s*\d+|floor|level|suite|unit|building|bldg)/i;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lower = line.toLowerCase();
+
+    // Skip obvious non-address lines
+    if (/^(mob|mobile|tel|telephone|phone|t\.|m\.)\s*[:|\-\(]/i.test(lower)) continue;
+    if (lower.includes("@")) continue;
+    if (lower.startsWith("http") || lower.includes("www.")) continue;
+    
+    // Skip company names with suffixes
+    if (hasCompanySuffix(line)) continue;
+    
+    // Skip lines that look like job titles
+    if (looksLikeTitle(line)) continue;
+
+    const hasDigit = /\d/.test(line);
+    const hasKeyword = addressKeywords.test(line);
+
+    if (hasDigit && hasKeyword) {
+      const streetLine = line;
+      const nextLine = lines[i + 1] || "";
+      const nextLower = nextLine.toLowerCase();
+
+      // Skip next line if it's a phone/email/url
+      const nextIsContact = 
+        /^(mob|mobile|tel|telephone|phone|t\.|m\.)\s*[:|\-\(]/i.test(nextLower) ||
+        nextLower.includes("@") ||
+        nextLower.startsWith("http") ||
+        nextLower.includes("www.");
+
+      // Include next line if it looks like postcode + city (e.g., "92741 NANTERRE CEDEX")
+      let cityLine = "";
+      if (!nextIsContact) {
+        // Has 4-5 digit postcode, or CEDEX (French), or uppercase city name
+        if (/\d{4,5}/.test(nextLine) || /cedex/i.test(nextLine)) {
+          cityLine = nextLine;
+        }
+      }
+
+      const addressParts = [streetLine, cityLine].filter(Boolean);
+      return addressParts.join(", ");
+    }
+  }
+
+  return null;
+}
+
+/**
  * Extract address - lines between company and contact fields
- * Uses AU-aware extraction first, falls back to generic
+ * Uses AU-aware extraction first, falls back to generic international
  */
 function extractAddress(lines: string[], companyIndex: number, rawText?: string): string | undefined {
+  if (!rawText) return undefined;
+  
   // Try AU-aware extraction first (works for AU business cards with multiple addresses)
-  if (rawText) {
-    const auAddress = extractBestAUAddress(rawText);
-    if (auAddress) {
-      return auAddress;
-    }
+  const auAddress = extractBestAUAddress(rawText);
+  if (auAddress) {
+    return auAddress;
   }
   
-  // Fall back to generic extraction
-  if (companyIndex < 0) return undefined;
-  
-  const addressParts: string[] = [];
-  
-  for (let i = companyIndex + 1; i < lines.length; i++) {
-    const line = lines[i];
-    const cleaned = line.trim();
-    
-    // Stop if we hit a field label (m:, e:, w:, etc.)
-    if (hasFieldLabel(cleaned)) break;
-    
-    // Stop if we hit email/phone/URL
-    if (/@/.test(cleaned)) break;
-    if (/https?:\/\/|www\./i.test(cleaned)) break;
-    
-    // Stop if line is mostly digits (phone)
-    const digits = cleaned.replace(/\D/g, "");
-    if (digits.length >= 7 && digits.length / cleaned.replace(/\s/g, "").length > 0.5) break;
-    
-    // Skip label lines
-    if (/^(registered|office|sydney|melbourne)\s*(address)?:?$/i.test(cleaned)) continue;
-    
-    // This looks like an address part
-    if (cleaned.length > 0 && cleaned.length <= 100) {
-      addressParts.push(cleaned);
-    }
-    
-    // Limit address to 3 lines
-    if (addressParts.length >= 3) break;
+  // Try generic international address extraction
+  const genericAddress = extractGenericAddress(rawText);
+  if (genericAddress) {
+    return genericAddress;
   }
   
-  if (addressParts.length > 0) {
-    return addressParts.join(", ");
-  }
-  
+  // Return undefined if no valid address found (no fake fallbacks)
   return undefined;
 }
 
@@ -1069,7 +1208,15 @@ export function parseContact(rawText: string): ParsedContact {
   
   // Format phone
   const phone = phones[0] ? formatPhone(phones[0]) : undefined;
-  const website = websites[0];
+  let website = websites[0];
+  
+  // If no website found, derive from email domain (never from local part)
+  if (!website && email) {
+    const derivedWebsite = deriveWebsite(email, rawText);
+    if (derivedWebsite) {
+      website = derivedWebsite;
+    }
+  }
   
   let contact: ParsedContact = {
     fullName,
@@ -1082,7 +1229,7 @@ export function parseContact(rawText: string): ParsedContact {
     address,
   };
   
-  // Post-process: fix company if it looks like an address
+  // Post-process: fix company if it looks like an address or same as name
   contact = fixCompanyIfAddress(contact, rawText);
   
   return contact;
