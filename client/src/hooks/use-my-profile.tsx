@@ -66,6 +66,29 @@ export function useMyProfile() {
   return { profile, setProfile, hasProfile, isLoaded };
 }
 
+/**
+ * Split a full name into first and last name parts
+ * Handles common patterns:
+ * - "John Doe" -> { firstName: "John", lastName: "Doe" }
+ * - "John Michael Doe" -> { firstName: "John Michael", lastName: "Doe" }
+ * - "John" -> { firstName: "John", lastName: "" }
+ */
+function splitName(fullName: string): { firstName: string; lastName: string } {
+  const trimmed = fullName.trim();
+  if (!trimmed) {
+    return { firstName: "", lastName: "" };
+  }
+  
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: "" };
+  }
+  
+  const lastName = parts[parts.length - 1];
+  const firstName = parts.slice(0, -1).join(" ");
+  return { firstName, lastName };
+}
+
 export function generateVCardFromProfile(profile: MyProfile): string {
   const {
     fullName = "",
@@ -81,13 +104,16 @@ export function generateVCardFromProfile(profile: MyProfile): string {
     website = "",
   } = profile || {};
 
+  const { firstName, lastName } = splitName(fullName);
+
   const lines = [
     "BEGIN:VCARD",
     "VERSION:3.0",
+    fullName ? `N:${lastName};${firstName};;;` : "",
     fullName ? `FN:${fullName}` : "",
-    companyName ? `ORG:${companyName}` : "",
     jobTitle ? `TITLE:${jobTitle}` : "",
-    phone ? `TEL;TYPE=CELL:${phone}` : "",
+    companyName ? `ORG:${companyName}` : "",
+    phone ? `TEL;TYPE=mobile:${phone}` : "",
     email ? `EMAIL:${email}` : "",
     (street || city || state || postcode || country)
       ? `ADR;TYPE=WORK:;;${street};${city};${state};${postcode};${country}`
