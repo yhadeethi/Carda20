@@ -128,9 +128,11 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
             )}
           </TabsContent>
 
-          <TabsContent value="edit" className="mt-4 flex-1 flex flex-col min-h-0 -mx-6 -mb-6">
-            <div className="flex-1 overflow-y-auto px-6 pb-28">
+          <TabsContent value="edit" className="mt-4 flex-1 flex flex-col min-h-0 overflow-hidden -mx-6 -mb-6">
+            {/* Scrollable form area - contains ALL fields including Address */}
+            <main className="flex-1 overflow-y-auto px-6 pt-2 pb-28">
               <div className="grid gap-3">
+                {/* Full Name */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
                     <User className="w-3 h-3" /> Full Name
@@ -143,6 +145,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
+                {/* Job Title + Company */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs flex items-center gap-1">
@@ -168,6 +171,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   </div>
                 </div>
 
+                {/* Phone + Email */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs flex items-center gap-1">
@@ -195,6 +199,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   </div>
                 </div>
 
+                {/* Website */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
                     <Globe className="w-3 h-3" /> Website
@@ -208,6 +213,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
+                {/* LinkedIn */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
                     <SiLinkedin className="w-3 h-3 text-[#0A66C2]" /> LinkedIn
@@ -225,6 +231,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   </div>
                 </div>
 
+                {/* Address line 1 */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
                     <MapPin className="w-3 h-3" /> Address
@@ -237,6 +244,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
+                {/* City / State / Postcode */}
                 <div className="grid grid-cols-3 gap-2">
                   <Input
                     value={formData.city}
@@ -258,6 +266,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
+                {/* Country - LAST field before save bar */}
                 <Input
                   value={formData.country}
                   onChange={(e) => handleInputChange("country", e.target.value)}
@@ -265,10 +274,11 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   data-testid="input-my-country"
                 />
               </div>
-            </div>
+            </main>
 
-            <div 
-              className="sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-6 pt-3 z-20"
+            {/* Sticky bottom save bar - LAST element, outside scrollable area */}
+            <footer 
+              className="shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 px-6 pt-3 z-20"
               style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
             >
               <button
@@ -290,7 +300,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   </span>
                 )}
               </button>
-            </div>
+            </footer>
           </TabsContent>
         </Tabs>
       </DialogContent>

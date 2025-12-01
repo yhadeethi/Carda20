@@ -1,0 +1,68 @@
+The Edit Card tab is still wrong. The “Save My Card” button is appearing before the Address fields in the DOM, so the scroll ends at the Save bar and the address inputs are hidden behind the browser bar.
+
+I need the layout to be:
+
+Order:
+
+Header (My QR / Edit Card)
+
+Scrollable <main> with all form fields including Address / City / State / Postcode / Country
+
+Sticky bottom save bar as the final element
+
+Please update the component so it matches this exact structure:
+
+export default function EditCardPage() {
+  return (
+    <div className="flex-1 flex justify-center">
+      <div className="w-full max-w-lg flex flex-col min-h-screen">
+        {/* 1. Header */}
+        <header className="px-4 pt-3 pb-2">
+          {/* My QR / Edit Card buttons */}
+        </header>
+
+        {/* 2. Scrollable form – MUST include Address + City/State/Postcode/Country */}
+        <main className="flex-1 overflow-y-auto px-4 pt-2 pb-28">
+          {/* Full Name */}
+          {/* Job Title + Company */}
+          {/* Phone + Email */}
+          {/* Website */}
+          {/* LinkedIn */}
+          {/* Address line 1 */}
+          {/* City / State / Postcode */}
+          {/* Country */}
+        </main>
+
+        {/* 3. Sticky bottom save bar – LAST element */}
+        <footer
+          className="
+            sticky bottom-0
+            bg-white/95 backdrop-blur
+            border-t border-slate-200
+            px-4 pt-3 pb-[max(env(safe-area-inset-bottom),16px)]
+            z-20
+          "
+        >
+          <button
+            type="button"
+            onClick={handleSave}
+            className="w-full rounded-xl py-3 text-base font-medium bg-slate-900 text-white"
+          >
+            Save My Card
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+
+Important:
+
+Do not render any form fields after the <footer> save bar.
+
+The address section (including City / State / Postcode / Country) must be inside the <main> block above.
+
+Keep flex-1 overflow-y-auto pb-28 on <main> so the whole form scrolls and leaves space above the sticky footer.
+
+After this change, on mobile I should be able to scroll until the Country field is fully visible above the Save bar, and the Save bar should stay stuck to the bottom of the visible area.
