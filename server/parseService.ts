@@ -22,6 +22,7 @@ export interface SplitAddress {
  * Handles formats like:
  * - "45B/2 Park Street, Sydney NSW 2000 Australia"
  * - "Ground Floor, 109 Burwood Road Hawthorn VIC 3122"
+ * - "Ground Floor, 109 Burwood road Hawthorn Melbourne Vic 3122"
  */
 export function splitAuAddress(address: string | undefined): SplitAddress {
   if (!address) {
@@ -32,6 +33,7 @@ export function splitAuAddress(address: string | undefined): SplitAddress {
 
   // Try to match AU address formats with comma separating street from city
   // Pattern: "Street Address, City STATE POSTCODE [Country]"
+  // Case-insensitive and tolerant of missing country
   let match = trimmed.match(
     /^(.*?),\s*([A-Za-z ]+)\s+(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+(\d{4})(?:\s+(Australia|AU|AUS))?$/i
   );
@@ -43,7 +45,7 @@ export function splitAuAddress(address: string | undefined): SplitAddress {
       city: city.trim(),
       state: state.trim().toUpperCase(),
       postcode: postcode.trim(),
-      country: countryRaw ? countryRaw.trim() : "Australia",
+      country: countryRaw ? "Australia" : "Australia", // Always default to Australia
     };
   }
 
@@ -60,18 +62,104 @@ export function splitAuAddress(address: string | undefined): SplitAddress {
       city: city.trim(),
       state: state.trim().toUpperCase(),
       postcode: postcode.trim(),
-      country: countryRaw ? countryRaw.trim() : "Australia",
+      country: countryRaw ? "Australia" : "Australia", // Always default to Australia
     };
   }
 
-  // Fallback: treat entire string as street
+  // Fallback: treat entire string as street, default country to Australia if has AU indicators
+  const hasAuState = /\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/i.test(trimmed);
+  const hasPostcode = /\b\d{4}\b/.test(trimmed);
+  
   return {
     street: trimmed,
     city: "",
     state: "",
     postcode: "",
-    country: "",
+    country: (hasAuState || hasPostcode) ? "Australia" : "",
   };
+}
+
+/**
+ * Derive a clean company name from a domain/website string
+ * e.g., "flowpower.com.au" -> "Flow Power"
+ * e.g., "w. flowpower.com.au" -> "Flow Power"
+ */
+export function deriveCompanyFromDomain(rawDomain: string | undefined): string {
+  if (!rawDomain) return "";
+
+  let domain = rawDomain.trim();
+  
+  // Strip protocol and leading labels
+  domain = domain.replace(/^https?:\/\//i, "");
+  domain = domain.replace(/^www\./i, "");
+  domain = domain.replace(/^w\.\s*/i, "");
+
+  // If the line has extra text, extract the first thing that looks like a domain
+  const domainMatch = domain.match(/[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+  if (domainMatch) {
+    domain = domainMatch[0];
+  }
+
+  // Get the main part (before first dot)
+  const parts = domain.split(".");
+  const main = parts[0]; // e.g., "flowpower"
+  if (!main) return "";
+
+  // Convert to title case, splitting on hyphens/underscores
+  // "flowpower" -> "Flowpower" (simple case)
+  // "flow-power" -> "Flow Power"
+  // For single words, try to detect camelCase boundaries or common patterns
+  
+  // Check if it's a compound word we can split intelligently
+  // Common patterns: flowpower -> flow power, energyaustralia -> energy australia
+  let words = main
+    .split(/[-_]/)
+    .filter(Boolean);
+  
+  // If it's a single word, try to split it intelligently
+  if (words.length === 1 && words[0]) {
+    const word = words[0].toLowerCase();
+    // Try to find natural word boundaries in compound domain names
+    // This is heuristic - split before common business words
+    const splitPatterns = [
+      /^(.+?)(power)$/i,
+      /^(.+?)(energy)$/i,
+      /^(.+?)(australia)$/i,
+      /^(.+?)(global)$/i,
+      /^(.+?)(group)$/i,
+      /^(.+?)(digital)$/i,
+      /^(.+?)(solutions)$/i,
+      /^(.+?)(services)$/i,
+      /^(.+?)(tech)$/i,
+      /^(.+?)(labs)$/i,
+      /^(.+?)(media)$/i,
+      /^(.+?)(works)$/i,
+    ];
+    
+    for (const pattern of splitPatterns) {
+      const match = word.match(pattern);
+      if (match && match[1] && match[1].length >= 2) {
+        words = [match[1], match[2]];
+        break;
+      }
+    }
+  }
+
+  return words
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/**
+ * Check if a string looks like a URL or website reference
+ */
+function looksLikeUrl(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  // Starts with protocol, www, or w. label
+  if (/^(https?:\/\/|www\.|w\.\s*)/.test(t)) return true;
+  // Looks like a domain (word.tld pattern)
+  if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(t)) return true;
+  return false;
 }
 
 /**
@@ -90,13 +178,18 @@ export function looksLikeAddress(text: string | undefined): boolean {
 }
 
 /**
- * Fix company name when it appears to be an address
+ * Fix company name when it appears to be an address, URL, or is missing
  * Uses email domain to find the real company name in the raw text
- * Priority: 1) Domain match (space-insensitive), 2) Company suffix, 3) First safe line
+ * Priority: 1) Line with domain match + company suffix, 2) Derived from domain, 3) Company suffix line, 4) First safe line
  */
 export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): ParsedContact {
-  // If company doesn't look like an address, leave it
-  if (contact.companyName && !looksLikeAddress(contact.companyName)) {
+  // Determine if we need to fix the company
+  const companyIsBad = 
+    !contact.companyName || 
+    looksLikeAddress(contact.companyName) ||
+    looksLikeUrl(contact.companyName);
+    
+  if (!companyIsBad) {
     return contact;
   }
 
@@ -107,8 +200,26 @@ export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): Pa
 
   // Get base domain from email for matching (e.g., "flowpower" from flowpower.com.au)
   const email = contact.email || "";
-  const domainMatch = email.match(/@([A-Za-z0-9.-]+)/);
-  const baseDomain = domainMatch ? domainMatch[1].split('.')[0].toLowerCase() : null;
+  const emailDomainMatch = email.match(/@([A-Za-z0-9.-]+)/);
+  const baseDomain = emailDomainMatch ? emailDomainMatch[1].split('.')[0].toLowerCase() : null;
+
+  // Find candidate domain from website or rawText
+  let candidateDomain: string | undefined = contact.website;
+  
+  // If no website, look for w. or www. lines in rawText
+  if (!candidateDomain) {
+    for (const line of lines) {
+      if (/^w\.\s*.+\.[a-z]{2,}/i.test(line) || /^www\..+\.[a-z]{2,}/i.test(line)) {
+        candidateDomain = line;
+        break;
+      }
+    }
+  }
+  
+  // If still no candidate domain, use email domain
+  if (!candidateDomain && emailDomainMatch) {
+    candidateDomain = emailDomainMatch[1];
+  }
 
   // Normalize job title for comparison
   const jobTitleLower = contact.jobTitle?.trim().toLowerCase() || "";
@@ -129,11 +240,17 @@ export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): Pa
     // Skip if this line IS the detected (wrong) company
     if (contact.companyName && line === contact.companyName) continue;
     
-    // Skip email, URL, phone lines
+    // Skip email lines
     if (lower.includes("@")) continue;
-    if (lower.startsWith("http") || lower.includes("www.")) continue;
+    
+    // Skip URL/website lines (these shouldn't be company names)
+    if (looksLikeUrl(line)) continue;
+    if (/^w\.\s*/i.test(line)) continue; // Skip "w. flowpower.com.au" style lines
+    if (/^e\.\s*/i.test(line)) continue; // Skip "e. email@..." style lines
+    
+    // Skip phone lines (various formats: +61..., m. 0432..., m: 0432..., etc.)
     if (/^\+?\d[\d\s()-]{6,}/.test(line)) continue;
-    if (/^m\s*[:|\-]/i.test(line)) continue; // Skip "M: +61..." style lines
+    if (/^m\s*[.:|\-]/i.test(line)) continue; // Skip "m. 0432...", "m: +61...", etc.
     
     // Skip lines that look like addresses
     if (looksLikeAddress(line)) continue;
@@ -162,21 +279,36 @@ export function fixCompanyIfAddress(contact: ParsedContact, rawText: string): Pa
     candidates.push({ line, hasDomainMatch, hasSuffix });
   }
 
-  // Priority 1: Domain match (strongest signal)
-  const domainMatch2 = candidates.find(c => c.hasDomainMatch);
-  if (domainMatch2) {
-    contact.companyName = domainMatch2.line;
+  // Priority 1: Line with domain match AND company suffix (strongest signal)
+  const domainAndSuffixMatch = candidates.find(c => c.hasDomainMatch && c.hasSuffix);
+  if (domainAndSuffixMatch) {
+    contact.companyName = domainAndSuffixMatch.line;
+    return contact;
+  }
+
+  // Priority 2: Line with domain match only
+  const domainOnlyMatch = candidates.find(c => c.hasDomainMatch);
+  if (domainOnlyMatch) {
+    contact.companyName = domainOnlyMatch.line;
     return contact;
   }
   
-  // Priority 2: Company suffix match (strong signal)
+  // Priority 3: Company suffix line (strong signal)
   const suffixMatch = candidates.find(c => c.hasSuffix);
   if (suffixMatch) {
     contact.companyName = suffixMatch.line;
     return contact;
   }
   
-  // Priority 3: First safe line (last resort fallback)
+  // Priority 4: Derive company name from domain
+  // This is the fallback when there's no explicit company line
+  const derivedCompany = deriveCompanyFromDomain(candidateDomain);
+  if (derivedCompany) {
+    contact.companyName = derivedCompany;
+    return contact;
+  }
+  
+  // Priority 5: First safe line (last resort fallback)
   if (candidates.length > 0) {
     contact.companyName = candidates[0].line;
   }
@@ -237,6 +369,33 @@ const DISCLAIMER_TRIGGERS = [
   "unauthorized use",
 ];
 
+// Email salutations to skip at the start (not part of the contact)
+const SALUTATION_PATTERNS = [
+  /^regards$/i,
+  /^kind regards$/i,
+  /^best regards$/i,
+  /^warm regards$/i,
+  /^many thanks$/i,
+  /^thanks$/i,
+  /^thank you$/i,
+  /^cheers$/i,
+  /^best$/i,
+  /^sincerely$/i,
+  /^yours sincerely$/i,
+  /^yours faithfully$/i,
+  /^yours truly$/i,
+  /^with thanks$/i,
+  /^with best regards$/i,
+  /^all the best$/i,
+  /^warmly$/i,
+  /^cordially$/i,
+  /^respectfully$/i,
+  /^ciao$/i,
+  /^take care$/i,
+  /^speak soon$/i,
+  /^looking forward$/i,
+];
+
 // Company suffixes to identify company names
 const COMPANY_SUFFIXES = [
   "pty ltd", "pty. ltd.", "pty. ltd",
@@ -269,17 +428,37 @@ const TITLE_KEYWORDS = [
 ];
 
 /**
- * Pre-clean raw text: split lines, trim, remove empty, stop at disclaimers
+ * Check if a line is a salutation
+ */
+function isSalutation(line: string): boolean {
+  const trimmed = line.trim();
+  return SALUTATION_PATTERNS.some(pattern => pattern.test(trimmed));
+}
+
+/**
+ * Pre-clean raw text: split lines, trim, remove empty, skip salutations, stop at disclaimers
  */
 function preCleanText(text: string): string[] {
   const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 0);
   
   // Find where disclaimer starts and cut off there
   const cleanedLines: string[] = [];
+  let passedSalutation = false;
+  
   for (const line of lines) {
     const lowerLine = line.toLowerCase();
+    
+    // Stop at disclaimer
     const isDisclaimer = DISCLAIMER_TRIGGERS.some(trigger => lowerLine.includes(trigger));
     if (isDisclaimer) break;
+    
+    // Skip salutations at the start
+    if (!passedSalutation && isSalutation(line)) {
+      continue; // Skip this line
+    }
+    
+    // Once we have a non-salutation line, we've passed the salutation section
+    passedSalutation = true;
     cleanedLines.push(line);
   }
   
@@ -715,8 +894,8 @@ function extractBestAUAddress(rawText: string): string | null {
 
   const addresses: AddressCandidate[] = [];
 
-  // AU state codes
-  const AU_STATES = /\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/;
+  // AU state codes (case-insensitive to catch "Vic", "vic", etc.)
+  const AU_STATES = /\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/i;
   const AU_POSTCODE = /\b\d{4}\b/;
 
   for (let i = 0; i < lines.length; i++) {
@@ -730,12 +909,37 @@ function extractBestAUAddress(rawText: string): string | null {
     // This line contains "City STATE POSTCODE"
     const placeLine = line;
     
-    // Street line is typically the line before
-    const streetLine = lines[i - 1] || "";
+    // Street line is typically the line before - always include if present and looks like an address
+    let streetLine = "";
+    if (i > 0) {
+      const prevLine = lines[i - 1];
+      // Include if it looks like a street address (has numbers, floor, level, etc.)
+      // but skip if it's a field label, phone, email, URL, or company name with suffix
+      const isFieldLabel = hasFieldLabel(prevLine);
+      const isPhone = /^\+?\d[\d\s()-]{6,}/.test(prevLine) || /^m\s*[.:|\-]/i.test(prevLine);
+      const isEmail = /@/.test(prevLine);
+      const isUrl = /https?:\/\/|www\.|^w\.\s/i.test(prevLine);
+      const isCompany = hasCompanySuffix(prevLine);
+      const isLabel = /^(registered|office|sydney|melbourne|brisbane)\s*(address)?:?$/i.test(prevLine);
+      
+      if (!isFieldLabel && !isPhone && !isEmail && !isUrl && !isCompany && !isLabel) {
+        streetLine = prevLine;
+      }
+    }
     
     // Country line is typically the line after (if it says Australia)
-    const countryLine =
-      lines[i + 1] && /australia/i.test(lines[i + 1]) ? lines[i + 1] : "";
+    let countryPart = "";
+    if (lines[i + 1] && /^australia$/i.test(lines[i + 1].trim())) {
+      countryPart = "Australia";
+    }
+    
+    // If no explicit country line, check if the current line has Australia at the end
+    if (!countryPart && /australia$/i.test(placeLine.trim())) {
+      countryPart = ""; // Already in placeLine
+    } else if (!countryPart) {
+      // Default to Australia for AU addresses
+      countryPart = "Australia";
+    }
 
     // Check label 2 lines up to determine address type
     const labelLine = (lines[i - 2] || "").toLowerCase();
@@ -747,13 +951,25 @@ function extractBestAUAddress(rawText: string): string | null {
     const isRegistered = labelLine.includes("registered address") || 
                          labelLine.includes("registered:");
 
-    // Skip lines that look like labels (not actual street addresses)
-    if (/^(registered|office|sydney|melbourne|brisbane)\s*(address)?:?$/i.test(streetLine)) {
-      continue;
+    // Build full address parts
+    const parts: string[] = [];
+    if (streetLine) parts.push(streetLine);
+    parts.push(placeLine);
+    if (countryPart && !/australia/i.test(placeLine)) {
+      parts.push(countryPart);
     }
-
-    // Build full address, cleaning up spacing
-    const full = `${streetLine} ${placeLine} ${countryLine}`
+    
+    // Join with comma for street/place separation
+    let full: string;
+    if (streetLine && parts.length >= 2) {
+      // Format as "Street, City STATE POSTCODE Country"
+      full = `${streetLine}, ${parts.slice(1).join(" ")}`;
+    } else {
+      full = parts.join(" ");
+    }
+    
+    // Clean up spacing
+    full = full
       .replace(/\s+,/g, ",")
       .replace(/,\s*,/g, ",")
       .replace(/\s+/g, " ")
