@@ -4,6 +4,7 @@ import multer from "multer";
 import { extractTextFromImage, initializeOCR } from "./ocrService";
 import { parseContact, ParsedContact, splitAuAddress } from "./parseService";
 import { getOrCreateCompanyIntel } from "./intelService";
+import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -152,6 +153,55 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting company intel:", error);
       res.status(500).send("Failed to get company intel");
+    }
+  });
+
+  app.post("/api/parse-ai", async (req: Request, res: Response) => {
+    try {
+      const { text } = req.body;
+      if (!text || typeof text !== "string") {
+        return res.status(400).send("Text is required");
+      }
+
+      const aiResult = await parseContactWithAI(text);
+      const contact = convertAIResultToContact(aiResult);
+      
+      res.json({
+        rawText: text,
+        contact: contact,
+        aiRaw: aiResult,
+      });
+    } catch (error) {
+      console.error("Error parsing contact with AI:", error);
+      res.status(500).send("Failed to parse contact with AI");
+    }
+  });
+
+  app.post("/api/scan-ai", upload.single("image"), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).send("No image file provided");
+      }
+
+      const base64 = file.buffer.toString("base64");
+      const ocrResult = await extractTextFromImage(base64);
+
+      if (ocrResult.error) {
+        return res.status(400).json({ error: ocrResult.error });
+      }
+
+      const aiResult = await parseContactWithAI(ocrResult.rawText);
+      const contact = convertAIResultToContact(aiResult);
+
+      res.json({
+        rawText: ocrResult.rawText,
+        contact: contact,
+        aiRaw: aiResult,
+      });
+    } catch (error) {
+      console.error("Error scanning contact with AI:", error);
+      res.status(500).send("Failed to scan contact with AI");
     }
   });
 

@@ -6,6 +6,7 @@ export interface ParsedContact {
   phone?: string;
   website?: string;
   linkedinUrl?: string;
+  linkedinSearchUrl?: string;
   address?: string;
 }
 

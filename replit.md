@@ -4,10 +4,10 @@
 Carda 2.0 is a mobile-first business card scanner with AI-powered company intelligence. Users can scan business cards or paste email signatures to extract contact information, then generate AI-powered company insights.
 
 ## Current State
-- **Status**: MVP Complete with AU address extraction, email truncation, and My QR feature
+- **Status**: MVP Complete with AU address extraction, email truncation, My QR feature, and AI parsing
 - **Stack**: React SPA (frontend) + Express.js (backend)
 - **OCR**: OCR.space API (modular, swappable)
-- **Parsing**: Deterministic regex/heuristics (no AI)
+- **Parsing**: Deterministic regex/heuristics (default) + AI-powered parsing (optional)
 - **Intel**: OpenAI via Replit AI Integrations
 
 ## Core Features
@@ -47,14 +47,17 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
 - `routes.ts` - API endpoints (all public, no auth required)
 - `ocrService.ts` - Modular OCR service (OCR.space provider)
 - `parseService.ts` - Deterministic contact parser with email signature support
+- `aiParseService.ts` - AI-powered contact parser using GPT-4o
 - `intelService.ts` - OpenAI-powered company intel generation
 
 ## API Endpoints (All Public)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/scan` | POST | Upload image for OCR + parsing |
-| `/api/parse` | POST | Parse contact from pasted text |
+| `/api/scan` | POST | Upload image for OCR + deterministic parsing |
+| `/api/scan-ai` | POST | Upload image for OCR + AI-powered parsing |
+| `/api/parse` | POST | Parse contact from pasted text (deterministic) |
+| `/api/parse-ai` | POST | Parse contact from pasted text (AI-powered) |
 | `/api/vcard` | POST | Generate vCard from contact data |
 | `/api/intel` | POST | Generate AI company intelligence |
 
@@ -92,6 +95,15 @@ Uses regex patterns and heuristics:
 - **Title**: Job title keyword matching
 - **Company**: Company suffix detection (Pty Ltd, Inc, LLC, GmbH, etc.)
 - **Address**: Lines between company and contact fields
+
+### AI-Powered Parsing (server/aiParseService.ts)
+Uses GPT-4o for intelligent contact extraction:
+- **Expert business card parser prompt**: Trained to distinguish logos from names, handle OCR noise
+- **Structured JSON output**: name, company, title, email, phone, mobile, fax, address, website
+- **Logo detection**: Ignores common brand logos (EVE, CATL, BYD, etc.) when extracting names
+- **OCR noise handling**: Reconstructs broken addresses, fixes obvious mistakes
+- **Never hallucinates**: Only extracts what's clearly visible on the card
+- **Fallback to deterministic**: Can use regex-based parsing as alternative
 
 ### Email Signature Parsing Features
 - **preCleanText**: Strips salutations at start and disclaimer text at end
