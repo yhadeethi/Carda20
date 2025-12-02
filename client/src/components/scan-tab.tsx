@@ -89,6 +89,9 @@ export function ScanTab() {
 
   const scanCardMutation = useMutation({
     mutationFn: async (file: File) => {
+      // Clear previous debug state before starting new scan
+      setDebugAiRaw(null);
+      
       const formData = new FormData();
       formData.append("image", file);
       
@@ -156,6 +159,9 @@ export function ScanTab() {
 
   const parseTextMutation = useMutation({
     mutationFn: async (text: string) => {
+      // Clear previous debug state before starting new parse
+      setDebugAiRaw(null);
+      
       // Try AI endpoint first
       try {
         const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
