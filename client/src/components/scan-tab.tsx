@@ -28,10 +28,23 @@ interface ParsedContact {
   address?: string;
 }
 
+interface AIRawResult {
+  name: string;
+  company: string;
+  title: string;
+  email: string;
+  phone: string;
+  mobile: string;
+  fax: string;
+  address: string;
+  website: string;
+}
+
 interface ScanResult {
   rawText: string;
   contact: ParsedContact;
   error?: string;
+  debugAiRaw?: AIRawResult;
 }
 
 export function ScanTab() {
@@ -51,6 +64,8 @@ export function ScanTab() {
   const [companyIntel, setCompanyIntel] = useState<CompanyIntelData | null>(null);
   const [intelError, setIntelError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [debugAiRaw, setDebugAiRaw] = useState<AIRawResult | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -76,9 +91,30 @@ export function ScanTab() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("image", file);
+      
+      // Try AI endpoint first
+      try {
+        const aiRes = await fetch("/api/scan-ai", {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        if (aiRes.ok) {
+          const result = await aiRes.json() as ScanResult;
+          console.log("[Scan] AI parsing succeeded");
+          return result;
+        }
+        console.log("[Scan] AI endpoint failed, falling back to deterministic");
+      } catch (aiError) {
+        console.log("[Scan] AI endpoint error, falling back:", aiError);
+      }
+      
+      // Fallback to deterministic parser
+      const formData2 = new FormData();
+      formData2.append("image", file);
       const res = await fetch("/api/scan", {
         method: "POST",
-        body: formData,
+        body: formData2,
         credentials: "include",
       });
       if (!res.ok) {
@@ -103,6 +139,7 @@ export function ScanTab() {
       setRawText(data.rawText);
       setContact(data.contact);
       setEditedContact(data.contact);
+      setDebugAiRaw(data.debugAiRaw || null);
       toast({
         title: "Card scanned",
         description: "Contact information extracted successfully",
@@ -119,6 +156,20 @@ export function ScanTab() {
 
   const parseTextMutation = useMutation({
     mutationFn: async (text: string) => {
+      // Try AI endpoint first
+      try {
+        const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
+        if (aiRes.ok) {
+          const result = await aiRes.json() as ScanResult;
+          console.log("[Parse] AI parsing succeeded");
+          return result;
+        }
+        console.log("[Parse] AI endpoint failed, falling back to deterministic");
+      } catch (aiError) {
+        console.log("[Parse] AI endpoint error, falling back:", aiError);
+      }
+      
+      // Fallback to deterministic parser
       const res = await apiRequest("POST", "/api/parse", { text });
       return res.json() as Promise<ScanResult>;
     },
@@ -126,6 +177,7 @@ export function ScanTab() {
       setRawText(data.rawText);
       setContact(data.contact);
       setEditedContact(data.contact);
+      setDebugAiRaw(data.debugAiRaw || null);
       toast({
         title: "Text parsed",
         description: "Contact information extracted successfully",
@@ -270,6 +322,8 @@ export function ScanTab() {
     setPastedText("");
     clearImage();
     setIsEditing(false);
+    setDebugAiRaw(null);
+    setShowDebug(false);
   };
 
   const isProcessing = isCompressing || scanCardMutation.isPending || parseTextMutation.isPending;
@@ -631,6 +685,24 @@ export function ScanTab() {
                             Search LinkedIn
                           </a>
                         </Button>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* AI Debug Panel (temporary) */}
+                  {debugAiRaw && (
+                    <div className="pt-3 mt-3 border-t" data-testid="debug-section">
+                      <button
+                        onClick={() => setShowDebug(!showDebug)}
+                        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        data-testid="button-toggle-debug"
+                      >
+                        {showDebug ? "▼" : "▶"} AI debug (temporary)
+                      </button>
+                      {showDebug && (
+                        <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-48 overflow-y-auto" data-testid="text-debug-json">
+                          {JSON.stringify(debugAiRaw, null, 2)}
+                        </pre>
                       )}
                     </div>
                   )}
