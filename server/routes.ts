@@ -164,12 +164,14 @@ export async function registerRoutes(
       }
 
       const aiResult = await parseContactWithAI(text);
+      console.log("AI PARSE RAW:", JSON.stringify(aiResult, null, 2));
+      
       const contact = convertAIResultToContact(aiResult);
       
       res.json({
         rawText: text,
         contact: contact,
-        aiRaw: aiResult,
+        debugAiRaw: aiResult,
       });
     } catch (error) {
       console.error("Error parsing contact with AI:", error);
@@ -192,12 +194,14 @@ export async function registerRoutes(
       }
 
       const aiResult = await parseContactWithAI(ocrResult.rawText);
+      console.log("AI PARSE RAW:", JSON.stringify(aiResult, null, 2));
+      
       const contact = convertAIResultToContact(aiResult);
 
       res.json({
         rawText: ocrResult.rawText,
         contact: contact,
-        aiRaw: aiResult,
+        debugAiRaw: aiResult,
       });
     } catch (error) {
       console.error("Error scanning contact with AI:", error);

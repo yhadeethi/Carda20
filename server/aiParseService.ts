@@ -180,13 +180,20 @@ function emptyResult(): AIParseResult {
 export function convertAIResultToContact(aiResult: AIParseResult) {
   const phone = aiResult.mobile || aiResult.phone;
   
+  // Validate website - must contain a dot to be a real URL
+  let website = aiResult.website || "";
+  if (website && !website.includes(".")) {
+    console.log("[AI Parse] Rejecting invalid website (no dot):", website);
+    website = "";
+  }
+  
   return {
     fullName: aiResult.name || undefined,
     jobTitle: aiResult.title || undefined,
     companyName: aiResult.company || undefined,
     email: aiResult.email || undefined,
     phone: phone || undefined,
-    website: aiResult.website || undefined,
+    website: website || undefined,
     address: aiResult.address || undefined,
     mobile: aiResult.mobile || undefined,
     fax: aiResult.fax || undefined,
