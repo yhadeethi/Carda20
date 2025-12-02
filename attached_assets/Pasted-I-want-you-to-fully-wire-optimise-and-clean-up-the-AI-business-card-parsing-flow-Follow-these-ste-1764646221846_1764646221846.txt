@@ -1,0 +1,130 @@
+I want you to fully wire, optimise, and clean up the AI business-card parsing flow. Follow these steps EXACTLY.
+
+GOAL
+The “Contact Extracted” card should be powered by the AI parser by default, be as fast as possible, have no debug clutter, and show the LinkedIn search button again. The AI must still use the detailed parsing rules I provided earlier (name/company/title/email/phone/mobile/fax/address/website).
+
+-----------------------------------
+1) Make AI parsing the default path
+-----------------------------------
+- Find ALL places in the frontend where we currently call the legacy endpoints:
+  - /api/scan
+  - /api/parse
+
+These will likely live in files like:
+  - client/src/api/contactApi.ts
+  - client/src/hooks/useScanContact.ts
+  - or wherever the scan + paste flows are implemented.
+
+Change them as follows:
+
+1. Image scan:
+   - Replace calls to POST /api/scan with POST /api/scan-ai.
+   - The request body (image/form-data) should remain the same.
+   - If /api/scan-ai fails, you MAY fall back to /api/scan as a backup, but the primary path must be /api/scan-ai.
+
+2. Pasted text:
+   - Replace calls to POST /api/parse with POST /api/parse-ai.
+   - Same: AI first, legacy only as a fallback on hard failure.
+
+Important:
+- Do NOT run the legacy deterministic parser on top of the AI result.
+- The AI output should map directly into the ParsedContact interface.
+
+-----------------------------------
+2) Optimise AI parsing for speed & cost
+-----------------------------------
+Open server/aiParseService.ts and:
+
+1. Model:
+   - Use gpt-4o-mini as the model.
+   - temperature: 0 or 0.2 max.
+   - Only ONE AI call per request.
+
+2. Flow for /api/scan-ai:
+   - Confirm the flow is:
+       image -> OCR service -> raw text -> aiParseService -> JSON contact
+   - There must be no extra redundant parse passes.
+   - Do NOT call the legacy parser inside /api/scan-ai. If you need a fallback, handle that only at the route level and ONLY when the AI completely fails.
+
+3. Flow for /api/parse-ai:
+   - Input: raw text from the pasted text.
+   - Directly call aiParseService once and return the mapped ParsedContact.
+
+3. Website sanity check (to stop fake URLs like www.Elina.Ling):
+   - After the AI result is produced in aiParseService.ts, before returning:
+     - If `website` does not contain a dot (.), set `website` to an empty string "".
+   - Ensure this cleaned website value is what is used when mapping to ParsedContact.
+
+-----------------------------------
+3) Remove all temporary AI debug UI and extra response fields
+-----------------------------------
+Backend:
+
+1. In the routes/controllers that handle /api/scan-ai and /api/parse-ai:
+   - Remove any extra fields in the JSON response such as debugAiRaw or similar.
+   - The response should only return the normal payload (ParsedContact and whatever else is part of the production API).
+   - You can keep console.log("AI PARSE RAW", ...) on the server if you want for internal debugging, but nothing debug-related should be sent to the client.
+
+Frontend:
+
+2. In the component that renders the “Contact Extracted” card:
+   - Remove the “AI debug (temporary)” section completely.
+   - Remove any state/props/hooks related to debugAiRaw or AI debug info.
+   - The UI should look clean and user-facing, with only the standard contact info and buttons.
+
+-----------------------------------
+4) Restore the LinkedIn search button
+-----------------------------------
+The AI parser does not need to return a LinkedIn field. We just generate a search link from the contact data.
+
+1. Find the contact details component where the Call and Email buttons are rendered (the same place the old “Search LinkedIn” button used to be).
+
+2. Implement the LinkedIn button as follows:
+   - Label: “Search LinkedIn”.
+   - When clicked, open a new tab to:
+       https://www.linkedin.com/search/results/people/?keywords={name}%20{company}
+
+   Where:
+   - name = contact.name
+   - company = contact.company
+
+3. Place this button under or next to the Call and Email buttons, consistent with the previous design.
+
+4. Make sure this button appears for both AI-parsed contacts and legacy-parsed contacts (in case the fallback ever kicks in).
+
+-----------------------------------
+5) Improve UX during slower AI parse
+-----------------------------------
+In the frontend, for both scanning and pasted text:
+
+1. When a scan or parse is in progress via the -ai endpoints:
+   - Show a clear loading state such as:
+     - “Scanning and parsing with AI…”
+   - Disable the main buttons during this time to avoid duplicate requests.
+
+2. As soon as the API returns, hide the loading state and show the “Contact Extracted” card with the parsed data.
+
+-----------------------------------
+6) Quick self-check with the EVE / Elina Ling card
+-----------------------------------
+After implementing everything:
+
+1. Run the app and scan the same EVE / Elina Ling business card again.
+
+2. Confirm that the final UI (without any debug sections) shows:
+
+   - Name: Elina Ling
+   - Title: ESS Solution Center Product Manager (or similar; title is clearly correct)
+   - Company: EVE Energy Storage Co., Ltd.
+   - Email: Elina.Ling@evebattery.com
+   - Phone/Mobile: includes 13545277916 as mobile and 0724-6079688 as office/fax if parsed
+   - Address: full multiline address, not cut off
+   - Website: www.evebattery.com
+   - LinkedIn: “Search LinkedIn” button is visible and opens a search URL containing both the name and company.
+
+3. Confirm that:
+   - The flow is using /api/scan-ai and /api/parse-ai by default.
+   - There is no “AI debug (temporary)” block visible anywhere.
+   - The interaction feels reasonably fast using gpt-4o-mini.
+
+Finally, summarise back the changes you made (files + a short bullet summary of key edits) so I can understand the new structure.

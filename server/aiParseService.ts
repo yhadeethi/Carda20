@@ -120,12 +120,12 @@ export async function parseContactWithAI(ocrText: string): Promise<AIParseResult
     console.log("[AI Parse] Starting AI parsing for text length:", ocrText.length);
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: ocrText }
       ],
-      temperature: 0.1,
+      temperature: 0,
       max_tokens: 1000,
     });
 

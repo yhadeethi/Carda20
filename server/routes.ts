@@ -171,7 +171,6 @@ export async function registerRoutes(
       res.json({
         rawText: text,
         contact: contact,
-        debugAiRaw: aiResult,
       });
     } catch (error) {
       console.error("Error parsing contact with AI:", error);
@@ -201,7 +200,6 @@ export async function registerRoutes(
       res.json({
         rawText: ocrResult.rawText,
         contact: contact,
-        debugAiRaw: aiResult,
       });
     } catch (error) {
       console.error("Error scanning contact with AI:", error);
