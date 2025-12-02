@@ -28,23 +28,10 @@ interface ParsedContact {
   address?: string;
 }
 
-interface AIRawResult {
-  name: string;
-  company: string;
-  title: string;
-  email: string;
-  phone: string;
-  mobile: string;
-  fax: string;
-  address: string;
-  website: string;
-}
-
 interface ScanResult {
   rawText: string;
   contact: ParsedContact;
   error?: string;
-  debugAiRaw?: AIRawResult;
 }
 
 export function ScanTab() {
@@ -64,8 +51,6 @@ export function ScanTab() {
   const [companyIntel, setCompanyIntel] = useState<CompanyIntelData | null>(null);
   const [intelError, setIntelError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
-  const [debugAiRaw, setDebugAiRaw] = useState<AIRawResult | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -89,9 +74,6 @@ export function ScanTab() {
 
   const scanCardMutation = useMutation({
     mutationFn: async (file: File) => {
-      // Clear previous debug state before starting new scan
-      setDebugAiRaw(null);
-      
       const formData = new FormData();
       formData.append("image", file);
       
@@ -142,7 +124,6 @@ export function ScanTab() {
       setRawText(data.rawText);
       setContact(data.contact);
       setEditedContact(data.contact);
-      setDebugAiRaw(data.debugAiRaw || null);
       toast({
         title: "Card scanned",
         description: "Contact information extracted successfully",
@@ -159,9 +140,6 @@ export function ScanTab() {
 
   const parseTextMutation = useMutation({
     mutationFn: async (text: string) => {
-      // Clear previous debug state before starting new parse
-      setDebugAiRaw(null);
-      
       // Try AI endpoint first
       try {
         const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
@@ -183,7 +161,6 @@ export function ScanTab() {
       setRawText(data.rawText);
       setContact(data.contact);
       setEditedContact(data.contact);
-      setDebugAiRaw(data.debugAiRaw || null);
       toast({
         title: "Text parsed",
         description: "Contact information extracted successfully",
@@ -328,8 +305,6 @@ export function ScanTab() {
     setPastedText("");
     clearImage();
     setIsEditing(false);
-    setDebugAiRaw(null);
-    setShowDebug(false);
   };
 
   const isProcessing = isCompressing || scanCardMutation.isPending || parseTextMutation.isPending;
@@ -415,7 +390,7 @@ export function ScanTab() {
                   ) : scanCardMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Scanning...
+                      Scanning with AI...
                     </>
                   ) : (
                     <>
@@ -443,7 +418,7 @@ export function ScanTab() {
                   {parseTextMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Extracting...
+                      Extracting with AI...
                     </>
                   ) : (
                     <>
@@ -634,7 +609,7 @@ export function ScanTab() {
                   )}
                   
                   {/* Action Row */}
-                  {(currentContact?.phone || currentContact?.email || currentContact?.linkedinUrl || currentContact?.linkedinSearchUrl) && (
+                  {(currentContact?.phone || currentContact?.email || currentContact?.linkedinUrl || currentContact?.fullName || currentContact?.companyName) && (
                     <div className="flex items-center gap-2 pt-3 mt-3 border-t flex-wrap" data-testid="action-row">
                       {currentContact?.phone && (
                         <Button
@@ -677,7 +652,7 @@ export function ScanTab() {
                             LinkedIn
                           </a>
                         </Button>
-                      ) : currentContact?.linkedinSearchUrl && (
+                      ) : (currentContact?.fullName || currentContact?.companyName) && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -685,30 +660,16 @@ export function ScanTab() {
                           className="gap-1.5"
                           data-testid="button-action-search-linkedin"
                         >
-                          <a href={currentContact.linkedinSearchUrl} target="_blank" rel="noopener noreferrer">
+                          <a 
+                            href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent([currentContact?.fullName, currentContact?.companyName].filter(Boolean).join(' '))}`}
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                          >
                             <SiLinkedin className="w-3.5 h-3.5 text-muted-foreground" />
                             <Search className="w-2.5 h-2.5 -ml-0.5" />
                             Search LinkedIn
                           </a>
                         </Button>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* AI Debug Panel (temporary) */}
-                  {debugAiRaw && (
-                    <div className="pt-3 mt-3 border-t" data-testid="debug-section">
-                      <button
-                        onClick={() => setShowDebug(!showDebug)}
-                        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                        data-testid="button-toggle-debug"
-                      >
-                        {showDebug ? "▼" : "▶"} AI debug (temporary)
-                      </button>
-                      {showDebug && (
-                        <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-48 overflow-y-auto" data-testid="text-debug-json">
-                          {JSON.stringify(debugAiRaw, null, 2)}
-                        </pre>
                       )}
                     </div>
                   )}
