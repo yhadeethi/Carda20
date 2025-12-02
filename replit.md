@@ -4,10 +4,10 @@
 Carda 2.0 is a mobile-first business card scanner with AI-powered company intelligence. Users can scan business cards or paste email signatures to extract contact information, then generate AI-powered company insights.
 
 ## Current State
-- **Status**: MVP Complete with AU address extraction, email truncation, My QR feature, and AI parsing
+- **Status**: MVP Complete with AU address extraction, email truncation, My QR feature, and AI-first parsing
 - **Stack**: React SPA (frontend) + Express.js (backend)
 - **OCR**: OCR.space API (modular, swappable)
-- **Parsing**: Deterministic regex/heuristics (default) + AI-powered parsing (optional)
+- **Parsing**: AI-powered (gpt-4o-mini) as default, deterministic fallback for resilience
 - **Intel**: OpenAI via Replit AI Integrations
 
 ## Core Features
@@ -97,13 +97,15 @@ Uses regex patterns and heuristics:
 - **Address**: Lines between company and contact fields
 
 ### AI-Powered Parsing (server/aiParseService.ts)
-Uses GPT-4o for intelligent contact extraction:
+Uses GPT-4o-mini (temperature 0) for fast, intelligent contact extraction:
+- **Default parsing path**: All scans and pastes use AI first, with deterministic fallback
 - **Expert business card parser prompt**: Trained to distinguish logos from names, handle OCR noise
 - **Structured JSON output**: name, company, title, email, phone, mobile, fax, address, website
 - **Logo detection**: Ignores common brand logos (EVE, CATL, BYD, etc.) when extracting names
 - **OCR noise handling**: Reconstructs broken addresses, fixes obvious mistakes
+- **Website validation**: Rejects websites without dots (prevents "www.Name.Surname" errors)
 - **Never hallucinates**: Only extracts what's clearly visible on the card
-- **Fallback to deterministic**: Can use regex-based parsing as alternative
+- **LinkedIn search**: Frontend generates search URL from name + company (no AI lookup needed)
 
 ### Email Signature Parsing Features
 - **preCleanText**: Strips salutations at start and disclaimer text at end
