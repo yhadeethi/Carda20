@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { ScanTab } from "@/components/scan-tab";
 import { ContactsHub } from "@/components/contacts-hub";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Moon, Sun, Users } from "lucide-react";
-import { StoredContact } from "@/lib/contactsStorage";
+import { StoredContact, loadContacts } from "@/lib/contactsStorage";
 
 type ViewMode = "scan" | "contacts" | "contact-detail";
 
@@ -15,6 +15,11 @@ export default function HomePage() {
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
+  const [contactsVersion, setContactsVersion] = useState(0);
+
+  const refreshContacts = useCallback(() => {
+    setContactsVersion((v) => v + 1);
+  }, []);
 
   const handleLogoClick = () => {
     setViewMode("scan");
@@ -86,6 +91,7 @@ export default function HomePage() {
             currentEventName={currentEventName}
             onEventModeChange={setEventModeEnabled}
             onEventNameChange={setCurrentEventName}
+            onContactSaved={refreshContacts}
           />
         )}
         {viewMode === "contacts" && (
@@ -93,6 +99,7 @@ export default function HomePage() {
             <ContactsHub
               onSelectContact={handleSelectContact}
               onBackToScan={handleBackToScan}
+              refreshKey={contactsVersion}
             />
           </div>
         )}
@@ -104,6 +111,7 @@ export default function HomePage() {
             currentEventName={currentEventName}
             onEventModeChange={setEventModeEnabled}
             onEventNameChange={setCurrentEventName}
+            onContactSaved={refreshContacts}
           />
         )}
       </main>

@@ -44,6 +44,7 @@ interface ScanTabProps {
   currentEventName: string | null;
   onEventModeChange: (enabled: boolean) => void;
   onEventNameChange: (name: string | null) => void;
+  onContactSaved?: () => void;
 }
 
 export function ScanTab({
@@ -53,6 +54,7 @@ export function ScanTab({
   currentEventName,
   onEventModeChange,
   onEventNameChange,
+  onContactSaved,
 }: ScanTabProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +126,7 @@ export function ScanTab({
         address: parsedContact.address || "",
       };
       saveContact(contactData, eventModeEnabled ? currentEventName : null);
+      onContactSaved?.();
     } catch (e) {
       console.error("[ScanTab] Failed to save contact to storage:", e);
     }

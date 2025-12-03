@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,17 @@ import { format } from "date-fns";
 interface ContactsHubProps {
   onSelectContact: (contact: StoredContact) => void;
   onBackToScan: () => void;
+  refreshKey?: number;
 }
 
-export function ContactsHub({ onSelectContact, onBackToScan }: ContactsHubProps) {
+export function ContactsHub({ onSelectContact, onBackToScan, refreshKey }: ContactsHubProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [contacts, setContacts] = useState<StoredContact[]>(() => loadContacts());
+  
+  useEffect(() => {
+    setContacts(loadContacts());
+  }, [refreshKey]);
   
   const eventNames = useMemo(() => getUniqueEventNames(), [contacts]);
   
