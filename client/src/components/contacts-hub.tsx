@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
 import { Search, Trash2, ArrowLeft, User, Building, Calendar, Tag } from "lucide-react";
 import { format } from "date-fns";
@@ -11,12 +12,14 @@ interface ContactsHubProps {
   onSelectContact: (contact: StoredContact) => void;
   onBackToScan: () => void;
   refreshKey?: number;
+  onContactDeleted?: () => void;
 }
 
-export function ContactsHub({ onSelectContact, onBackToScan, refreshKey }: ContactsHubProps) {
+export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onContactDeleted }: ContactsHubProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [contacts, setContacts] = useState<StoredContact[]>(() => loadContacts());
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
   useEffect(() => {
     setContacts(loadContacts());
@@ -45,11 +48,21 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey }: Conta
     return result;
   }, [contacts, searchQuery, eventFilter]);
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    deleteContact(id);
-    setContacts(loadContacts());
+    setDeleteConfirmId(id);
   };
+
+  const confirmDelete = () => {
+    if (deleteConfirmId) {
+      deleteContact(deleteConfirmId);
+      setContacts(loadContacts());
+      setDeleteConfirmId(null);
+      onContactDeleted?.();
+    }
+  };
+
+  const contactToDelete = deleteConfirmId ? contacts.find(c => c.id === deleteConfirmId) : null;
 
   const formatDate = (dateStr: string) => {
     try {
@@ -60,22 +73,40 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey }: Conta
   };
 
   return (
-    <Card className="glass">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">Contacts</CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onBackToScan}
-            className="gap-1 text-muted-foreground"
-            data-testid="button-back-to-scan"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Scan
-          </Button>
-        </div>
-      </CardHeader>
+    <>
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete contact?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {contactToDelete?.name || "this contact"}? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} data-testid="button-confirm-delete">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Card className="glass">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">Contacts</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBackToScan}
+              className="gap-1 text-muted-foreground"
+              data-testid="button-back-to-scan"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Scan
+            </Button>
+          </div>
+        </CardHeader>
       <CardContent className="space-y-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -157,11 +188,11 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey }: Conta
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    onClick={(e) => handleDelete(e, contact.id)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => handleDeleteClick(e, contact.id)}
                     data-testid={`button-delete-contact-${contact.id}`}
                   >
-                    <Trash2 className="w-4 h-4 text-destructive" />
+                    <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
@@ -175,6 +206,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey }: Conta
           </p>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </>
   );
 }

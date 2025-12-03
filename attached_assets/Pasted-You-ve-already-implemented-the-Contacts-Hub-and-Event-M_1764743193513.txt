@@ -1,0 +1,100 @@
+You’ve already implemented the Contacts Hub and Event Mode for my Carda app. They look good, but I need two behaviour/UX fixes.
+
+IMPORTANT:
+- Do NOT change any parsing logic, prompts, or backend behaviour.
+- Do NOT change how the QR icon or theme toggle work.
+- Do NOT remove or rename any existing features; only adjust layout and tap behaviours as described.
+- Keep the overall visual design as it is now (same colours, fonts, rounded corners).
+
+==================================================
+ISSUE 1 – EVENT MODE ROW ALIGNMENT ON MOBILE
+==================================================
+
+Current problem:
+- On mobile, the “Event mode” row under “Scan Business Card” looks slightly misaligned.
+- The toggle, “Event mode:” label, event name (e.g. “All Energy 2025”) and the “Change” text are not vertically aligned and feel cramped, especially on small screens.
+
+Desired behaviour and layout:
+- The Event Mode row should be a clean, horizontally aligned layout on larger screens, and stack gracefully on very small screens.
+- All elements in that row should be vertically centered.
+
+Implementation guidance (you can adjust exact styling but follow the intent):
+- Wrap the Event Mode contents in a flex container.
+- On normal screens:
+  - Use a single row with:
+    - Left side: toggle + “Event mode:” label.
+    - Right side: when ON, show the event name as a chip/pill and a small “Change” text button.
+  - Everything should be `align-items: center` (or Tailwind `items-center`) so the toggle and text sit on the same vertical center line.
+- On narrow screens (mobile):
+  - It’s OK to stack the event name and “Change” link under the label to avoid cramping, as long as the layout still looks clean.
+  - For example:
+    - First line: [toggle]  “Event mode:”
+    - Second line (only when ON): “Event: All Energy 2025   Change”
+- Make sure there is consistent spacing (margin / gap) between:
+  - Toggle and label
+  - Label and event name
+  - Event name and “Change” link
+- Do NOT change the actual logic of Event Mode (enabling, disabling, changing event name). Only adjust the layout/CSS/JSX so that the row looks neat and aligned on mobile and desktop.
+
+Before you finish this part, check:
+- On mobile width, the row doesn’t overflow or cut off text.
+- The event name “All Energy 2025” is fully readable.
+- The toggle and “Event mode:” label look visually lined up.
+
+==================================================
+ISSUE 2 – CONTACTS HUB TAP BEHAVIOUR & DELETE
+==================================================
+
+Current problem:
+- In the Contacts Hub, when I tap once on a contact card, it shows a delete/bin state instead of immediately opening the contact.
+- This “first tap = reveal delete” interaction is not intuitive. I want a single tap on the card to ALWAYS open the contact detail view.
+- Delete should be a clear, explicit action, not the default on first tap.
+
+Desired behaviour:
+1) **Single tap on contact row/card:**
+   - Anywhere on the main body of the contact row/card should open the existing “Contact Extracted” view for that contact (the detailed view with Call / Email / LinkedIn / Download vCard / Generate Company Intel).
+   - No intermediate state. No “tap to reveal delete” state.
+
+2) **Delete action:**
+   - Keep a small trash/bin icon on the right-hand side of each contact row in the Contacts Hub list.
+   - Tapping the trash icon should:
+     - ONLY delete that contact (after a simple confirm dialog is ok, e.g. `Are you sure you want to delete this contact?`).
+     - Remove it from localStorage and from the list.
+   - Tapping the trash icon should NOT trigger the “open contact detail” action.
+   - There should be no need to tap once to reveal the bin. The bin can be always visible as a small icon aligned on the right side of the row.
+
+3) **Inside the contact detail view:**
+   - Optionally (if it’s simple), add a small delete option in the detailed “Contact Extracted” view as well:
+     - e.g. a small trash icon or “Delete contact” text somewhere near the top or in a secondary actions row.
+     - Deleting here should also:
+       - Remove the contact from localStorage.
+       - Navigate back to the Contacts list view.
+   - If adding this delete-in-detail behaviour is complex, it is acceptable to only support delete in the Contacts list view. The key requirement is that the main tap behaviour is corrected.
+
+Implementation guidance:
+- Refactor the Contacts list item so that:
+  - The parent container’s `onClick` (or equivalent) opens the contact detail.
+  - The trash icon has its own click handler which calls `event.stopPropagation()` so it does not trigger the parent click.
+- Ensure the list item still shows:
+  - Name (bold),
+  - Company + title,
+  - Scanned date,
+  - Event pill if present,
+  - And the trash icon on the right.
+
+Do NOT change:
+- How contacts are saved in localStorage (key name and fields used).
+- How the Contacts Hub filters by event or search term.
+- The visual style of the cards, text, and pills (just adjust interaction/tap logic and the placement of the bin icon if necessary for clarity).
+
+==================================================
+FINAL CHECK
+==================================================
+
+After making these changes, verify:
+1. Event Mode row on the Scan screen looks visually aligned on mobile and desktop, with all elements readable and not cramped.
+2. In the Contacts Hub:
+   - Single tap on a contact immediately opens its detail view.
+   - The trash icon is clearly visible and deletes the contact without opening it.
+   - No “first tap reveals delete” behaviour remains.
+3. All previously working features (scanning, parsing, Contact Extracted view, event tagging, filtering, QR icon, theme toggle) still work exactly as before.

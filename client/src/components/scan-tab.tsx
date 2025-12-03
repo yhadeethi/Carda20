@@ -10,10 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CompanyIntelCard } from "@/components/company-intel-card";
 import { CompanyIntelData } from "@shared/schema";
 import { StoredContact, saveContact } from "@/lib/contactsStorage";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar } from "lucide-react";
+import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2 } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
@@ -40,6 +41,7 @@ interface ScanResult {
 interface ScanTabProps {
   viewingContact?: StoredContact;
   onBackToContacts?: () => void;
+  onDeleteContact?: (id: string) => void;
   eventModeEnabled: boolean;
   currentEventName: string | null;
   onEventModeChange: (enabled: boolean) => void;
@@ -50,6 +52,7 @@ interface ScanTabProps {
 export function ScanTab({
   viewingContact,
   onBackToContacts,
+  onDeleteContact,
   eventModeEnabled,
   currentEventName,
   onEventModeChange,
@@ -75,6 +78,7 @@ export function ScanTab({
 
   const [showEventNameDialog, setShowEventNameDialog] = useState(false);
   const [tempEventName, setTempEventName] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (viewingContact) {
@@ -416,41 +420,67 @@ export function ScanTab({
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete contact?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {viewingContact?.name || "this contact"}? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-detail">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (viewingContact && onDeleteContact) {
+                  onDeleteContact(viewingContact.id);
+                  setShowDeleteConfirm(false);
+                }
+              }}
+              data-testid="button-confirm-delete-detail"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {!contact && !isViewingFromHub && (
         <Card className="glass">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl font-semibold">Scan Business Card</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={eventModeEnabled}
-                  onCheckedChange={handleEventModeToggle}
-                  data-testid="switch-event-mode"
-                />
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Event mode:</span>
-                  <span className={eventModeEnabled ? "font-medium" : "text-muted-foreground"}>
-                    {eventModeEnabled ? "On" : "Off"}
-                  </span>
+            <div className="py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={eventModeEnabled}
+                    onCheckedChange={handleEventModeToggle}
+                    data-testid="switch-event-mode"
+                  />
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Event mode</span>
+                  </div>
                 </div>
+                {eventModeEnabled && currentEventName && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium" data-testid="current-event-name">
+                      {currentEventName}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto py-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={handleChangeEvent}
+                      data-testid="button-change-event"
+                    >
+                      Change
+                    </Button>
+                  </div>
+                )}
               </div>
-              {eventModeEnabled && currentEventName && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-primary" data-testid="current-event-name">{currentEventName}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto py-1 px-2 text-xs"
-                    onClick={handleChangeEvent}
-                    data-testid="button-change-event"
-                  >
-                    Change
-                  </Button>
-                </div>
-              )}
             </div>
 
             <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
@@ -589,14 +619,27 @@ export function ScanTab({
                     Contact Extracted
                   </CardTitle>
                 )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setIsEditing(!isEditing)}
-                  data-testid="button-toggle-edit"
-                >
-                  {isEditing ? "Done" : "Edit"}
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setIsEditing(!isEditing)}
+                    data-testid="button-toggle-edit"
+                  >
+                    {isEditing ? "Done" : "Edit"}
+                  </Button>
+                  {isViewingFromHub && viewingContact && onDeleteContact && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="text-muted-foreground hover:text-destructive"
+                      data-testid="button-delete-contact-detail"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">

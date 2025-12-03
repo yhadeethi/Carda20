@@ -5,7 +5,7 @@ import { ContactsHub } from "@/components/contacts-hub";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Moon, Sun, Users } from "lucide-react";
-import { StoredContact, loadContacts } from "@/lib/contactsStorage";
+import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 
 type ViewMode = "scan" | "contacts" | "contact-detail";
 
@@ -45,6 +45,13 @@ export default function HomePage() {
     setViewMode("scan");
     setSelectedContact(null);
   };
+
+  const handleDeleteContact = useCallback((id: string) => {
+    deleteContact(id);
+    refreshContacts();
+    setSelectedContact(null);
+    setViewMode("contacts");
+  }, [refreshContacts]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -100,6 +107,7 @@ export default function HomePage() {
               onSelectContact={handleSelectContact}
               onBackToScan={handleBackToScan}
               refreshKey={contactsVersion}
+              onContactDeleted={refreshContacts}
             />
           </div>
         )}
@@ -107,6 +115,7 @@ export default function HomePage() {
           <ScanTab
             viewingContact={selectedContact}
             onBackToContacts={handleBackToContacts}
+            onDeleteContact={handleDeleteContact}
             eventModeEnabled={eventModeEnabled}
             currentEventName={currentEventName}
             onEventModeChange={setEventModeEnabled}
