@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -8,9 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { CompanyIntelCard } from "@/components/company-intel-card";
 import { CompanyIntelData } from "@shared/schema";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search } from "lucide-react";
+import { StoredContact, saveContact } from "@/lib/contactsStorage";
+import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
@@ -34,7 +37,23 @@ interface ScanResult {
   error?: string;
 }
 
-export function ScanTab() {
+interface ScanTabProps {
+  viewingContact?: StoredContact;
+  onBackToContacts?: () => void;
+  eventModeEnabled: boolean;
+  currentEventName: string | null;
+  onEventModeChange: (enabled: boolean) => void;
+  onEventNameChange: (name: string | null) => void;
+}
+
+export function ScanTab({
+  viewingContact,
+  onBackToContacts,
+  eventModeEnabled,
+  currentEventName,
+  onEventModeChange,
+  onEventNameChange,
+}: ScanTabProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -51,6 +70,26 @@ export function ScanTab() {
   const [companyIntel, setCompanyIntel] = useState<CompanyIntelData | null>(null);
   const [intelError, setIntelError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
+
+  const [showEventNameDialog, setShowEventNameDialog] = useState(false);
+  const [tempEventName, setTempEventName] = useState("");
+
+  useEffect(() => {
+    if (viewingContact) {
+      const parsed: ParsedContact = {
+        fullName: viewingContact.name,
+        jobTitle: viewingContact.title,
+        companyName: viewingContact.company,
+        email: viewingContact.email,
+        phone: viewingContact.phone,
+        website: viewingContact.website,
+        linkedinUrl: viewingContact.linkedinUrl,
+        address: viewingContact.address,
+      };
+      setContact(parsed);
+      setEditedContact(parsed);
+    }
+  }, [viewingContact]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,12 +111,29 @@ export function ScanTab() {
     }
   };
 
+  const saveContactToStorage = (parsedContact: ParsedContact) => {
+    try {
+      const contactData = {
+        name: parsedContact.fullName || "",
+        company: parsedContact.companyName || "",
+        title: parsedContact.jobTitle || "",
+        email: parsedContact.email || "",
+        phone: parsedContact.phone || "",
+        website: parsedContact.website || "",
+        linkedinUrl: parsedContact.linkedinUrl || "",
+        address: parsedContact.address || "",
+      };
+      saveContact(contactData, eventModeEnabled ? currentEventName : null);
+    } catch (e) {
+      console.error("[ScanTab] Failed to save contact to storage:", e);
+    }
+  };
+
   const scanCardMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("image", file);
       
-      // Try AI endpoint first
       try {
         const aiRes = await fetch("/api/scan-ai", {
           method: "POST",
@@ -94,7 +150,6 @@ export function ScanTab() {
         console.log("[Scan] AI endpoint error, falling back:", aiError);
       }
       
-      // Fallback to deterministic parser
       const formData2 = new FormData();
       formData2.append("image", file);
       const res = await fetch("/api/scan", {
@@ -104,7 +159,6 @@ export function ScanTab() {
       });
       if (!res.ok) {
         const text = await res.text();
-        // Parse OCR.space specific errors
         if (text.includes("File size exceeds") || text.includes("maximum size limit")) {
           throw new Error("This photo is too large for the scanner. Please retake the photo a bit further away or crop it.");
         }
@@ -124,6 +178,7 @@ export function ScanTab() {
       setRawText(data.rawText);
       setContact(data.contact);
       setEditedContact(data.contact);
+      saveContactToStorage(data.contact);
       toast({
         title: "Card scanned",
         description: "Contact information extracted successfully",
@@ -140,7 +195,6 @@ export function ScanTab() {
 
   const parseTextMutation = useMutation({
     mutationFn: async (text: string) => {
-      // Try AI endpoint first
       try {
         const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
         if (aiRes.ok) {
@@ -153,7 +207,6 @@ export function ScanTab() {
         console.log("[Parse] AI endpoint error, falling back:", aiError);
       }
       
-      // Fallback to deterministic parser
       const res = await apiRequest("POST", "/api/parse", { text });
       return res.json() as Promise<ScanResult>;
     },
@@ -161,6 +214,7 @@ export function ScanTab() {
       setRawText(data.rawText);
       setContact(data.contact);
       setEditedContact(data.contact);
+      saveContactToStorage(data.contact);
       toast({
         title: "Text parsed",
         description: "Contact information extracted successfully",
@@ -212,7 +266,6 @@ export function ScanTab() {
       
       scanCardMutation.mutate(result.file);
     } catch (error) {
-      // Check if it's a CompressionError (our custom error)
       if (error instanceof CompressionError) {
         if (error.type === 'still_too_large') {
           toast({
@@ -228,7 +281,6 @@ export function ScanTab() {
           });
         }
       } else {
-        // Generic error - could be a DOM exception or other unexpected error
         console.error("Unexpected error during compression:", error);
         toast({
           title: "Something went wrong",
@@ -307,18 +359,97 @@ export function ScanTab() {
     setIsEditing(false);
   };
 
+  const handleEventModeToggle = (enabled: boolean) => {
+    if (enabled && !currentEventName) {
+      setShowEventNameDialog(true);
+      setTempEventName("");
+    } else {
+      onEventModeChange(enabled);
+    }
+  };
+
+  const handleEventNameSubmit = () => {
+    if (tempEventName.trim()) {
+      onEventNameChange(tempEventName.trim());
+      onEventModeChange(true);
+      setShowEventNameDialog(false);
+    }
+  };
+
+  const handleChangeEvent = () => {
+    setTempEventName(currentEventName || "");
+    setShowEventNameDialog(true);
+  };
+
   const isProcessing = isCompressing || scanCardMutation.isPending || parseTextMutation.isPending;
 
   const currentContact = editedContact;
 
+  const isViewingFromHub = !!viewingContact;
+
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
-      {!contact && (
+      <Dialog open={showEventNameDialog} onOpenChange={setShowEventNameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>What event are you at?</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="e.g. All-Energy 2025"
+            value={tempEventName}
+            onChange={(e) => setTempEventName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
+            autoFocus
+            data-testid="input-event-name"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEventNameDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEventNameSubmit} disabled={!tempEventName.trim()} data-testid="button-save-event">
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {!contact && !isViewingFromHub && (
         <Card className="glass">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl font-semibold">Scan Business Card</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={eventModeEnabled}
+                  onCheckedChange={handleEventModeToggle}
+                  data-testid="switch-event-mode"
+                />
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Event mode:</span>
+                  <span className={eventModeEnabled ? "font-medium" : "text-muted-foreground"}>
+                    {eventModeEnabled ? "On" : "Off"}
+                  </span>
+                </div>
+              </div>
+              {eventModeEnabled && currentEventName && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-primary" data-testid="current-event-name">{currentEventName}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto py-1 px-2 text-xs"
+                    onClick={handleChangeEvent}
+                    data-testid="button-change-event"
+                  >
+                    Change
+                  </Button>
+                </div>
+              )}
+            </div>
+
             <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="scan" className="gap-2" data-testid="mode-scan">
@@ -433,15 +564,28 @@ export function ScanTab() {
         </Card>
       )}
 
-      {contact && (
+      {(contact || isViewingFromHub) && (
         <div className="space-y-4">
           <Card className="glass">
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  Contact Extracted
-                </CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                {isViewingFromHub && onBackToContacts ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onBackToContacts}
+                    className="gap-1 -ml-2"
+                    data-testid="button-back-to-contacts"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to Contacts
+                  </Button>
+                ) : (
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    Contact Extracted
+                  </CardTitle>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
@@ -608,7 +752,6 @@ export function ScanTab() {
                     </div>
                   )}
                   
-                  {/* Action Row */}
                   {(currentContact?.phone || currentContact?.email || currentContact?.linkedinUrl || currentContact?.fullName || currentContact?.companyName) && (
                     <div className="flex items-center gap-2 pt-3 mt-3 border-t flex-wrap" data-testid="action-row">
                       {currentContact?.phone && (
@@ -706,14 +849,16 @@ export function ScanTab() {
                   )}
                 </Button>
                 
-                <Button
-                  onClick={resetFlow}
-                  variant="ghost"
-                  className="w-full"
-                  data-testid="button-new-scan"
-                >
-                  Scan Another Card
-                </Button>
+                {!isViewingFromHub && (
+                  <Button
+                    onClick={resetFlow}
+                    variant="ghost"
+                    className="w-full"
+                    data-testid="button-new-scan"
+                  >
+                    Scan Another Card
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

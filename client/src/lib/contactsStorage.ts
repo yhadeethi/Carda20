@@ -57,7 +57,7 @@ function findExistingContact(contacts: StoredContact[], email: string, name: str
   return null;
 }
 
-export function saveContact(contact: Omit<StoredContact, "id" | "createdAt">, eventName: string | null): StoredContact {
+export function saveContact(contact: Omit<StoredContact, "id" | "createdAt" | "eventName">, eventName: string | null): StoredContact {
   const contacts = loadContacts();
   const existing = findExistingContact(contacts, contact.email, contact.name, contact.company);
   
