@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
-import { Search, Trash2, ArrowLeft, User, Building, Calendar, Tag } from "lucide-react";
+import { Search, Trash2, User, Building, Calendar, Tag } from "lucide-react";
 import { format } from "date-fns";
 
 interface ContactsHubProps {
@@ -93,19 +93,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
 
       <Card className="glass">
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">Contacts</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onBackToScan}
-              className="gap-1 text-muted-foreground"
-              data-testid="button-back-to-scan"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Scan
-            </Button>
-          </div>
+          <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">Contacts</CardTitle>
         </CardHeader>
       <CardContent className="space-y-4">
         <div className="relative">

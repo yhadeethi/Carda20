@@ -31,6 +31,13 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
    - Profile saved to localStorage (persists between sessions)
    - vCard 3.0 format QR code generation
    - Accessible from header QR button
+7. **Bottom Navigation** - Apple-style liquid glass bottom nav bar
+   - Three tabs: Scan, Contacts, Events
+   - Smooth horizontal slide transitions using Framer Motion
+   - Glassmorphism styling with backdrop blur
+   - Active tab highlighting
+8. **Events Hub** - Placeholder for upcoming event discovery feature
+   - Coming soon: Renewable energy, mining, construction industry events in Australia
 
 ## Project Structure
 

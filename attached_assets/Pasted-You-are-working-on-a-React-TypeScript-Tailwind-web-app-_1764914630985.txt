@@ -1,0 +1,113 @@
+You are working on a React + TypeScript + Tailwind web app called Carda.
+Do NOT break or remove any existing functionality, especially:
+
+The scan / QR functionality
+
+The contact form / edit card UI
+
+The existing header layout and theme toggle
+
+Your task is to implement a new bottom navigation bar and smooth tab transitions, using a minimal and Apple-style “liquid glass” design. Follow these rules exactly:
+
+Global layout
+
+Wrap the main app content in a flex column layout if not already:
+
+Outer container: className="flex min-h-screen flex-col"
+
+Keep the existing header as-is at the top.
+
+The main content area should be inside <main className="flex-1 pb-20">...</main> so there is spacing for the new bottom nav.
+
+Do not move or redesign the header or any existing top nav; only add a bottom nav.
+
+Bottom navigation bar
+
+Add a new bottom navigation bar that is:
+
+Fixed, centered, floating above the bottom:
+fixed bottom-4 left-1/2 -translate-x-1/2
+
+Glass / liquid style with blur and subtle border:
+flex items-center justify-between gap-4 rounded-3xl px-4 py-2 backdrop-blur-xl bg-white/10 dark:bg-black/20 border border-white/10 shadow-lg
+
+Inside the bar, create 3 tabs:
+
+Scan
+
+Contacts
+
+Events
+
+Each tab is a button with:
+
+An icon (use existing icon set if there is one, or fallback to simple SVG/emoji placeholders).
+
+A small label under or beside the icon (e.g. “Scan”, “Contacts”, “Events”).
+
+The active tab should have:
+
+A slightly stronger background and text:
+bg-white/20 dark:bg-white/10 text-white
+
+Inactive tabs should be more subtle:
+text-white/70 hover:text-white/90
+
+State handling
+
+Introduce a simple activeTab state in the main layout/component that controls which “section” is visible:
+
+'scan' | 'contacts' | 'events'.
+
+Make sure:
+
+The current scan/home view maps to activeTab === 'scan'.
+
+The current contacts hub view maps to activeTab === 'contacts'.
+
+Create a placeholder container for the new Events Hub for now when activeTab === 'events' (we will implement the events content later).
+
+Do NOT remove any existing routes – if the app already uses routing, sync activeTab with the existing route or implement this as a top-level layout that controls which content component is rendered, but do not break navigation.
+
+Smooth sliding transitions (iOS-like)
+
+Install and use Framer Motion if it is not already used:
+npm install framer-motion
+
+Wrap the tab content area (inside <main>) with AnimatePresence and motion.div so that switching activeTab triggers a horizontal slide animation:
+
+Use different key values for each tab ("scan", "contacts", "events").
+
+For the entering tab, use something like:
+initial={{ x: 40, opacity: 0 }}
+animate={{ x: 0, opacity: 1 }}
+
+For the exiting tab, use:
+exit={{ x: -40, opacity: 0 }}
+transition={{ duration: 0.2, ease: "easeOut" }}
+
+The result should feel like iOS: when I tap a bottom tab, the content slides smoothly left/right with a subtle fade – not an instant jump.
+
+Do NOT slow down the animation too much; it should feel snappy and modern.
+
+No visual regressions
+
+Confirm that:
+
+On mobile, nothing is hidden behind the bottom nav thanks to the <main className="flex-1 pb-20"> padding.
+
+The existing pages (scan, contacts) still look and behave exactly as before, just now inside the animated content container.
+
+The bottom nav does not overlap critical UI elements.
+
+Events tab placeholder
+
+For now, when activeTab === 'events', show a simple placeholder:
+
+Title: “Events Hub (Coming Soon)”
+
+Short text explaining this will show renewable, mining, and construction events in Australia.
+
+Style it consistently with the rest of the app.
+
+Do not refactor the whole app; only implement the bottom nav, tab state, and the sliding animations as described. Keep the design minimal, modern, and consistent with an Apple-style “liquid glass” bottom bar.
