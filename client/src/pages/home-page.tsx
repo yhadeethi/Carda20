@@ -99,7 +99,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-1 pb-24">
+      <main className="flex-1 pb-28">
         <AnimatePresence mode="wait">
           {viewMode === "scan" && (
             <motion.div
@@ -181,16 +181,14 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar - Liquid Glass Style with Scroll Morph */}
-      <nav className="fixed inset-x-0 bottom-0 flex items-center justify-center pointer-events-none z-40">
-        <div className={`pointer-events-auto mx-auto max-w-md px-4 transition-all duration-200 ease-out ${
-          isCompact ? "mb-2" : "mb-5"
-        }`}>
+      {/* Bottom Navigation Bar - Fixed to safe-area with subtle morph */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] flex items-center justify-center pointer-events-none">
+        <div className="pointer-events-auto mx-auto max-w-md w-[92%] mb-3 px-4">
           <div 
-            className={`flex w-full items-center justify-between rounded-full px-6 backdrop-blur-xl border border-white/40 dark:border-slate-700/60 transition-all duration-200 ease-out ${
+            className={`flex w-full items-center justify-around h-14 rounded-full px-6 backdrop-blur-xl border border-white/40 dark:border-slate-700/60 transition-all duration-200 ease-out ${
               isCompact
-                ? "h-12 shadow-md bg-white/70 dark:bg-slate-900/70 translate-y-1 scale-[0.97]"
-                : "h-16 shadow-xl bg-white/80 dark:bg-slate-900/80 translate-y-0 scale-100"
+                ? "shadow-md bg-white/65 dark:bg-slate-900/65 scale-[0.98] opacity-95"
+                : "shadow-xl bg-white/80 dark:bg-slate-900/80 scale-100 opacity-100"
             }`}
             data-testid="nav-bottom"
           >

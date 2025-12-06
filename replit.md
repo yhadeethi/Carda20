@@ -36,10 +36,11 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
    - Smooth horizontal slide transitions using Framer Motion
    - Glassmorphism styling with backdrop-blur-2xl
    - Active tab highlighting with bold labels
-   - **Scroll-driven morph**: Subtle expanded/compact animation based on scroll direction
-     - Expanded (at top / scroll up): h-16, mb-5, shadow-xl, scale-100
-     - Compact (scroll down): h-12, mb-2, shadow-md, scale-[0.97], translate-y-1
-     - Smooth 200ms transition with ease-out timing
+   - **Scroll-driven morph**: Subtle visual-only animation (NO vertical movement)
+     - Fixed to iOS safe-area at bottom with `pb-[env(safe-area-inset-bottom)]`
+     - Expanded (at top / scroll up): shadow-xl, scale-100, opacity-100, bg-white/80
+     - Compact (scroll down): shadow-md, scale-[0.98], opacity-95, bg-white/65
+     - Main content has pb-28 to ensure nothing hidden behind nav
    - `useScrollDirectionNav` hook for scroll detection
 8. **Events Hub** - Placeholder for upcoming event discovery feature
    - Coming soon: Renewable energy, mining, construction industry events in Australia
