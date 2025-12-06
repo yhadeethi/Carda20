@@ -1,0 +1,170 @@
+Alright, here’s the full Replit prompt you can paste in to get the iOS-26-style morphing bottom nav.
+
+⸻
+
+REPLIT PROMPT (COPY–PASTE THIS):
+
+You are editing my Carda web app (React + TypeScript + Tailwind).
+
+Goal: Turn the bottom navigation into a morphing “liquid glass” bar with two visual states that change smoothly based on scroll direction, similar to the Photos bottom nav in iOS 26.
+
+Please do this without breaking any existing logic or layout. Only touch the components/layout directly related to the bottom nav and scroll container.
+
+⸻
+
+1. Create scroll-direction state (layout level)
+	1.	Find the main mobile layout / page wrapper that contains:
+	•	The main scrollable content (the card scanner / contacts / events)
+	•	The floating bottom nav bar
+It’s probably something like pages/index.tsx, app/page.tsx, or components/Layout/MobileLayout.tsx. Use the one that actually renders the bottom nav.
+	2.	In that layout component:
+	•	Add a useState for the nav state:
+
+const [isNavCompact, setIsNavCompact] = useState(false);
+
+
+	•	Track scroll direction on the main scrollable container:
+	•	When the user scrolls down more than a small threshold (e.g. 24px), set isNavCompact to true.
+	•	When they scroll up or near the top again, set isNavCompact back to false.
+	•	Make sure you don’t spam state updates – only change the state when the direction clearly flips.
+Example logic (adapt and wire it to the correct scroll container, not window if the app uses an inner div):
+
+const lastScrollRef = useRef(0);
+
+const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+  const current = event.currentTarget.scrollTop;
+  const last = lastScrollRef.current;
+
+  const delta = current - last;
+
+  // Ignore tiny jitters
+  if (Math.abs(delta) < 6) {
+    return;
+  }
+
+  // If scrolling down and not already compact, shrink
+  if (delta > 0 && !isNavCompact && current > 24) {
+    setIsNavCompact(true);
+  }
+
+  // If scrolling up, expand again
+  if (delta < 0 && isNavCompact) {
+    setIsNavCompact(false);
+  }
+
+  // Always expanded at the very top
+  if (current <= 8 && isNavCompact) {
+    setIsNavCompact(false);
+  }
+
+  lastScrollRef.current = current;
+};
+
+
+	•	Make sure the main scrollable container has onScroll={handleScroll} and overflow-y-auto or similar so the scroll event actually fires.
+
+	3.	Pass isNavCompact down as a prop to the bottom nav component, e.g.:
+
+<BottomNav isCompact={isNavCompact} />
+
+
+
+⸻
+
+2. Add the two visual states to the bottom nav
+
+Find the bottom nav component (the one with the three tabs: Scan, Contacts, Events). It probably looks like a pill with Tailwind backdrop-blur, rounded-full, etc.
+
+Do not change the nav items or routing logic. Only adjust container styles and add a prop.
+	1.	Update the component signature to accept the prop:
+
+type BottomNavProps = {
+  isCompact?: boolean;
+};
+
+export function BottomNav({ isCompact = false }: BottomNavProps) {
+  // ...
+}
+
+
+	2.	Replace the current root container className with a conditional string that has two states:
+	•	Expanded state (when isCompact === false):
+	•	Taller: h-16
+	•	More floating: shadow-xl
+	•	Strong blur and slightly stronger background: backdrop-blur-2xl bg-white/80 dark:bg-slate-900/80
+	•	Slightly higher off the edge (more margin bottom): e.g. mb-5
+	•	Slight upward transform: translate-y-0
+	•	Compact state (when isCompact === true):
+	•	Shorter: h-12
+	•	Less floating: shadow-md
+	•	Slightly less blur: backdrop-blur-xl bg-white/70 dark:bg-slate-900/70
+	•	Closer to the bottom edge: e.g. mb-2
+	•	Tiny downward transform / scale to feel docked: translate-y-1 scale-[0.97]
+Add a smooth transition so it morphs instead of jumps:
+	•	transition-all duration-200 ease-out
+Example implementation (adapt to whatever utility you use – clsx, cn, or plain template strings):
+
+const baseClasses =
+  "fixed inset-x-0 bottom-0 flex items-center justify-center pointer-events-none";
+
+const navShellClasses = clsx(
+  "pointer-events-auto mx-auto max-w-md px-4",
+  "transition-all duration-200 ease-out",
+  isCompact ? "mb-2" : "mb-5"
+);
+
+const navInnerClasses = clsx(
+  "flex w-full items-center justify-between rounded-full px-6",
+  "backdrop-blur-xl border border-white/40 dark:border-slate-700/60",
+  "transition-all duration-200 ease-out",
+  isCompact
+    ? "h-12 shadow-md bg-white/70 dark:bg-slate-900/70 translate-y-1 scale-[0.97]"
+    : "h-16 shadow-xl bg-white/80 dark:bg-slate-900/80 translate-y-0 scale-100"
+);
+
+Then use them in JSX:
+
+return (
+  <nav className={baseClasses}>
+    <div className={navShellClasses}>
+      <div className={navInnerClasses}>
+        {/* existing nav buttons: Scan / Contacts / Events – leave untouched */}
+      </div>
+    </div>
+  </nav>
+);
+
+
+	3.	Make sure the icons/text inside the nav do NOT change between states (no layout jumps). Only the container’s height, blur, shadow, and subtle transform should animate.
+
+⸻
+
+3. Keep it mobile-safe and non-intrusive
+	1.	Ensure this behaviour is only applied on mobile / small breakpoints:
+	•	Either the entire bottom nav is mobile-only already (that’s fine), or
+	•	Wrap the fixed nav in sm:hidden so it doesn’t interfere with desktop.
+	2.	Do not change:
+	•	Tab selection logic
+	•	Existing click handlers
+	•	Routing or page structure
+
+Only the visual shell and scroll behaviour should be updated.
+
+⸻
+
+4. Quick sanity checks (please run them)
+
+After implementing, please verify:
+	1.	On first load at the top of the page:
+	•	The nav appears in expanded state: taller, more floating.
+	2.	When I start scrolling down:
+	•	After a small scroll (around 24px), the nav smoothly morphs into the compact state (shorter, closer to the bottom, slightly smaller, less shadow).
+	3.	When I scroll up:
+	•	The nav smoothly returns to expanded state.
+	4.	The morph is clearly visible but still elegant – it shouldn’t feel like a big jump or a slide-in drawer.
+
+If anything breaks visually or functionally, adjust classes/thresholds but keep the two-state morph concept and the smooth transitions.
+
+⸻
+
+Do all of the above now.

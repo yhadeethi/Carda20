@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 export function useScrollDirectionNav() {
-  const [expanded, setExpanded] = useState(true);
+  const [isCompact, setIsCompact] = useState(false);
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
 
@@ -12,10 +12,21 @@ export function useScrollDirectionNav() {
           const currentScrollY = window.scrollY;
           const delta = currentScrollY - lastScrollY.current;
 
-          if (delta > 8) {
-            setExpanded(true);
-          } else if (delta < -8) {
-            setExpanded(false);
+          if (Math.abs(delta) < 6) {
+            ticking.current = false;
+            return;
+          }
+
+          if (delta > 0 && !isCompact && currentScrollY > 24) {
+            setIsCompact(true);
+          }
+
+          if (delta < 0 && isCompact) {
+            setIsCompact(false);
+          }
+
+          if (currentScrollY <= 8 && isCompact) {
+            setIsCompact(false);
           }
 
           lastScrollY.current = currentScrollY;
@@ -31,7 +42,7 @@ export function useScrollDirectionNav() {
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, []);
+  }, [isCompact]);
 
-  return { expanded };
+  return { isCompact, expanded: !isCompact };
 }
