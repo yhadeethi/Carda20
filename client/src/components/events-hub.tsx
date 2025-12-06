@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +66,12 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState(prefs.note);
 
+  useEffect(() => {
+    if (noteOpen) {
+      setNoteText(prefs.note);
+    }
+  }, [noteOpen, prefs.note]);
+
   const handleTogglePin = () => {
     setEventPinned(event.id, !prefs.pinned);
     onPrefsChange();
@@ -97,7 +103,7 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
   };
 
   return (
-    <Card className={`relative ${prefs.pinned ? 'ring-2 ring-primary/50' : ''}`}>
+    <Card className={`relative ${prefs.pinned ? 'ring-2 ring-primary/50' : ''}`} data-testid={`event-card-${event.id}`}>
       {prefs.pinned && (
         <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground rounded-full p-1">
           <Pin className="w-3 h-3" />
@@ -153,7 +159,7 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
         )}
 
         {prefs.note && (
-          <div className="bg-muted/50 rounded-md p-2 text-xs text-muted-foreground">
+          <div className="bg-muted/50 rounded-md p-2 text-xs text-muted-foreground" data-testid={`event-note-preview-${event.id}`}>
             <div className="flex items-center gap-1 font-medium mb-0.5">
               <StickyNote className="w-3 h-3" />
               Your note:
@@ -188,19 +194,31 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => handleSetAttending('yes')}>
+              <DropdownMenuItem 
+                onClick={() => handleSetAttending('yes')}
+                data-testid={`event-attending-yes-${event.id}`}
+              >
                 <Check className="w-4 h-4 mr-2" />
                 Attending
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSetAttending('maybe')}>
+              <DropdownMenuItem 
+                onClick={() => handleSetAttending('maybe')}
+                data-testid={`event-attending-maybe-${event.id}`}
+              >
                 <HelpCircle className="w-4 h-4 mr-2" />
                 Maybe
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSetAttending('no')}>
+              <DropdownMenuItem 
+                onClick={() => handleSetAttending('no')}
+                data-testid={`event-attending-no-${event.id}`}
+              >
                 <X className="w-4 h-4 mr-2" />
                 Not Attending
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSetAttending(null)}>
+              <DropdownMenuItem 
+                onClick={() => handleSetAttending(null)}
+                data-testid={`event-attending-clear-${event.id}`}
+              >
                 Clear Status
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -231,7 +249,7 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
                   data-testid="event-note-input"
                 />
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setNoteOpen(false)}>
+                  <Button variant="outline" onClick={() => setNoteOpen(false)} data-testid="event-note-cancel">
                     Cancel
                   </Button>
                   <Button onClick={handleSaveNote} data-testid="event-note-save">
@@ -259,7 +277,7 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
         </div>
 
         {event.reliabilityNote && (
-          <p className="text-[10px] text-muted-foreground/70 italic">
+          <p className="text-[10px] text-muted-foreground/70 italic" data-testid={`event-reliability-${event.id}`}>
             {event.reliabilityNote}
           </p>
         )}
@@ -270,24 +288,18 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
 
 export function EventsHub() {
   const [selectedIndustry, setSelectedIndustry] = useState<EventIndustryId>('renewable');
-  const [prefsVersion, setPrefsVersion] = useState(0);
   const [allPrefs, setAllPrefs] = useState(() => getAllEventPrefs());
 
   const refreshPrefs = useCallback(() => {
     setAllPrefs(getAllEventPrefs());
-    setPrefsVersion((v) => v + 1);
   }, []);
 
-  useEffect(() => {
-    setAllPrefs(getAllEventPrefs());
-  }, [prefsVersion]);
-
-  const events = sortEventsByDate(getEventsByIndustry(selectedIndustry));
-
-  const pinnedEvents = events.filter((e) => allPrefs[e.id]?.pinned);
-  const unpinnedEvents = events.filter((e) => !allPrefs[e.id]?.pinned);
-
-  const sortedEvents = [...pinnedEvents, ...unpinnedEvents];
+  const getSortedEventsForIndustry = useCallback((industryId: EventIndustryId) => {
+    const events = sortEventsByDate(getEventsByIndustry(industryId));
+    const pinnedEvents = events.filter((e) => allPrefs[e.id]?.pinned);
+    const unpinnedEvents = events.filter((e) => !allPrefs[e.id]?.pinned);
+    return [...pinnedEvents, ...unpinnedEvents];
+  }, [allPrefs]);
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
@@ -321,25 +333,28 @@ export function EventsHub() {
           })}
         </TabsList>
 
-        {INDUSTRIES.map((industry) => (
-          <TabsContent key={industry.id} value={industry.id} className="mt-4 space-y-4">
-            {sortedEvents.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No events found for {industry.label}</p>
-              </div>
-            ) : (
-              sortedEvents.map((event) => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '' }}
-                  onPrefsChange={refreshPrefs}
-                />
-              ))
-            )}
-          </TabsContent>
-        ))}
+        {INDUSTRIES.map((industry) => {
+          const industryEvents = getSortedEventsForIndustry(industry.id);
+          return (
+            <TabsContent key={industry.id} value={industry.id} className="mt-4 space-y-4">
+              {industryEvents.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No events found for {industry.label}</p>
+                </div>
+              ) : (
+                industryEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '' }}
+                    onPrefsChange={refreshPrefs}
+                  />
+                ))
+              )}
+            </TabsContent>
+          );
+        })}
       </Tabs>
 
       <div className="text-center pt-4">

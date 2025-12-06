@@ -42,8 +42,15 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
      - Compact (scroll down >50px): shadow-lg, scale-[0.96]
      - Main content has pb-[calc(96px+env(safe-area-inset-bottom))] to ensure nothing hidden behind nav
    - `useScrollDirectionNav` hook for scroll detection
-8. **Events Hub** - Placeholder for upcoming event discovery feature
-   - Coming soon: Renewable energy, mining, construction industry events in Australia
+8. **Events Hub** - Industry event discovery and tracking
+   - Three industries: Renewable Energy, Mining, Construction
+   - Event tiers: Major (flagship events) and Standard
+   - Event sources: Curated (verified), AI-suggested (mocked), Other
+   - User controls per event: Pin/Unpin, Attending status (yes/no/maybe), Notes
+   - Pinned events appear at top of list with visual indicator
+   - 12 seed events across all three industries
+   - Preferences persisted in localStorage (key: `carda_event_prefs_v1`)
+   - Architecture ready for future AI + cron-based pipeline
 
 ## Project Structure
 
