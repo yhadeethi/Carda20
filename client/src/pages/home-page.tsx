@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useTheme } from "@/hooks/use-theme";
+import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import { ScanTab } from "@/components/scan-tab";
 import { ContactsHub } from "@/components/contacts-hub";
 import { MyQRModal } from "@/components/my-qr-modal";
@@ -13,6 +14,7 @@ type ViewMode = "scan" | "contacts" | "contact-detail" | "events";
 
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
+  const { expanded } = useScrollDirectionNav();
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
@@ -97,7 +99,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden pb-20">
+      <main className="flex-1 pb-24">
         <AnimatePresence mode="wait">
           {viewMode === "scan" && (
             <motion.div
@@ -106,7 +108,6 @@ export default function HomePage() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="h-full overflow-y-auto"
             >
               <ScanTab
                 eventModeEnabled={eventModeEnabled}
@@ -124,7 +125,6 @@ export default function HomePage() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="h-full overflow-y-auto"
             >
               <div className="p-4 max-w-2xl mx-auto">
                 <ContactsHub
@@ -143,7 +143,6 @@ export default function HomePage() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="h-full overflow-y-auto"
             >
               <ScanTab
                 viewingContact={selectedContact}
@@ -164,7 +163,6 @@ export default function HomePage() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="h-full overflow-y-auto"
             >
               <div className="p-4 max-w-2xl mx-auto">
                 <div className="text-center py-16">
@@ -183,31 +181,43 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar - Liquid Glass Style */}
-      <nav 
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between gap-2 rounded-3xl px-2 py-2 backdrop-blur-xl bg-white/10 dark:bg-black/20 border border-white/20 dark:border-white/10 shadow-lg"
-        data-testid="nav-bottom"
-      >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id || (viewMode === "contact-detail" && tab.id === "contacts");
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={`flex flex-col items-center gap-0.5 px-5 py-2 rounded-2xl transition-all duration-200 ${
-                isActive
-                  ? "bg-white/25 dark:bg-white/15 text-foreground"
-                  : "text-foreground/60 hover:text-foreground/90 hover:bg-white/10"
-              }`}
-              data-testid={`nav-tab-${tab.id}`}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="text-xs font-medium">{tab.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+      {/* Bottom Navigation Bar - Liquid Glass Style with Scroll Morph */}
+      <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center pointer-events-none">
+        <nav 
+          className={`pointer-events-auto max-w-[440px] w-[92%] flex items-center justify-around backdrop-blur-2xl border shadow-[0_4px_30px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+            expanded
+              ? "h-16 px-5 py-3 rounded-[26px] translate-y-0 scale-100 bg-white/80 dark:bg-neutral-900/80 border-white/60 dark:border-white/10"
+              : "h-14 px-4 py-2 rounded-[22px] translate-y-1 scale-[0.97] bg-white/70 dark:bg-neutral-900/70 border-white/50 dark:border-white/8"
+          }`}
+          data-testid="nav-bottom"
+        >
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id || (viewMode === "contact-detail" && tab.id === "contacts");
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex flex-col items-center justify-center rounded-2xl transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                  expanded ? "gap-1 px-5 py-2" : "gap-0.5 px-4 py-1.5"
+                } ${
+                  isActive
+                    ? "bg-white/30 dark:bg-white/15 text-foreground"
+                    : "text-foreground/50 hover:text-foreground/80 hover:bg-white/15 dark:hover:bg-white/10"
+                }`}
+                data-testid={`nav-tab-${tab.id}`}
+              >
+                <Icon className={`transition-all duration-300 ${expanded ? "w-5 h-5" : "w-[18px] h-[18px]"}`} />
+                <span className={`font-medium transition-all duration-300 ${
+                  expanded ? "text-xs" : "text-[10px]"
+                } ${isActive ? "font-semibold" : ""}`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
     </div>
   );
 }
