@@ -1,0 +1,136 @@
+You are editing my existing Carda web app in this Replit project.
+
+TECH STACK (do NOT change):
+- React + TypeScript
+- TailwindCSS
+- Vite
+- Existing file structure and components must remain intact.
+
+OVERALL GOAL
+Polish the new Events Hub feature WITHOUT changing any other working parts of the app. This is purely a UX + copy + presentation improvement.
+
+VERY IMPORTANT CONSTRAINTS
+- Do NOT break or change functionality for Scan or Contacts.
+- Do NOT change routing, auth, or global layouts.
+- Keep all existing Events Hub logic (data model, localStorage, pinning, notes, attendance) as-is, and only enhance/refine where specified.
+- Keep CSS/Tailwind tokens and design language consistent with the rest of the app.
+
+FILES YOU WILL MOST LIKELY TOUCH
+- `client/src/components/events-hub.tsx`
+- `client/src/lib/eventsData.ts`
+- Bottom nav component (where the “Scan / Contacts / Events” tabs live). Find it and only minimally edit what’s requested for the Events icon.
+
+If you need helper utilities, define them next to existing ones rather than introducing new global utilities.
+
+--------------------------------
+PART 1 – INDUSTRY TAB LABELS
+--------------------------------
+Current behaviour: 3 industry chips/tabs at the top of the Events Hub – currently something like “Energy / Mining / Build”.
+
+Change:
+- Display label “Energy” → **“Renewables”** (or “Renewable Energy” if there’s space and it still looks clean; pick the one that fits better in the layout).
+- Display label “Build” → **“Construction”**.
+
+Key rules:
+- Do NOT break underlying IDs if they’re used in the data model (e.g., `industryId: 'energy'` etc.). Only change the **display labels** in the UI and/or in `EventIndustryMeta` where labels are defined.
+- Make sure the active/selected state, icons, and tabs switching still work exactly as before.
+
+--------------------------------
+PART 2 – CONSISTENT DATE SORTING
+--------------------------------
+Goal: For each industry, events should be shown in a clean, predictable order.
+
+Requirements:
+1. Within any given industry, events must be sorted in **ascending order by start date**.
+2. Pinned events still “float” to the top, BUT:
+   - All pinned events come first, sorted by start date.
+   - All non-pinned events come after, also sorted by start date.
+3. Use the existing `sortEventsByDate()` helper from `client/src/lib/eventsData.ts` if it already exists. If it’s not used in the Events Hub, start using it.
+4. Implement the sorting logic in `events-hub.tsx` where the events are selected + rendered:
+   - First, filter events by current industry.
+   - Then, split into pinned vs not pinned based on `eventPrefs`.
+   - Sort each group by start date.
+   - Render pinned group first, then non-pinned group.
+
+Do NOT change the underlying data model or seed event dates.
+
+--------------------------------
+PART 3 – ATTENDANCE BUTTON COPY + UX
+--------------------------------
+Current behaviour: Button labelled something like “Set Status” with dropdown for attending.
+
+Change:
+- Button label should be more human and specific to attendance.
+
+Implementation:
+1. Replace the button label text “Set Status” with **“Attendance”**.
+2. The dropdown options should be:
+   - “Not set” (or equivalent default)
+   - “Going”
+   - “Maybe”
+   - “Not going”
+3. When a user selects a status, the button should visually reflect the choice. Implement one of these two patterns (pick whichever matches existing code with minimal change):
+   - Button text becomes: `Attendance: Going` / `Attendance: Maybe` / `Attendance: Not going` when a value is chosen.
+   - Or show the selected status as a small pill next to the button (but keep it clean and minimal).
+4. Persist behaviour must stay exactly the same:
+   - Continue using existing `setEventAttending()` and related helpers in `eventsStorage.ts`.
+   - Do NOT change the storage key format or types, only the UI labels.
+
+--------------------------------
+PART 4 – CLEAR AI / VERIFIED DISCLAIMERS
+--------------------------------
+We already have `source` in the data model (`'verified' | 'ai'` or similar). Make sure this is fully wired into the UI.
+
+Requirements:
+1. For events with `source === 'verified'`:
+   - Show the existing “Verified” badge at the top-right of the card (keep styling consistent).
+   - At the bottom of the card (small, subtle grey text), show:
+     - `Verified from official website`
+2. For events with `source === 'ai'`:
+   - Show an “AI” badge at the top-right of the card (already there, but ensure it’s consistent and clearly distinct from Verified).
+   - At the bottom of the card (small grey text), show:
+     - `AI-suggested — please verify details on the official site.`
+3. Make sure these lines only appear when relevant:
+   - Do not show the verified line on AI events.
+   - Do not show the AI disclaimer on verified events.
+4. Keep typography + spacing consistent with the existing description and tags:
+   - Subtle grey, small font, a bit of spacing from the main content (like one `mt-2` or `mt-3`).
+
+--------------------------------
+PART 5 – EVENTS TAB ICON WEIGHT IN BOTTOM NAV
+--------------------------------
+Goal: The Events bottom nav item should visually feel equal in weight and style to Scan and Contacts. Right now it may look slightly off.
+
+Steps:
+1. Find the bottom navigation component (likely in something like `client/src/components/bottom-nav.tsx` or similar).
+2. Identify the item that navigates to the Events Hub.
+3. Ensure:
+   - The Events icon uses the **same icon library** and approx. the same size as Scan and Contacts.
+   - The label text is consistent (“Events”).
+   - Active state (when on Events) matches the other tabs’ active state (e.g., icon + text color, slight background, etc.).
+4. Do not change routing or names; just fix the visual consistency.
+
+--------------------------------
+PART 6 – GENERAL CLEANUP / QA
+--------------------------------
+Before you finish, do a quick internal QA pass:
+
+1. Check **mobile view** (narrow width):
+   - Industry tabs (Renewables / Mining / Construction) should fit nicely without wrapping in a weird way.
+   - Event cards should remain readable and not squashed.
+   - Bottom nav must still look good and not jump around.
+2. Check **desktop view**:
+   - The Events Hub page should still look centered and balanced.
+3. Confirm:
+   - Pinning still works and is persisted across refreshes.
+   - Attendance selection still persists.
+   - Notes still work as before (open dialog, save, close).
+4. Make sure there are **no TypeScript errors** and no new ESLint/TS warnings introduced.
+
+DO NOT:
+- Introduce new libraries.
+- Change the global theme.
+- Implement any external AI calls, scraping, or cron logic yet.
+- Remove or rename any of the existing seed events.
+
+Once done, output a short summary of exactly what files you changed and a bullet list of the behaviours you verified manually.

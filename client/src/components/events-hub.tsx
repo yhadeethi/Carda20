@@ -88,11 +88,14 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
     setNoteOpen(false);
   };
 
-  const attendingLabel = {
-    yes: 'Attending',
-    no: 'Not Attending',
-    maybe: 'Maybe',
-    null: 'Set Status',
+  const getAttendanceLabel = (status: 'yes' | 'no' | 'maybe' | null) => {
+    if (!status) return 'Attendance';
+    const statusLabels = {
+      yes: 'Going',
+      no: 'Not going',
+      maybe: 'Maybe',
+    };
+    return `Attendance: ${statusLabels[status]}`;
   };
 
   const attendingIcon = {
@@ -189,7 +192,7 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
                 data-testid={`event-attending-${event.id}`}
               >
                 {attendingIcon[prefs.attending || 'null']}
-                {attendingLabel[prefs.attending || 'null']}
+                {getAttendanceLabel(prefs.attending)}
                 <ChevronDown className="w-3 h-3" />
               </Button>
             </DropdownMenuTrigger>
@@ -199,7 +202,7 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
                 data-testid={`event-attending-yes-${event.id}`}
               >
                 <Check className="w-4 h-4 mr-2" />
-                Attending
+                Going
               </DropdownMenuItem>
               <DropdownMenuItem 
                 onClick={() => handleSetAttending('maybe')}
@@ -213,13 +216,13 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
                 data-testid={`event-attending-no-${event.id}`}
               >
                 <X className="w-4 h-4 mr-2" />
-                Not Attending
+                Not going
               </DropdownMenuItem>
               <DropdownMenuItem 
                 onClick={() => handleSetAttending(null)}
                 data-testid={`event-attending-clear-${event.id}`}
               >
-                Clear Status
+                Not set
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -276,9 +279,14 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
           )}
         </div>
 
-        {event.reliabilityNote && (
-          <p className="text-[10px] text-muted-foreground/70 italic" data-testid={`event-reliability-${event.id}`}>
-            {event.reliabilityNote}
+        {event.source === 'curated' && (
+          <p className="text-[10px] text-muted-foreground/70 mt-2" data-testid={`event-reliability-${event.id}`}>
+            Verified from official website
+          </p>
+        )}
+        {event.source === 'ai' && (
+          <p className="text-[10px] text-muted-foreground/70 italic mt-2" data-testid={`event-reliability-${event.id}`}>
+            AI-suggested — please verify details on the official site.
           </p>
         )}
       </CardContent>
@@ -326,7 +334,7 @@ export function EventsHub() {
                 <Icon className="w-4 h-4" />
                 <span className="hidden sm:inline">{industry.label}</span>
                 <span className="sm:hidden">
-                  {industry.id === 'renewable' ? 'Energy' : industry.id === 'mining' ? 'Mining' : 'Build'}
+                  {industry.id === 'renewable' ? 'Renewables' : industry.id === 'mining' ? 'Mining' : 'Construction'}
                 </span>
               </TabsTrigger>
             );
