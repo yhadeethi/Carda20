@@ -1,0 +1,42 @@
+Fix the bottom navigation bar layout to behave like a modern iOS floating tab bar and never cover the page content.
+
+Requirements:
+	1.	Layout structure
+	•	The page root should be a flex column with at least full viewport height:
+	•	div with className="flex min-h-screen flex-col bg-[#F7F8FC]" (or whatever background we use).
+	•	Inside it:
+	1.	A main element that contains all the “Scan Business Card” content and is the only scrollable area.
+	2.	A bottom navigation component rendered as a sibling of main, not inside it.
+	2.	Scrollable content
+	•	The main content container must:
+	•	Use className="flex-1 overflow-y-auto" (or equivalent).
+	•	Have bottom padding large enough so that the last element (the blue “Scan Card” button) is always fully visible above the nav bar, even when the page is at the very top.
+	•	Set bottom padding to at least the nav height + extra spacing. For Tailwind, something like:
+	•	pb-[96px] or pb-28
+	•	If we use the iOS safe area, add:
+	•	pb-[calc(96px+env(safe-area-inset-bottom))]
+	3.	Bottom nav positioning
+	•	The bottom nav bar should:
+	•	Be positioned fixed, not relative to the scroll container:
+	•	className="fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[env(safe-area-inset-bottom)]"
+	•	Inside that, render the pill with something like:
+	•	className="mb-3 inline-flex items-center gap-8 rounded-full bg-white px-6 py-3 shadow-lg"
+	•	It should always sit just above the iOS home indicator / Safari toolbar, not overlap the content.
+	4.	No more “jumping up” into the content
+	•	Remove any code that moves the bottom nav upwards on scroll or changes its bottom value to sit higher in the screen.
+	•	The nav should always be anchored to the bottom with safe-area padding; the only thing that should move is the content behind it.
+	5.	Optional morph effect (simple version)
+	•	Add a subtle scroll-based transform only to polish the feel:
+	•	When the user scrolls down more than, say, 40–60px:
+	•	Apply a small scale and opacity change to the nav pill:
+	•	e.g. scale(0.96) and slightly lower shadow.
+	•	When the user scrolls back up near the top:
+	•	Restore it to full size and full shadow.
+	•	Do not change its vertical position; the nav stays anchored to the bottom at all times.
+	6.	Regression checks
+	•	Verify on iPhone viewport:
+	•	At the very top of the page, the full blue “Scan Card” button is visible above the nav bar.
+	•	When scrolling, the nav stays fixed at the bottom and never overlaps any tappable content.
+	•	Safari’s own bottom toolbar and the app nav bar do not overlap each other visually.
+
+Please implement these layout changes and clean up any old CSS or JS that tried to move the nav upwards over the content.

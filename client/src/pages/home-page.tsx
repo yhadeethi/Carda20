@@ -70,8 +70,8 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="h-14 border-b flex items-center justify-between px-4 bg-card">
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="h-14 border-b flex items-center justify-between px-4 bg-card shrink-0">
         <button 
           className="flex items-center gap-2 hover-elevate rounded-lg px-2 py-1 -ml-2"
           onClick={handleLogoClick}
@@ -99,7 +99,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-1 pb-28">
+      <main className="flex-1 overflow-y-auto pb-[calc(96px+env(safe-area-inset-bottom))]">
         <AnimatePresence mode="wait">
           {viewMode === "scan" && (
             <motion.div
@@ -181,39 +181,37 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar - Fixed to safe-area with subtle morph */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] flex items-center justify-center pointer-events-none">
-        <div className="pointer-events-auto mx-auto max-w-md w-[92%] mb-3 px-4">
-          <div 
-            className={`flex w-full items-center justify-around h-14 rounded-full px-6 backdrop-blur-xl border border-white/40 dark:border-slate-700/60 transition-all duration-200 ease-out ${
-              isCompact
-                ? "shadow-md bg-white/65 dark:bg-slate-900/65 scale-[0.98] opacity-95"
-                : "shadow-xl bg-white/80 dark:bg-slate-900/80 scale-100 opacity-100"
-            }`}
-            data-testid="nav-bottom"
-          >
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id || (viewMode === "contact-detail" && tab.id === "contacts");
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`flex flex-col items-center justify-center gap-0.5 px-4 py-2 rounded-2xl transition-colors duration-150 ${
-                    isActive
-                      ? "text-foreground"
-                      : "text-foreground/50 hover:text-foreground/80"
-                  }`}
-                  data-testid={`nav-tab-${tab.id}`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}>
-                    {tab.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+      {/* Bottom Navigation Bar - Fixed to safe-area, never moves vertically */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[env(safe-area-inset-bottom)]">
+        <div 
+          className={`mb-3 inline-flex items-center gap-8 rounded-full bg-white dark:bg-slate-900 px-6 py-3 transition-all duration-200 ease-out ${
+            isCompact
+              ? "shadow-lg scale-[0.96]"
+              : "shadow-xl scale-100"
+          }`}
+          data-testid="nav-bottom"
+        >
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id || (viewMode === "contact-detail" && tab.id === "contacts");
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex flex-col items-center justify-center gap-0.5 transition-colors duration-150 ${
+                  isActive
+                    ? "text-foreground"
+                    : "text-foreground/50 hover:text-foreground/80"
+                }`}
+                data-testid={`nav-tab-${tab.id}`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </nav>
     </div>

@@ -12,12 +12,12 @@ export function useScrollDirectionNav() {
           const currentScrollY = window.scrollY;
           const delta = currentScrollY - lastScrollY.current;
 
-          if (Math.abs(delta) < 6) {
+          if (Math.abs(delta) < 8) {
             ticking.current = false;
             return;
           }
 
-          if (delta > 0 && !isCompact && currentScrollY > 24) {
+          if (delta > 0 && !isCompact && currentScrollY > 50) {
             setIsCompact(true);
           }
 
@@ -25,7 +25,7 @@ export function useScrollDirectionNav() {
             setIsCompact(false);
           }
 
-          if (currentScrollY <= 8 && isCompact) {
+          if (currentScrollY <= 20 && isCompact) {
             setIsCompact(false);
           }
 
