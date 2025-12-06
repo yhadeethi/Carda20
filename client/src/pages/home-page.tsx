@@ -3,6 +3,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import { ScanTab } from "@/components/scan-tab";
 import { ContactsHub } from "@/components/contacts-hub";
+import { EventsHub } from "@/components/events-hub";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Moon, Sun, Camera, Users, Calendar } from "lucide-react";
@@ -164,18 +165,7 @@ export default function HomePage() {
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <div className="p-4 max-w-2xl mx-auto">
-                <div className="text-center py-16">
-                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                    <Calendar className="w-8 h-8 text-primary" />
-                  </div>
-                  <h2 className="text-2xl font-semibold mb-3">Events Hub</h2>
-                  <p className="text-muted-foreground text-sm max-w-sm mx-auto leading-relaxed">
-                    Coming soon: Discover renewable energy, mining, and construction industry events across Australia. 
-                    Tag contacts at conferences and trade shows for easy follow-up.
-                  </p>
-                </div>
-              </div>
+              <EventsHub />
             </motion.div>
           )}
         </AnimatePresence>
