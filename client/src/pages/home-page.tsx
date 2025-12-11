@@ -56,7 +56,7 @@ export default function HomePage() {
     setActiveTab("contacts");
   };
 
-  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'notes' = 'orgmap') => {
+  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'notes' = 'contacts') => {
     setSelectedCompanyId(companyId);
     setCompanyDetailTab(initialTab);
     setViewMode("company-detail");
