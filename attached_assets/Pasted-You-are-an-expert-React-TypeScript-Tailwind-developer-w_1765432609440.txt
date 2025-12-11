@@ -1,0 +1,307 @@
+You are an expert React + TypeScript + Tailwind developer working on my Carda app on Replit.
+
+CONTEXT (VERY IMPORTANT)
+- Carda is a business card + contact intelligence app.
+- There is already:
+  - A **Contacts / Contacts Hub** screen that shows saved / scanned contacts.
+  - A bottom navigation and overall layout that is already working.
+  - Contact storage and parsing logic are already implemented – DO NOT BREAK any existing parsing, saving, or scanning functionality.
+- Your job is to ADD a new “Org Intelligence” layer on top of what exists, with:
+  - People vs Companies split
+  - Company pages
+  - An Org Map view per company
+
+Your priority: 
+- Keep all existing features working.
+- Make changes minimal and well-contained.
+- Use clean, readable React + TypeScript + Tailwind.
+- Mobile-first, looks good on iPhone-sized viewports.
+
+---
+
+HIGH-LEVEL GOAL
+
+Add a **People / Companies** split on the existing contacts screen, and for each company create a detail view with **Contacts | Org Map | Notes** tabs.
+
+The **Org Map** tab will show a simple, editable org structure for that company, seeded from the contacts I’ve scanned that belong to that company.
+
+This is the first MVP of “Org Intelligence”.
+
+---
+
+STEP 1 – DATA MODEL UPDATES
+
+1. Locate the central TypeScript types / models used for contacts.
+   - Example: `Contact`, `StoredContact`, or similar.
+   - Do NOT rename existing fields or break serialization.
+
+2. Extend the contact model with a few OPTIONAL fields (do not make any of these required):
+
+   - `companyId?: string | null`  
+     // internal ID used to link a contact to a company
+
+   - `orgRole?: 'Champion' | 'Neutral' | 'Blocker' | 'Unknown'`  
+     // how this person behaves in the deal (for later use, but add now)
+
+   - `influenceLevel?: 'Low' | 'Medium' | 'High' | 'Unknown'`  
+     // rough influence tag (for later color-coding)
+
+   - `managerContactId?: string | null`  
+     // contact.id of their manager within this company (for org tree building later)
+
+3. Create a new **Company** type and store:
+
+   - Type:
+     ```ts
+     export type Company = {
+       id: string;                    // unique ID, e.g. uuid or slug
+       name: string;                  // e.g. "Flow Power"
+       domain?: string | null;        // optional, e.g. "flowpower.com.au"
+       city?: string | null;
+       state?: string | null;
+       country?: string | null;
+       notes?: string | null;         // free text notes about the company
+       createdAt: string;             // ISO date
+       updatedAt: string;             // ISO date
+     };
+     ```
+
+4. Implement a simple storage module for Companies, mirroring how contacts are stored:
+   - Example file: `client/src/lib/companiesStorage.ts`
+   - Use `localStorage` with a key like `carda_companies_v1`.
+   - Functions:
+     - `getCompanies(): Company[]`
+     - `saveCompanies(companies: Company[]): void`
+     - `upsertCompany(company: Company): Company[]`
+     - `deleteCompany(companyId: string): Company[]`
+
+5. Add a helper to **auto-generate companies** from existing contacts on first use:
+   - Group contacts by `company` or email domain (if available).
+   - Normalize company name (trim, collapse whitespace).
+   - For each group, if there’s no existing company with that name/domain, create one.
+   - This should be idempotent and safe to call multiple times.
+
+---
+
+STEP 2 – CREATE PEOPLE / COMPANIES SPLIT IN CONTACTS SCREEN
+
+1. Locate the **current contacts / contacts hub screen**:
+   - This is the screen that lists saved contacts / recent scans.
+   - Do NOT rename any routes without reason.
+   - Wrap its content with a new segmented control at the top.
+
+2. At the top of that screen, add a segmented control (tabs):
+
+   - **“People”** | **“Companies”**
+
+   Requirements:
+   - Default selected tab: **People**
+   - Use whatever existing tab / toggle component you already have (e.g. same style used elsewhere).
+   - On mobile, this should be a horizontal pill-style toggle with clear active state.
+
+3. **People tab behaviour:**
+   - Keep the existing behaviour and layout of the contacts list here.
+   - If there is a header like “Recent Scans”, it can remain – just ensure it visually belongs to the People tab.
+   - Changes are minimal:
+     - Only render the current contacts list when the “People” tab is active.
+
+4. **Companies tab behaviour (NEW):**
+   - Display a list of companies built from the `Company` store.
+   - For each company, show a card with:
+     - Company name
+     - Number of linked contacts (e.g. “6 contacts”)
+     - Optional: primary domain (if available)
+     - CTA button or link: **“View Org Map”** (this will navigate to the company detail page, defaulting to the Org Map tab later).
+
+   - At the top-right of the Companies list, add a small **“+ Add Company”** button.
+     - Clicking it opens a simple modal or inline form to manually create a company:
+       - Fields: Name (required), Domain (optional), City, State, Country, Notes
+       - Save → creates a new `Company` and persists it.
+       - Cancel → closes without changes.
+
+   - Make sure Companies tab and People tab share the same overall styling so it feels cohesive.
+
+---
+
+STEP 3 – LINK CONTACTS TO COMPANIES
+
+1. Linking logic:
+   - A contact should be linked to a company in this order of priority:
+     - If contact already has `companyId` → that company.
+     - Else, if a `Company` exists with the same `name` as the contact’s company string (case-insensitive) → use that.
+     - Else, if a `Company` exists with a matching email domain → use that.
+     - Else, leave `companyId` null (can be manually assigned later).
+
+2. On the **contact edit / detail view**:
+   - Show a “Company” field that:
+     - Displays the current company name if linked.
+     - Allows the user to pick from a dropdown of existing companies or create a new one on the fly.
+   - When the user selects a company:
+     - Set `contact.companyId` accordingly.
+     - Optionally update the contact’s textual company name to match.
+
+3. Make sure that when the contacts are loaded:
+   - The helper that auto-generates companies from contacts is run once so that the Companies tab has content immediately from existing scans.
+
+---
+
+STEP 4 – COMPANY DETAIL PAGE WITH TABS
+
+1. Create a dedicated **Company Detail** view / component:
+   - Can be a route like `/company/:companyId` or a modal style – choose the pattern consistent with the rest of the app.
+   - This view should be opened when:
+     - User taps a company card in the Companies tab.
+     - User taps “View in Org Map” from a contact (we’ll add that later).
+     - User taps “View Org Map” on the company card.
+
+2. At the top of the Company Detail page:
+   - Show:
+     - Company name
+     - (Optional) domain and location (city, state, country) in a smaller subtitle line
+   - Under this header, add a tabbed interface:
+
+     **Tabs:**
+     - **Contacts**
+     - **Org Map**
+     - **Notes**
+
+3. **Contacts tab:**
+   - Show a list of all contacts whose `companyId` matches this company.
+   - Reuse the existing contact card component for consistency.
+   - If there are no contacts yet:
+     - Show a friendly empty state:  
+       “No contacts yet for this company. Scan a card or link existing people to this company.”
+
+4. **Notes tab:**
+   - Simple `textarea` / multiline input bound to `company.notes`.
+   - Autosave or use an explicit “Save Notes” button, whichever fits the app’s pattern.
+   - Store notes inside the `Company` object (update `updatedAt` when modified).
+
+---
+
+STEP 5 – ORG MAP (MVP VERSION)
+
+This is the hero feature.
+
+1. In the **Org Map** tab for a company:
+   - Initially, build a simple vertical organisation layout from the company’s contacts.
+
+2. MVP Org Map logic:
+   - Fetch all contacts linked to this `companyId`.
+   - Categorise them into rough “seniority bands” based on job title:
+     - Exec: title contains `"CEO"`, `"Chief"`, `"Managing Director"`, `"MD"`, `"Founder"`, `"Director"`, `"Head"`
+     - Manager: title contains `"Manager"`, `"Lead"`, `"Principal"`
+     - Staff: everything else
+   - If `managerContactId` relationships exist, use them to form true parent-child relationships.
+   - If not, just group contacts into horizontal rows by band:
+     - Row 1: Exec
+     - Row 2: Manager
+     - Row 3: Staff
+
+3. UI layout (keep it simple but clean):
+   - Use a scrollable container with padding.
+   - For now, use a **vertical org layout**:
+     - Each row is a flex container with horizontally centered contact “nodes”.
+     - A node is a small card with:
+       - Name (bold)
+       - Title (smaller)
+       - Optional chips: `Champion / Neutral / Blocker` and `High / Medium / Low` influence if present.
+   - Use light Tailwind styles consistent with the rest of the app (rounded corners, subtle shadow, small padding).
+   - OPTIONAL but nice: draw simple connecting lines between manager and report if `managerContactId` is set.
+     - This can be done with absolute-positioned connectors or simple borders – don’t over-engineer, just make it readable.
+
+4. Editing / interactions (MVP but powerful):
+
+   On each node (contact card in Org Map):
+   - Tapping the card:
+     - Opens the standard contact detail page (same as elsewhere) OR a small bottom sheet with:
+       - “View full contact”
+       - “Set manager”
+       - “Set org role”
+       - “Set influence”
+
+   - “Set manager”:
+     - Opens a dropdown or modal listing all other contacts for this company.
+     - Selecting one sets `managerContactId` for this contact.
+     - When saved, the Org Map re-renders with updated structure.
+
+   - “Set org role”:
+     - Choice: Champion / Neutral / Blocker / Unknown
+
+   - “Set influence”:
+     - Choice: High / Medium / Low / Unknown
+
+   Do NOT add AI logic here yet – just manual editing.
+
+5. Empty / small-state handling:
+   - If the company has:
+     - `0` contacts → show a message:  
+       “To build an Org Map, add contacts for this company first.”
+     - `1` contact → show that single node with a hint:  
+       “Add more people from this company to build out the org structure.”
+
+---
+
+STEP 6 – ENTRY POINTS TO ORG MAP FROM A CONTACT
+
+1. On the **contact detail view**:
+   - Next to the Company field, add a small button or link:
+     - Label: **“View in Org Map”**
+   - Clicking this:
+     - If the contact is linked to a company (`companyId` exists):
+       - Navigate to that company’s detail page **Org Map tab** directly.
+     - If not linked:
+       - Prompt user to select a company first (by reusing the company dropdown).
+
+2. After scanning a card (when a contact is created and saved):
+   - If, after saving, that contact’s company has 2 or more contacts:
+     - Show a small toast/banner:  
+       “You now have X contacts from [CompanyName]. View Org Map →”
+     - The “View Org Map” action navigates directly to the Org Map tab for that company.
+
+Make sure this toast/banner is unobtrusive and consistent with the existing notification style.
+
+---
+
+STEP 7 – GENERAL REQUIREMENTS & QUALITY
+
+- Do NOT:
+  - Break scanning, contact saving, or parsing.
+  - Change existing bottom nav structure unless absolutely necessary.
+
+- DO:
+  - Keep components small and reusable.
+  - Reuse existing button, card, and tab components where possible.
+  - Ensure everything works well on mobile / narrow widths first.
+  - Use TypeScript strictly (no `any` unless absolutely unavoidable).
+  - Comment key parts of the new code (especially Org Map grouping and manager logic).
+
+- Naming:
+  - Tabs on company page: **Contacts | Org Map | Notes**
+  - Tab group on Contacts screen: **People | Companies**
+  - Feature concept name in code comments: **“Org Intelligence / Org Map”**
+
+---
+
+DELIVERABLES
+
+1. New / updated TypeScript models for Contact and Company.
+2. `companiesStorage` helper module with localStorage persistence.
+3. Updated Contacts screen with People / Companies segmented control.
+4. Companies list view with “Add Company” flow.
+5. Company detail view with tabs: Contacts, Org Map, Notes.
+6. MVP Org Map rendering and editing (manager, orgRole, influenceLevel).
+7. Navigation from:
+   - Companies tab → Company → Org Map
+   - Contact detail → “View in Org Map”
+   - Post-scan toast → “View Org Map”
+
+After implementing, run through this manual test flow:
+- Scan 3–4 cards from the same company.
+- Confirm the company appears under Companies with correct contact count.
+- Open the company → Org Map and see all the people.
+- Set a manager for one or two of them.
+- Navigate back and forth between People tab, Companies tab, Company → Org Map.
+- Refresh the page and confirm data persists correctly via localStorage.
+
+Implement all of the above now.

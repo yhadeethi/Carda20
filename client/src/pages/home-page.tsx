@@ -4,6 +4,7 @@ import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import { ScanTab } from "@/components/scan-tab";
 import { ContactsHub } from "@/components/contacts-hub";
 import { EventsHub } from "@/components/events-hub";
+import { CompanyDetail } from "@/components/company-detail";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Moon, Sun, Camera, Users, Calendar } from "lucide-react";
@@ -11,7 +12,7 @@ import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorag
 import { motion, AnimatePresence } from "framer-motion";
 
 type TabMode = "scan" | "contacts" | "events";
-type ViewMode = "scan" | "contacts" | "contact-detail" | "events";
+type ViewMode = "scan" | "contacts" | "contact-detail" | "company-detail" | "events";
 
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
@@ -19,6 +20,8 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [companyDetailTab, setCompanyDetailTab] = useState<'contacts' | 'orgmap' | 'notes'>('orgmap');
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
@@ -31,12 +34,14 @@ export default function HomePage() {
     setActiveTab("scan");
     setViewMode("scan");
     setSelectedContact(null);
+    setSelectedCompanyId(null);
   };
 
   const handleTabChange = (tab: TabMode) => {
     setActiveTab(tab);
     setViewMode(tab);
     setSelectedContact(null);
+    setSelectedCompanyId(null);
   };
 
   const handleSelectContact = (contact: StoredContact) => {
@@ -46,8 +51,27 @@ export default function HomePage() {
 
   const handleBackToContacts = () => {
     setSelectedContact(null);
+    setSelectedCompanyId(null);
     setViewMode("contacts");
     setActiveTab("contacts");
+  };
+
+  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'notes' = 'orgmap') => {
+    setSelectedCompanyId(companyId);
+    setCompanyDetailTab(initialTab);
+    setViewMode("company-detail");
+    setActiveTab("contacts");
+  };
+
+  const handleBackToCompanies = () => {
+    setSelectedCompanyId(null);
+    setViewMode("contacts");
+    setActiveTab("contacts");
+  };
+
+  const handleContactSelectedFromCompany = (contact: StoredContact) => {
+    setSelectedContact(contact);
+    setViewMode("contact-detail");
   };
 
   const handleBackToScan = () => {
@@ -116,6 +140,7 @@ export default function HomePage() {
                 onEventModeChange={setEventModeEnabled}
                 onEventNameChange={setCurrentEventName}
                 onContactSaved={refreshContacts}
+                onViewInOrgMap={(companyId) => handleSelectCompany(companyId, 'orgmap')}
               />
             </motion.div>
           )}
@@ -133,6 +158,7 @@ export default function HomePage() {
                   onBackToScan={handleBackToScan}
                   refreshKey={contactsVersion}
                   onContactDeleted={refreshContacts}
+                  onSelectCompany={handleSelectCompany}
                 />
               </div>
             </motion.div>
@@ -154,6 +180,23 @@ export default function HomePage() {
                 onEventModeChange={setEventModeEnabled}
                 onEventNameChange={setCurrentEventName}
                 onContactSaved={refreshContacts}
+                onViewInOrgMap={(companyId) => handleSelectCompany(companyId, 'orgmap')}
+              />
+            </motion.div>
+          )}
+          {viewMode === "company-detail" && selectedCompanyId && (
+            <motion.div
+              key="company-detail"
+              initial={{ x: 40, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -40, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <CompanyDetail
+                companyId={selectedCompanyId}
+                onBack={handleBackToCompanies}
+                onSelectContact={handleContactSelectedFromCompany}
+                initialTab={companyDetailTab}
               />
             </motion.div>
           )}
@@ -182,7 +225,7 @@ export default function HomePage() {
           data-testid="nav-bottom"
         >
           {tabs.map((tab) => {
-            const isActive = activeTab === tab.id || (viewMode === "contact-detail" && tab.id === "contacts");
+            const isActive = activeTab === tab.id || ((viewMode === "contact-detail" || viewMode === "company-detail") && tab.id === "contacts");
             const Icon = tab.icon;
             return (
               <button

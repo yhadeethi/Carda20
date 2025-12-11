@@ -1,5 +1,11 @@
 const STORAGE_KEY = "carda_contacts_v1";
 
+// Org Intelligence: Role classification for deal management
+export type OrgRole = 'Champion' | 'Neutral' | 'Blocker' | 'Unknown';
+
+// Org Intelligence: Influence level for prioritization
+export type InfluenceLevel = 'Low' | 'Medium' | 'High' | 'Unknown';
+
 export interface StoredContact {
   id: string;
   createdAt: string;
@@ -12,6 +18,11 @@ export interface StoredContact {
   linkedinUrl: string;
   address: string;
   eventName: string | null;
+  // Org Intelligence fields (optional)
+  companyId?: string | null;
+  orgRole?: OrgRole;
+  influenceLevel?: InfluenceLevel;
+  managerContactId?: string | null;
 }
 
 function generateId(): string {
@@ -95,4 +106,47 @@ export function getUniqueEventNames(): string[] {
     if (c.eventName) events.add(c.eventName);
   });
   return Array.from(events).sort();
+}
+
+/**
+ * Update a contact's fields (for Org Intelligence updates like companyId, orgRole, etc.)
+ */
+export function updateContact(id: string, updates: Partial<StoredContact>): StoredContact | null {
+  const contacts = loadContacts();
+  const index = contacts.findIndex((c) => c.id === id);
+  
+  if (index === -1) return null;
+  
+  const updated = { ...contacts[index], ...updates };
+  contacts[index] = updated;
+  saveContacts(contacts);
+  
+  return updated;
+}
+
+/**
+ * Get contacts by company ID
+ */
+export function getContactsByCompanyId(companyId: string): StoredContact[] {
+  return loadContacts().filter((c) => c.companyId === companyId);
+}
+
+/**
+ * Get contacts grouped by company name (for companies that haven't been linked yet)
+ */
+export function getContactsGroupedByCompany(): Map<string, StoredContact[]> {
+  const contacts = loadContacts();
+  const groups = new Map<string, StoredContact[]>();
+  
+  contacts.forEach((c) => {
+    if (c.company) {
+      const normalized = c.company.trim().toLowerCase();
+      if (!groups.has(normalized)) {
+        groups.set(normalized, []);
+      }
+      groups.get(normalized)!.push(c);
+    }
+  });
+  
+  return groups;
 }

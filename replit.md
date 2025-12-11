@@ -4,11 +4,12 @@
 Carda 2.0 is a mobile-first business card scanner with AI-powered company intelligence. Users can scan business cards or paste email signatures to extract contact information, then generate AI-powered company insights.
 
 ## Current State
-- **Status**: MVP Complete with AU address extraction, email truncation, My QR feature, and AI-first parsing
+- **Status**: MVP Complete with AU address extraction, email truncation, My QR feature, AI-first parsing, and Org Intelligence
 - **Stack**: React SPA (frontend) + Express.js (backend)
 - **OCR**: OCR.space API (modular, swappable)
 - **Parsing**: AI-powered (gpt-4o-mini) as default, deterministic fallback for resilience
 - **Intel**: OpenAI via Replit AI Integrations
+- **Storage**: localStorage for contacts, companies, and event preferences
 
 ## Core Features
 1. **Business Card OCR** - Upload/scan card images, extract text via OCR.space
@@ -55,14 +56,28 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
    - 12 seed events across all three industries
    - Preferences persisted in localStorage (key: `carda_event_prefs_v1`)
    - Architecture ready for future AI + cron-based pipeline
+9. **Org Intelligence** - Company tracking and organizational mapping
+   - **Contacts Hub redesign**: People/Companies segmented control (tabs)
+   - **Companies auto-generation**: Companies created from contact data (company name or email domain)
+   - **Company Detail page**: Three-tab interface (Contacts, Org Map, Notes)
+   - **Org Map MVP**: Seniority-based vertical grouping (Exec/Manager/Staff tiers)
+   - **Contact org metadata**: orgRole, influenceLevel, managerContactId fields
+   - **View in Org Map button**: Quick navigation from contact detail to company org map
+   - Companies persisted in localStorage (key: `carda_companies_v1`)
+   - Data relationships: contacts link to companies via matching name or domain
 
 ## Project Structure
 
 ### Frontend (`/client/src/`)
 - `App.tsx` - Main app with routing and theme provider
-- `pages/home-page.tsx` - Main scanner page
-- `components/scan-tab.tsx` - Scan/paste modes, contact display, edit, vCard
+- `pages/home-page.tsx` - Main scanner page with tab navigation and view management
+- `components/scan-tab.tsx` - Scan/paste modes, contact display, edit, vCard, View in Org Map
+- `components/contacts-hub.tsx` - People/Companies split view with search and filtering
+- `components/company-detail.tsx` - Company detail page with Contacts/Org Map/Notes tabs
+- `components/org-map.tsx` - Org Map MVP with seniority grouping and contact metadata editing
 - `components/company-intel-card.tsx` - AI-generated intel display
+- `lib/contactsStorage.ts` - Contact CRUD with localStorage persistence
+- `lib/companiesStorage.ts` - Company CRUD with auto-generation from contacts
 - `lib/imageUtils.ts` - Client-side image compression utility
 - `hooks/use-theme.tsx` - Dark/light theme toggle
 

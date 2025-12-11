@@ -13,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CompanyIntelCard } from "@/components/company-intel-card";
 import { CompanyIntelData } from "@shared/schema";
-import { StoredContact, saveContact } from "@/lib/contactsStorage";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2 } from "lucide-react";
+import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
+import { getContactCountForCompany, findCompanyByName, extractDomainFromEmail, findCompanyByDomain } from "@/lib/companiesStorage";
+import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2, Network } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
@@ -47,6 +48,7 @@ interface ScanTabProps {
   onEventModeChange: (enabled: boolean) => void;
   onEventNameChange: (name: string | null) => void;
   onContactSaved?: () => void;
+  onViewInOrgMap?: (companyId: string) => void;
 }
 
 export function ScanTab({
@@ -58,6 +60,7 @@ export function ScanTab({
   onEventModeChange,
   onEventNameChange,
   onContactSaved,
+  onViewInOrgMap,
 }: ScanTabProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -393,6 +396,32 @@ export function ScanTab({
   const currentContact = editedContact;
 
   const isViewingFromHub = !!viewingContact;
+
+  // Helper to find company ID for the current contact
+  const getCompanyIdForContact = (): string | null => {
+    const companyName = currentContact?.companyName;
+    const email = currentContact?.email;
+    
+    if (companyName) {
+      const byName = findCompanyByName(companyName);
+      if (byName) return byName.id;
+    }
+    
+    if (email) {
+      const domain = extractDomainFromEmail(email);
+      if (domain) {
+        const byDomain = findCompanyByDomain(domain);
+        if (byDomain) return byDomain.id;
+      }
+    }
+    
+    return null;
+  };
+
+  const companyIdForContact = getCompanyIdForContact();
+  const companyContactCount = companyIdForContact 
+    ? getContactCountForCompany(companyIdForContact, loadContacts())
+    : 0;
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
@@ -858,6 +887,23 @@ export function ScanTab({
                             <Search className="w-2.5 h-2.5 -ml-0.5" />
                             Search LinkedIn
                           </a>
+                        </Button>
+                      )}
+                      {companyIdForContact && onViewInOrgMap && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onViewInOrgMap(companyIdForContact)}
+                          className="gap-1.5"
+                          data-testid="button-action-org-map"
+                        >
+                          <Network className="w-3.5 h-3.5" />
+                          View Org Map
+                          {companyContactCount > 1 && (
+                            <span className="ml-0.5 text-xs text-muted-foreground">
+                              ({companyContactCount})
+                            </span>
+                          )}
                         </Button>
                       )}
                     </div>
