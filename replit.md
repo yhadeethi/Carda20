@@ -56,12 +56,25 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
    - 12 seed events across all three industries
    - Preferences persisted in localStorage (key: `carda_event_prefs_v1`)
    - Architecture ready for future AI + cron-based pipeline
-9. **Org Intelligence** - Company tracking and organizational mapping
+9. **Org Intelligence v2** - Company tracking and organizational mapping
    - **Contacts Hub redesign**: People/Companies segmented control (tabs)
    - **Companies auto-generation**: Companies created from contact data (company name or email domain)
    - **Company Detail page**: Three-tab interface (Contacts, Org Map, Notes)
-   - **Org Map MVP**: Seniority-based vertical grouping (Exec/Manager/Staff tiers)
-   - **Contact org metadata**: orgRole, influenceLevel, managerContactId fields
+   - **Quick Edit Bottom Sheet**: Drawer to edit Department, Role, Influence, Manager for any contact
+   - **Department Filter Chips**: Horizontal scroll filter by department (Exec, Legal, Project Delivery, Sales, Finance, Ops)
+   - **Auto-group Button**: Automatically assigns departments based on job titles with undo support
+   - **Org Map Redesign**: Segmented control for Org Chart vs Influence Map views
+     - **Org Chart**: Department swimlanes with color-coded left borders, hierarchy sorting
+     - **Edit Mode Toggle**: Enables drag-and-drop to set reporting lines
+     - **Drag-Drop Confirmation**: Shows dialog to confirm manager assignment with cycle prevention
+     - **Clear All Reporting Lines**: Bulk action with undo toast
+   - **Influence Map**: Force-directed graph using react-force-graph-2d
+     - Node size = influence level (HIGH=20, MEDIUM=12, LOW=6)
+     - Node color = role (Champion=green, Neutral=gray, Blocker=red, Unknown=zinc)
+     - Links from reporting relationships
+     - Legend with all role colors
+     - Click node to view contact details
+   - **Contact org metadata**: department, role, influence, reportsToId, relationshipStrength fields
    - **View in Org Map button**: Quick navigation from contact detail to company org map
    - Companies persisted in localStorage (key: `carda_companies_v1`)
    - Data relationships: contacts link to companies via matching name or domain
