@@ -284,13 +284,13 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="w-full grid grid-cols-3">
-          <TabsTrigger value="contacts" className="gap-1.5 text-xs" data-testid="tab-contacts">
+          <TabsTrigger value="contacts" className="gap-1.5 text-xs" data-testid="tab-people">
             <Users className="w-4 h-4" />
-            <span>Contacts</span>
+            <span>People</span>
           </TabsTrigger>
-          <TabsTrigger value="orgmap" className="gap-1.5 text-xs" data-testid="tab-orgmap">
+          <TabsTrigger value="orgmap" className="gap-1.5 text-xs" data-testid="tab-org">
             <Network className="w-4 h-4" />
-            <span>Org Map</span>
+            <span>Org</span>
           </TabsTrigger>
           <TabsTrigger value="notes" className="gap-1.5 text-xs" data-testid="tab-notes">
             <StickyNote className="w-4 h-4" />

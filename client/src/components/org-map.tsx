@@ -1,9 +1,10 @@
 /**
  * Org Map Component for Org Intelligence v2
  * Features:
- * - Segmented control: Org Chart | Influence Map
- * - View/Edit toggle (default View)
- * - Department swimlanes for Org Chart
+ * - Segmented control: Org | Influence
+ * - React Flow canvas with dagre layout
+ * - Top-right icon buttons: Edit, Relayout, Clear
+ * - Bottom sheet for node tap
  * - Force-directed graph for Influence Map
  */
 
@@ -12,8 +13,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -23,29 +22,31 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   User,
-  MoreVertical,
-  Shield,
   Minus,
-  AlertTriangle,
-  CircleDot,
   Users,
-  UserPlus,
-  Eye,
-  Check,
   Network,
   GitBranch,
-  GripVertical,
   Trash2,
   Info,
+  Pencil,
+  Sparkles,
+  X,
 } from "lucide-react";
 import {
   StoredContact,
@@ -58,6 +59,7 @@ import {
   restoreReportingLines,
 } from "@/lib/contactsStorage";
 import { useToast } from "@/hooks/use-toast";
+import { OrgChartCanvas } from "@/components/org-chart-canvas";
 
 interface OrgMapProps {
   companyId: string;
@@ -66,198 +68,84 @@ interface OrgMapProps {
   onSelectContact: (contact: StoredContact) => void;
 }
 
-type ViewType = 'chart' | 'influence';
+type ViewType = 'org' | 'influence';
 
-// Department display order and labels
-const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
+// Department display labels
 const DEPARTMENT_LABELS: Record<Department, string> = {
-  EXEC: 'Executive',
+  EXEC: 'Exec',
   LEGAL: 'Legal',
-  PROJECT_DELIVERY: 'Project Delivery',
+  PROJECT_DELIVERY: 'Delivery',
   SALES: 'Sales',
   FINANCE: 'Finance',
-  OPS: 'Operations',
-  UNKNOWN: 'Unassigned',
+  OPS: 'Ops',
+  UNKNOWN: 'Unknown',
 };
 
-const DEPARTMENT_COLORS: Record<Department, string> = {
-  EXEC: 'border-l-purple-500',
-  LEGAL: 'border-l-indigo-500',
-  PROJECT_DELIVERY: 'border-l-emerald-500',
-  SALES: 'border-l-pink-500',
-  FINANCE: 'border-l-amber-500',
-  OPS: 'border-l-cyan-500',
-  UNKNOWN: 'border-l-gray-400',
-};
+const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
 
 export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }: OrgMapProps) {
-  const [viewType, setViewType] = useState<ViewType>('chart');
+  const [viewType, setViewType] = useState<ViewType>('org');
   const [editMode, setEditMode] = useState(false);
-  const [editingContact, setEditingContact] = useState<StoredContact | null>(null);
-  const [showManagerPicker, setShowManagerPicker] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [dragTarget, setDragTarget] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
+  const [relayoutKey, setRelayoutKey] = useState(0);
   const { toast } = useToast();
 
-  // Group contacts by department for swimlanes
-  const departmentGroups = useMemo(() => {
-    const groups: Record<Department, StoredContact[]> = {
-      EXEC: [],
-      LEGAL: [],
-      PROJECT_DELIVERY: [],
-      SALES: [],
-      FINANCE: [],
-      OPS: [],
-      UNKNOWN: [],
-    };
-    
-    contacts.forEach((c) => {
-      const dept = c.org?.department || 'UNKNOWN';
-      groups[dept].push(c);
-    });
-    
-    // Sort contacts within each department by hierarchy (roots first, then by reports)
-    Object.keys(groups).forEach((dept) => {
-      const deptContacts = groups[dept as Department];
-      const sorted = sortByHierarchy(deptContacts, contacts);
-      groups[dept as Department] = sorted;
-    });
-    
-    return groups;
-  }, [contacts]);
+  const handleNodeClick = useCallback((contact: StoredContact) => {
+    setSelectedContact(contact);
+  }, []);
 
-  // Sort contacts by hierarchy within department
-  function sortByHierarchy(deptContacts: StoredContact[], allContacts: StoredContact[]): StoredContact[] {
-    const roots: StoredContact[] = [];
-    const hasReports: StoredContact[] = [];
-    const leaves: StoredContact[] = [];
-    
-    deptContacts.forEach((c) => {
-      const isRoot = !c.org?.reportsToId;
-      const hasDirectReports = allContacts.some((other) => other.org?.reportsToId === c.id);
-      
-      if (isRoot && hasDirectReports) {
-        roots.push(c);
-      } else if (isRoot) {
-        leaves.push(c);
-      } else if (hasDirectReports) {
-        hasReports.push(c);
-      } else {
-        leaves.push(c);
-      }
-    });
-    
-    return [...roots, ...hasReports, ...leaves];
-  }
-
-  const handleSetOrgRole = (contactId: string, role: OrgRole) => {
-    const contact = contacts.find(c => c.id === contactId);
-    if (contact) {
-      const currentOrg = contact.org || { ...DEFAULT_ORG };
-      updateContact(contactId, { org: { ...currentOrg, role } });
-      onContactUpdate();
-    }
-  };
-
-  const handleSetInfluence = (contactId: string, level: InfluenceLevel) => {
-    const contact = contacts.find(c => c.id === contactId);
-    if (contact) {
-      const currentOrg = contact.org || { ...DEFAULT_ORG };
-      updateContact(contactId, { org: { ...currentOrg, influence: level } });
-      onContactUpdate();
-    }
-  };
-
-  const handleSetManager = (contactId: string, managerId: string | null) => {
-    const contact = contacts.find(c => c.id === contactId);
-    if (contact) {
-      const currentOrg = contact.org || { ...DEFAULT_ORG };
-      updateContact(contactId, { org: { ...currentOrg, reportsToId: managerId } });
-      setShowManagerPicker(false);
-      setEditingContact(null);
-      onContactUpdate();
-      
-      if (managerId) {
-        const manager = contacts.find(c => c.id === managerId);
-        toast({
-          title: "Reporting line set",
-          description: `${contact.name} now reports to ${manager?.name || 'Unknown'}`,
-        });
-      }
-    }
-  };
-
-  const handleDragStart = (e: React.DragEvent, contactId: string) => {
-    if (!editMode) return;
-    e.dataTransfer.setData('contactId', contactId);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    if (!editMode) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  // Check if targetId is a descendant of sourceId (would create cycle)
-  const isDescendant = useCallback((sourceId: string, targetId: string): boolean => {
+  // Check if setting managerId as sourceId's manager would create a cycle
+  const wouldCreateCycle = useCallback((sourceId: string, managerId: string): boolean => {
     const visited = new Set<string>();
     const check = (currentId: string): boolean => {
+      if (currentId === sourceId) return true;
       if (visited.has(currentId)) return false;
       visited.add(currentId);
       
-      const directReports = contacts.filter(c => c.org?.reportsToId === currentId);
-      for (const report of directReports) {
-        if (report.id === targetId) return true;
-        if (check(report.id)) return true;
+      const contact = contacts.find(c => c.id === currentId);
+      if (contact?.org?.reportsToId) {
+        return check(contact.org.reportsToId);
       }
       return false;
     };
-    return check(sourceId);
+    return check(managerId);
   }, [contacts]);
 
-  const handleDrop = (e: React.DragEvent, targetId: string) => {
-    if (!editMode) return;
-    e.preventDefault();
-    const sourceId = e.dataTransfer.getData('contactId');
+  // Handle setting manager from drag-drop connection
+  const handleSetManager = useCallback((sourceId: string, managerId: string) => {
+    if (sourceId === managerId) return;
     
-    if (sourceId && sourceId !== targetId) {
-      // Check for cycle prevention
-      if (isDescendant(sourceId, targetId)) {
-        toast({
-          title: "Cannot create reporting loop",
-          description: "This would create a circular reporting structure.",
-          variant: "destructive",
-        });
-        return;
-      }
-      setDragTarget({ sourceId, targetId });
-    }
-  };
-
-  const confirmDragDrop = () => {
-    if (!dragTarget) return;
-    
-    // Double-check cycle prevention before confirming
-    if (isDescendant(dragTarget.sourceId, dragTarget.targetId)) {
+    // Check for cycle
+    if (wouldCreateCycle(sourceId, managerId)) {
       toast({
         title: "Cannot create reporting loop",
         description: "This would create a circular reporting structure.",
         variant: "destructive",
       });
-      setDragTarget(null);
       return;
     }
     
-    handleSetManager(dragTarget.sourceId, dragTarget.targetId);
-    setDragTarget(null);
-  };
+    const contact = contacts.find(c => c.id === sourceId);
+    if (contact) {
+      const currentOrg = contact.org || { ...DEFAULT_ORG };
+      updateContact(sourceId, { org: { ...currentOrg, reportsToId: managerId } });
+      onContactUpdate();
+      
+      const manager = contacts.find(c => c.id === managerId);
+      toast({
+        title: "Reporting line set",
+        description: `${contact.name} now reports to ${manager?.name || 'Unknown'}`,
+      });
+    }
+  }, [contacts, wouldCreateCycle, onContactUpdate, toast]);
 
-  const cancelDragDrop = () => {
-    setDragTarget(null);
-  };
+  const handleRelayout = useCallback(() => {
+    setRelayoutKey((k) => k + 1);
+    toast({ title: "Layout refreshed" });
+  }, [toast]);
 
-  const handleClearAllReportingLines = () => {
+  const handleClearAllReportingLines = useCallback(() => {
     const previousManagers = clearAllReportingLines(contacts);
     setShowClearConfirm(false);
     onContactUpdate();
@@ -279,7 +167,19 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         </Button>
       ),
     });
-  };
+  }, [contacts, onContactUpdate, toast]);
+
+  // Quick edit handlers
+  const handleQuickEditField = useCallback((field: 'department' | 'role' | 'influence' | 'reportsToId', value: string | null) => {
+    if (!selectedContact) return;
+    
+    const currentOrg = selectedContact.org || { ...DEFAULT_ORG };
+    const updatedOrg = { ...currentOrg, [field]: value };
+    
+    updateContact(selectedContact.id, { org: updatedOrg });
+    setSelectedContact({ ...selectedContact, org: updatedOrg });
+    onContactUpdate();
+  }, [selectedContact, onContactUpdate]);
 
   // Empty state
   if (contacts.length === 0) {
@@ -291,93 +191,87 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     );
   }
 
-  // Check if any contacts have departments assigned
   const hasDepartments = contacts.some(c => c.org?.department && c.org.department !== 'UNKNOWN');
   const hasReportingLines = contacts.some(c => c.org?.reportsToId);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Controls Row */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between gap-2">
         {/* View Type Segmented Control */}
         <Tabs value={viewType} onValueChange={(v) => setViewType(v as ViewType)}>
           <TabsList className="h-8">
-            <TabsTrigger value="chart" className="text-xs gap-1 px-3" data-testid="tab-org-chart">
+            <TabsTrigger value="org" className="text-xs gap-1 px-3" data-testid="tab-org">
               <GitBranch className="w-3.5 h-3.5" />
-              Org Chart
+              Org
             </TabsTrigger>
-            <TabsTrigger value="influence" className="text-xs gap-1 px-3" data-testid="tab-influence-map">
+            <TabsTrigger value="influence" className="text-xs gap-1 px-3" data-testid="tab-influence">
               <Network className="w-3.5 h-3.5" />
-              Influence Map
+              Influence
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {/* Edit Mode Toggle */}
-        {viewType === 'chart' && (
-          <div className="flex items-center gap-2">
-            <Label htmlFor="edit-mode" className="text-xs text-muted-foreground">
-              {editMode ? 'Edit' : 'View'}
-            </Label>
-            <Switch
-              id="edit-mode"
-              checked={editMode}
-              onCheckedChange={setEditMode}
-              data-testid="switch-edit-mode"
-            />
+        {/* Icon Buttons (only for Org view) */}
+        {viewType === 'org' && (
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon"
+              variant={editMode ? "default" : "ghost"}
+              className="h-8 w-8"
+              onClick={() => setEditMode(!editMode)}
+              data-testid="button-edit-mode"
+              title={editMode ? "Exit edit mode" : "Enter edit mode"}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={handleRelayout}
+              data-testid="button-relayout"
+              title="Re-layout nodes"
+            >
+              <Sparkles className="w-4 h-4" />
+            </Button>
+            {hasReportingLines && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={() => setShowClearConfirm(true)}
+                data-testid="button-clear-reporting"
+                title="Clear all reporting lines"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Edit Mode Actions */}
-      {editMode && viewType === 'chart' && hasReportingLines && (
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => setShowClearConfirm(true)}
-            data-testid="button-clear-reporting"
-          >
-            <Trash2 className="w-4 h-4 mr-1.5" />
-            Clear all reporting lines
-          </Button>
-        </div>
-      )}
-
       {/* Helper Card for new users */}
-      {!hasDepartments && !hasReportingLines && (
+      {!hasDepartments && !hasReportingLines && viewType === 'org' && (
         <Card className="border-dashed">
-          <CardContent className="py-4 flex items-start gap-3">
+          <CardContent className="py-3 flex items-start gap-3">
             <Info className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
             <div className="text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Get started with Org Map</p>
-              <p>Use the Contacts tab to assign departments via Auto-group or manually edit each contact. 
-                 Turn on Edit mode above to drag contacts onto each other to set reporting lines.</p>
+              <p>Use the People tab to assign departments via Auto-group. Tap nodes to set reporting lines.</p>
             </div>
           </CardContent>
         </Card>
       )}
 
       {/* Main Content */}
-      {viewType === 'chart' ? (
-        <OrgChartView
+      {viewType === 'org' ? (
+        <OrgChartCanvas
+          key={relayoutKey}
           contacts={contacts}
-          departmentGroups={departmentGroups}
+          onNodeClick={handleNodeClick}
+          onSetManager={handleSetManager}
           editMode={editMode}
-          onSetOrgRole={handleSetOrgRole}
-          onSetInfluence={handleSetInfluence}
-          onSetManager={(id) => {
-            const contact = contacts.find(c => c.id === id);
-            if (contact) {
-              setEditingContact(contact);
-              setShowManagerPicker(true);
-            }
-          }}
-          onViewContact={onSelectContact}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
         />
       ) : (
         <InfluenceMapView
@@ -386,67 +280,124 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         />
       )}
 
-      {/* Manager Picker Dialog */}
-      <Dialog open={showManagerPicker} onOpenChange={setShowManagerPicker}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Set Manager for {editingContact?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+      {/* Bottom Sheet for Node Tap */}
+      <Drawer open={!!selectedContact} onOpenChange={(open) => !open && setSelectedContact(null)}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle className="flex items-center gap-2">
+              <User className="w-5 h-5" />
+              {selectedContact?.name || "Contact"}
+            </DrawerTitle>
+            {selectedContact?.title && (
+              <p className="text-sm text-muted-foreground">{selectedContact.title}</p>
+            )}
+          </DrawerHeader>
+          <div className="p-4 space-y-4">
+            {/* Department Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Department</label>
+              <Select
+                value={selectedContact?.org?.department || 'UNKNOWN'}
+                onValueChange={(value) => handleQuickEditField('department', value as Department)}
+              >
+                <SelectTrigger data-testid="select-department">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENT_ORDER.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
+                      {DEPARTMENT_LABELS[dept]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Influence Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Influence Level</label>
+              <Select
+                value={selectedContact?.org?.influence || 'UNKNOWN'}
+                onValueChange={(value) => handleQuickEditField('influence', value as InfluenceLevel)}
+              >
+                <SelectTrigger data-testid="select-influence">
+                  <SelectValue placeholder="Select influence" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="UNKNOWN">Unknown</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Role Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Org Role</label>
+              <Select
+                value={selectedContact?.org?.role || 'UNKNOWN'}
+                onValueChange={(value) => handleQuickEditField('role', value as OrgRole)}
+              >
+                <SelectTrigger data-testid="select-role">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CHAMPION">Champion</SelectItem>
+                  <SelectItem value="NEUTRAL">Neutral</SelectItem>
+                  <SelectItem value="BLOCKER">Blocker</SelectItem>
+                  <SelectItem value="UNKNOWN">Unknown</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Reports To Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Reports To</label>
+              <Select
+                value={selectedContact?.org?.reportsToId || '_none'}
+                onValueChange={(value) => handleQuickEditField('reportsToId', value === '_none' ? null : value)}
+              >
+                <SelectTrigger data-testid="select-manager">
+                  <SelectValue placeholder="Select manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">No Manager (Top Level)</SelectItem>
+                  {contacts
+                    .filter((c) => c.id !== selectedContact?.id)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name || c.email || "Unknown"}
+                        {c.title && ` - ${c.title}`}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* View Full Profile Button */}
             <Button
               variant="outline"
-              className="w-full justify-start"
-              onClick={() => handleSetManager(editingContact!.id, null)}
+              className="w-full"
+              onClick={() => {
+                if (selectedContact) {
+                  onSelectContact(selectedContact);
+                  setSelectedContact(null);
+                }
+              }}
+              data-testid="button-view-profile"
             >
-              <Minus className="w-4 h-4 mr-2" />
-              No Manager (Top Level)
+              <User className="w-4 h-4 mr-2" />
+              View Full Profile
             </Button>
-            {contacts
-              .filter((c) => c.id !== editingContact?.id)
-              .map((c) => (
-                <Button
-                  key={c.id}
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleSetManager(editingContact!.id, c.id)}
-                >
-                  <User className="w-4 h-4 mr-2" />
-                  <span className="truncate">{c.name}</span>
-                  {c.title && (
-                    <span className="text-muted-foreground text-xs ml-2 truncate">
-                      {c.title}
-                    </span>
-                  )}
-                </Button>
-              ))}
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Drag-Drop Confirmation Dialog */}
-      <Dialog open={!!dragTarget} onOpenChange={() => setDragTarget(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Set Reporting Line</DialogTitle>
-            <DialogDescription>
-              {dragTarget && (
-                <>
-                  Set <strong>{contacts.find(c => c.id === dragTarget.sourceId)?.name}</strong> to report to{' '}
-                  <strong>{contacts.find(c => c.id === dragTarget.targetId)?.name}</strong>?
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={cancelDragDrop}>
-              Cancel
-            </Button>
-            <Button onClick={confirmDragDrop} data-testid="button-confirm-reporting">
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <DrawerFooter>
+            <DrawerClose asChild>
+              <Button variant="outline" data-testid="button-close-drawer">Done</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* Clear All Confirmation Dialog */}
       <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
@@ -468,78 +419,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-// Org Chart View with Department Swimlanes
-interface OrgChartViewProps {
-  contacts: StoredContact[];
-  departmentGroups: Record<Department, StoredContact[]>;
-  editMode: boolean;
-  onSetOrgRole: (contactId: string, role: OrgRole) => void;
-  onSetInfluence: (contactId: string, level: InfluenceLevel) => void;
-  onSetManager: (contactId: string) => void;
-  onViewContact: (contact: StoredContact) => void;
-  onDragStart: (e: React.DragEvent, contactId: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, targetId: string) => void;
-}
-
-function OrgChartView({
-  contacts,
-  departmentGroups,
-  editMode,
-  onSetOrgRole,
-  onSetInfluence,
-  onSetManager,
-  onViewContact,
-  onDragStart,
-  onDragOver,
-  onDrop,
-}: OrgChartViewProps) {
-  // Filter to only show departments that have contacts
-  const activeDepartments = DEPARTMENT_ORDER.filter((dept) => departmentGroups[dept].length > 0);
-  
-  if (activeDepartments.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Users className="w-10 h-10 mx-auto mb-2 opacity-50" />
-        <p>No contacts with assigned departments.</p>
-        <p className="text-sm mt-1">Use Auto-group in the Contacts tab to get started.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {activeDepartments.map((dept) => (
-        <div key={dept} className={`border-l-4 ${DEPARTMENT_COLORS[dept]} pl-3 space-y-2`}>
-          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-            {DEPARTMENT_LABELS[dept]}
-            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-              {departmentGroups[dept].length}
-            </Badge>
-          </h4>
-          <div className="flex flex-wrap gap-3">
-            {departmentGroups[dept].map((contact) => (
-              <OrgNode
-                key={contact.id}
-                contact={contact}
-                allContacts={contacts}
-                editMode={editMode}
-                onSetOrgRole={onSetOrgRole}
-                onSetInfluence={onSetInfluence}
-                onSetManager={() => onSetManager(contact.id)}
-                onViewContact={() => onViewContact(contact)}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -687,40 +566,36 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
         </div>
       </div>
 
-      {/* Graph Container */}
-      <div 
-        ref={containerRef} 
-        className="border rounded-lg bg-card overflow-hidden"
-        style={{ height: dimensions.height }}
-        data-testid="influence-map-container"
-      >
-        {ForceGraph ? (
+      {/* Force Graph */}
+      <div ref={containerRef} className="rounded-lg border bg-background/50 overflow-hidden" data-testid="influence-map-canvas">
+        {ForceGraph && (
           <ForceGraph
             graphData={graphData}
             width={dimensions.width}
             height={dimensions.height}
-            nodeLabel={(node: GraphNode) => `${node.name}${node.title ? ` - ${node.title}` : ''}`}
-            nodeColor={(node: GraphNode) => node.color}
+            nodeRelSize={1}
             nodeVal={(node: GraphNode) => node.val}
-            linkColor={() => 'rgba(156, 163, 175, 0.3)'}
+            nodeColor={(node: GraphNode) => node.color}
+            nodeLabel={(node: GraphNode) => `${node.name}${node.title ? ` - ${node.title}` : ''}`}
+            linkColor={() => '#d1d5db'}
             linkWidth={1}
             onNodeClick={handleNodeClick}
             cooldownTicks={100}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-              const label = node.name?.split(' ')[0] || '';
-              const fontSize = Math.max(8 / globalScale, 3);
+              const label = node.name;
+              const fontSize = 10 / globalScale;
               ctx.font = `${fontSize}px Sans-Serif`;
               
               // Draw node circle
               ctx.beginPath();
-              ctx.arc(node.x, node.y, node.val / 2, 0, 2 * Math.PI);
+              ctx.arc(node.x, node.y, node.val, 0, 2 * Math.PI);
               ctx.fillStyle = node.color;
               ctx.fill();
               
               // Draw ring for influence
               if (node.influence !== 'UNKNOWN') {
                 ctx.strokeStyle = node.influence === 'HIGH' ? '#f97316' : 
-                                  node.influence === 'MEDIUM' ? '#eab308' : '#3b82f6';
+                                  node.influence === 'MEDIUM' ? '#eab308' : '#60a5fa';
                 ctx.lineWidth = 2 / globalScale;
                 ctx.stroke();
               }
@@ -728,174 +603,12 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
               // Draw label below node
               ctx.textAlign = 'center';
               ctx.textBaseline = 'top';
-              ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-              ctx.fillText(label, node.x, node.y + node.val / 2 + 2);
+              ctx.fillStyle = '#374151';
+              ctx.fillText(label, node.x, node.y + node.val + 2);
             }}
           />
-        ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            Loading visualization...
-          </div>
         )}
       </div>
-
-      <p className="text-xs text-center text-muted-foreground">
-        Click on a node to view contact details. Drag to rearrange.
-      </p>
     </div>
-  );
-}
-
-// Individual Org Node Component
-interface OrgNodeProps {
-  contact: StoredContact;
-  allContacts: StoredContact[];
-  editMode: boolean;
-  onSetOrgRole: (contactId: string, role: OrgRole) => void;
-  onSetInfluence: (contactId: string, level: InfluenceLevel) => void;
-  onSetManager: () => void;
-  onViewContact: () => void;
-  onDragStart: (e: React.DragEvent, contactId: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, targetId: string) => void;
-}
-
-function OrgNode({
-  contact,
-  allContacts,
-  editMode,
-  onSetOrgRole,
-  onSetInfluence,
-  onSetManager,
-  onViewContact,
-  onDragStart,
-  onDragOver,
-  onDrop,
-}: OrgNodeProps) {
-  const roleConfig: Record<OrgRole, { icon: typeof Shield; color: string }> = {
-    CHAMPION: { icon: Shield, color: "text-green-600 dark:text-green-400" },
-    NEUTRAL: { icon: Minus, color: "text-gray-500" },
-    BLOCKER: { icon: AlertTriangle, color: "text-red-600 dark:text-red-400" },
-    UNKNOWN: { icon: CircleDot, color: "text-gray-400" },
-  };
-
-  const influenceColors: Record<InfluenceLevel, string> = {
-    HIGH: "border-orange-400",
-    MEDIUM: "border-yellow-400",
-    LOW: "border-blue-400",
-    UNKNOWN: "border-border",
-  };
-
-  const RoleIcon = roleConfig[contact.org?.role || 'UNKNOWN'].icon;
-  const roleColor = roleConfig[contact.org?.role || 'UNKNOWN'].color;
-  const borderColor = influenceColors[contact.org?.influence || 'UNKNOWN'];
-
-  // Find manager name
-  const manager = contact.org?.reportsToId
-    ? allContacts.find((c) => c.id === contact.org?.reportsToId)
-    : null;
-
-  // Find direct reports
-  const directReports = allContacts.filter((c) => c.org?.reportsToId === contact.id);
-
-  return (
-    <Card
-      className={`w-44 border-2 ${borderColor} ${editMode ? 'cursor-grab' : 'hover-elevate cursor-pointer'}`}
-      draggable={editMode}
-      onDragStart={(e) => onDragStart(e, contact.id)}
-      onDragOver={onDragOver}
-      onDrop={(e) => onDrop(e, contact.id)}
-      onClick={!editMode ? onViewContact : undefined}
-      data-testid={`org-node-${contact.id}`}
-    >
-      <CardContent className="p-3 space-y-2">
-        <div className="flex items-start justify-between gap-1">
-          {editMode && (
-            <GripVertical className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="font-medium text-sm truncate" title={contact.name}>
-              {contact.name || "Unknown"}
-            </p>
-            <p className="text-[10px] text-muted-foreground truncate" title={contact.title}>
-              {contact.title || "No title"}
-            </p>
-          </div>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={(e) => e.stopPropagation()}>
-                <MoreVertical className="w-3 h-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={onViewContact}>
-                <Eye className="w-4 h-4 mr-2" />
-                View Full Contact
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onSetManager}>
-                <User className="w-4 h-4 mr-2" />
-                Set Manager
-              </DropdownMenuItem>
-              
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[10px]">Org Role</DropdownMenuLabel>
-              {(['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN'] as OrgRole[]).map((role) => (
-                <DropdownMenuItem
-                  key={role}
-                  onClick={() => onSetOrgRole(contact.id, role)}
-                >
-                  {contact.org?.role === role && <Check className="w-4 h-4 mr-2" />}
-                  {contact.org?.role !== role && <span className="w-4 mr-2" />}
-                  {role.charAt(0) + role.slice(1).toLowerCase()}
-                </DropdownMenuItem>
-              ))}
-              
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[10px]">Influence</DropdownMenuLabel>
-              {(['HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'] as InfluenceLevel[]).map((level) => (
-                <DropdownMenuItem
-                  key={level}
-                  onClick={() => onSetInfluence(contact.id, level)}
-                >
-                  {contact.org?.influence === level && <Check className="w-4 h-4 mr-2" />}
-                  {contact.org?.influence !== level && <span className="w-4 mr-2" />}
-                  {level.charAt(0) + level.slice(1).toLowerCase()}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {/* Role and Influence chips */}
-        <div className="flex items-center gap-1 flex-wrap">
-          {contact.org?.role && contact.org.role !== 'UNKNOWN' && (
-            <div className={`flex items-center gap-0.5 ${roleColor}`}>
-              <RoleIcon className="w-3 h-3" />
-              <span className="text-[9px] font-medium">{contact.org.role.charAt(0) + contact.org.role.slice(1).toLowerCase()}</span>
-            </div>
-          )}
-          {contact.org?.influence && contact.org.influence !== 'UNKNOWN' && (
-            <span className="text-[9px] text-muted-foreground">
-              {contact.org.influence.charAt(0) + contact.org.influence.slice(1).toLowerCase()}
-            </span>
-          )}
-        </div>
-
-        {/* Manager indicator */}
-        {manager && (
-          <p className="text-[9px] text-muted-foreground truncate">
-            Reports to: {manager.name}
-          </p>
-        )}
-
-        {/* Direct reports count */}
-        {directReports.length > 0 && (
-          <p className="text-[9px] text-muted-foreground">
-            {directReports.length} direct report{directReports.length !== 1 ? 's' : ''}
-          </p>
-        )}
-      </CardContent>
-    </Card>
   );
 }
