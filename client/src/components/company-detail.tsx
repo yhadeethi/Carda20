@@ -17,6 +17,21 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -41,6 +56,8 @@ import {
   Wand2,
   Pencil,
   Briefcase,
+  Settings2,
+  X,
 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
@@ -58,6 +75,8 @@ import {
   OrgRole,
   InfluenceLevel,
   Department,
+  RelationshipStrength,
+  DEFAULT_ORG,
   autoGroupByDepartment,
   batchUpdateContacts,
   revertAutoGroup,
@@ -93,6 +112,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const [notesSaved, setNotesSaved] = useState(true);
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'ALL'>('ALL');
   const [undoState, setUndoState] = useState<Map<string, Department> | null>(null);
+  const [quickEditContact, setQuickEditContact] = useState<StoredContact | null>(null);
   const { toast } = useToast();
 
   // Load company and contacts
@@ -176,6 +196,23 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const handleEditOrg = useCallback(() => {
     setActiveTab('orgmap');
   }, []);
+
+  // Quick edit org field handlers
+  const handleQuickEditField = useCallback((field: keyof StoredContact['org'], value: string | null) => {
+    if (!quickEditContact) return;
+    
+    const currentOrg = quickEditContact.org || { ...DEFAULT_ORG };
+    const updatedOrg = { ...currentOrg, [field]: value };
+    
+    updateContact(quickEditContact.id, { org: updatedOrg });
+    setQuickEditContact({ ...quickEditContact, org: updatedOrg });
+    refreshContacts();
+  }, [quickEditContact, refreshContacts]);
+
+  const handleClearManager = useCallback(() => {
+    handleQuickEditField('reportsToId', null);
+    toast({ title: "Manager cleared" });
+  }, [handleQuickEditField, toast]);
 
   const handleNotesChange = (value: string) => {
     setNotes(value);
@@ -327,16 +364,28 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
                 filteredContacts.map((contact) => (
                   <div
                     key={contact.id}
-                    className="p-3 rounded-lg border bg-card hover-elevate cursor-pointer"
+                    className="p-3 rounded-lg border bg-card hover-elevate cursor-pointer relative group"
                     onClick={() => onSelectContact(contact)}
                     data-testid={`company-contact-${contact.id}`}
                   >
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="font-medium truncate">{contact.name || contact.email || "Unknown"}</span>
+                      <span className="font-medium truncate flex-1">{contact.name || contact.email || "Unknown"}</span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 shrink-0 opacity-60 group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQuickEditContact(contact);
+                        }}
+                        data-testid={`button-quick-edit-${contact.id}`}
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
                     </div>
                     {contact.title && (
-                      <p className="text-sm text-muted-foreground mt-0.5 ml-6 truncate">
+                      <p className="text-sm text-muted-foreground mt-0.5 ml-6 truncate pr-8">
                         {contact.title}
                       </p>
                     )}
@@ -392,6 +441,122 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Quick Edit Bottom Sheet */}
+      <Drawer open={!!quickEditContact} onOpenChange={(open) => !open && setQuickEditContact(null)}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle className="flex items-center gap-2">
+              <User className="w-5 h-5" />
+              {quickEditContact?.name || "Edit Contact"}
+            </DrawerTitle>
+            {quickEditContact?.title && (
+              <p className="text-sm text-muted-foreground">{quickEditContact.title}</p>
+            )}
+          </DrawerHeader>
+          <div className="p-4 space-y-4">
+            {/* Department Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Department</label>
+              <Select
+                value={quickEditContact?.org?.department || 'UNKNOWN'}
+                onValueChange={(value) => handleQuickEditField('department', value as Department)}
+              >
+                <SelectTrigger data-testid="select-department">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENT_ORDER.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
+                      {DEPARTMENT_LABELS[dept]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Role Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Org Role</label>
+              <Select
+                value={quickEditContact?.org?.role || 'UNKNOWN'}
+                onValueChange={(value) => handleQuickEditField('role', value as OrgRole)}
+              >
+                <SelectTrigger data-testid="select-role">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CHAMPION">Champion</SelectItem>
+                  <SelectItem value="NEUTRAL">Neutral</SelectItem>
+                  <SelectItem value="BLOCKER">Blocker</SelectItem>
+                  <SelectItem value="UNKNOWN">Unknown</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Influence Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Influence Level</label>
+              <Select
+                value={quickEditContact?.org?.influence || 'UNKNOWN'}
+                onValueChange={(value) => handleQuickEditField('influence', value as InfluenceLevel)}
+              >
+                <SelectTrigger data-testid="select-influence">
+                  <SelectValue placeholder="Select influence" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="UNKNOWN">Unknown</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Manager Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Reports To</label>
+              <Select
+                value={quickEditContact?.org?.reportsToId || '_none'}
+                onValueChange={(value) => handleQuickEditField('reportsToId', value === '_none' ? null : value)}
+              >
+                <SelectTrigger data-testid="select-manager">
+                  <SelectValue placeholder="Select manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">No Manager (Top Level)</SelectItem>
+                  {contacts
+                    .filter((c) => c.id !== quickEditContact?.id)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name || c.email || "Unknown"}
+                        {c.title && ` - ${c.title}`}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Clear Manager Button */}
+            {quickEditContact?.org?.reportsToId && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleClearManager}
+                data-testid="button-clear-manager"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Clear Manager
+              </Button>
+            )}
+          </div>
+          <DrawerFooter>
+            <DrawerClose asChild>
+              <Button variant="outline" data-testid="button-close-quick-edit">Done</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
