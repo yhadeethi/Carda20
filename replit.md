@@ -59,21 +59,25 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
 9. **Org Intelligence v2** - Company tracking and organizational mapping
    - **Contacts Hub redesign**: People/Companies segmented control (tabs)
    - **Companies auto-generation**: Companies created from contact data (company name or email domain)
-   - **Company Detail page**: Three-tab interface (Contacts, Org Map, Notes)
+   - **Company Detail page**: Three-tab interface (People, Org, Notes)
    - **Quick Edit Bottom Sheet**: Drawer to edit Department, Role, Influence, Manager for any contact
    - **Department Filter Chips**: Horizontal scroll filter by department (Exec, Legal, Project Delivery, Sales, Finance, Ops)
    - **Auto-group Button**: Automatically assigns departments based on job titles with undo support
-   - **Org Map Redesign**: Segmented control for Org Chart vs Influence Map views
-     - **Org Chart**: Department swimlanes with color-coded left borders, hierarchy sorting
-     - **Edit Mode Toggle**: Enables drag-and-drop to set reporting lines
-     - **Drag-Drop Confirmation**: Shows dialog to confirm manager assignment with cycle prevention
-     - **Clear All Reporting Lines**: Bulk action with undo toast
-   - **Influence Map**: Force-directed graph using react-force-graph-2d
-     - Node size = influence level (HIGH=20, MEDIUM=12, LOW=6)
-     - Node color = role (Champion=green, Neutral=gray, Blocker=red, Unknown=zinc)
-     - Links from reporting relationships
-     - Legend with all role colors
-     - Click node to view contact details
+   - **Org Map**: Segmented control for Org Chart vs Influence Map views
+     - **Org Chart (React Flow)**: Interactive canvas with dagre auto-layout
+       - Custom contact nodes with name, title, department pill
+       - Department color-coded node styling
+       - Pinch-zoom, pan, and fit-to-view controls
+       - Edit mode with drag-drop to set reporting lines
+       - Cycle detection prevents circular reporting structures
+       - Icon buttons: Pencil (edit), Sparkles (relayout), Trash (clear all)
+       - Bottom sheet on node tap for quick metadata editing
+     - **Influence Map**: Force-directed graph using react-force-graph-2d
+       - Node size = influence level (HIGH=20, MEDIUM=12, LOW=6)
+       - Node color = role (Champion=green, Neutral=gray, Blocker=red, Unknown=zinc)
+       - Links from reporting relationships
+       - Legend with all role colors
+       - Click node to view contact details
    - **Contact org metadata**: department, role, influence, reportsToId, relationshipStrength fields
    - **View in Org Map button**: Quick navigation from contact detail to company org map
    - Companies persisted in localStorage (key: `carda_companies_v1`)
@@ -86,8 +90,9 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
 - `pages/home-page.tsx` - Main scanner page with tab navigation and view management
 - `components/scan-tab.tsx` - Scan/paste modes, contact display, edit, vCard, View in Org Map
 - `components/contacts-hub.tsx` - People/Companies split view with search and filtering
-- `components/company-detail.tsx` - Company detail page with Contacts/Org Map/Notes tabs
-- `components/org-map.tsx` - Org Map MVP with seniority grouping and contact metadata editing
+- `components/company-detail.tsx` - Company detail page with People/Org/Notes tabs
+- `components/org-map.tsx` - Org Map with Org/Influence segmented control, icon buttons, bottom sheet
+- `components/org-chart-canvas.tsx` - React Flow canvas with dagre layout, custom nodes, drag-drop
 - `components/company-intel-card.tsx` - AI-generated intel display
 - `lib/contactsStorage.ts` - Contact CRUD with localStorage persistence
 - `lib/companiesStorage.ts` - Company CRUD with auto-generation from contacts
