@@ -1,0 +1,234 @@
+You are working on the Carda web app (existing codebase). Implement **Org Intelligence v2** inside the existing Company Detail page that currently has tabs: **Contacts / Org Map / Notes**.
+
+NON-NEGOTIABLES
+- Do NOT break existing Scan, Contacts, Events, Notes flows.
+- Keep styling consistent with current UI (mobile-first, clean, minimal).
+- No major redesign of header/nav.
+- All changes must be isolated to company/org features.
+- Make sure old saved data migrates safely (no crashes).
+
+================================================================================
+1) DATA MODEL + PERSISTENCE
+================================================================================
+
+1.1 Extend company contact records with org fields
+Wherever company contacts are stored (localStorage/store), extend each contact with:
+
+org: {
+  department: "EXEC" | "LEGAL" | "PROJECT_DELIVERY" | "SALES" | "FINANCE" | "OPS" | "UNKNOWN",
+  reportsToId: string | null,           // contactId of manager
+  role: "CHAMPION" | "NEUTRAL" | "BLOCKER" | "UNKNOWN",
+  influence: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN",
+  relationshipStrength?: "CLOSE" | "NORMAL" | "CASUAL" | "UNKNOWN"   // optional, default UNKNOWN if used
+}
+
+Defaults for any contact missing org:
+- department = "UNKNOWN"
+- reportsToId = null
+- role = "UNKNOWN"
+- influence = "UNKNOWN"
+- relationshipStrength = "UNKNOWN" (if implemented)
+
+1.2 Migration
+On load, if existing stored contacts do not have `org`, inject defaults safely.
+Never crash on older stored data.
+
+1.3 Update existing actions
+The existing contact menu actions already include:
+- View Full Contact
+- Set Manager
+- Org Role (Champion/Neutral/Blocker/Unknown)
+- Influence (High/Medium/Low/Unknown)
+
+Ensure these actions update the new `org` fields and immediately reflect everywhere
+(Contacts tab + Org Map tab + Influence Map).
+
+================================================================================
+2) COMPANY DETAIL > CONTACTS TAB (ORG-READY LIST)
+================================================================================
+
+2.1 Add Department filter chips row
+Directly under the company card (above the contact list), add filter chips:
+- All, Exec, Legal, Project Delivery, Sales, Finance, Ops, Unknown
+
+Selecting a chip filters the contacts by org.department.
+
+2.2 Add two buttons next to/under chips (responsive)
+- Auto-group
+- Edit Org
+
+2.3 Auto-group behavior (DETERMINISTIC, NO AI)
+Auto-group sets department from job title keywords.
+Rules (case-insensitive; match substrings):
+- LEGAL: "legal", "counsel", "law", "solicitor", "barrister", "company secretary", "secretary"
+- PROJECT_DELIVERY: "project", "delivery", "epc", "construction", "pm", "project manager", "site"
+- SALES: "sales", "commercial", "bd", "business development", "account", "partnerships"
+- FINANCE: "finance", "cfo", "accountant", "controller", "payable", "treasury"
+- OPS: "operations", "o&m", "asset", "engineering", "maintenance" (ONLY if not clearly delivery)
+- EXEC: "ceo", "coo", "cto", "director", "general manager", "gm", "head of", "vp", "chief"
+
+IMPORTANT:
+- Only overwrite department if it is currently "UNKNOWN" (do not destroy user edits).
+- After Auto-group, show toast: "Grouped X contacts" + Undo action.
+- Undo fully reverts departments changed by Auto-group.
+
+2.4 Contact row display improvements (still opens full contact on tap)
+Each contact row should show small pills/icons:
+- Department pill (e.g., "Legal")
+- Role indicator (Champion/Neutral/Blocker/Unknown)
+- Influence indicator (High/Medium/Low/Unknown)
+
+2.5 Quick edit actions (must be fast)
+Keep tap-to-open full contact.
+Add (or extend existing) 3-dot menu / bottom sheet with:
+- Set Department
+- Set Manager
+- Set Role
+- Set Influence
+- Clear Manager (if set)
+
+Use a bottom sheet modal with dropdown selectors.
+Changes persist immediately.
+
+2.6 “Edit Org” button
+When pressed:
+- Switch to Org Map tab
+- Automatically enable Edit Mode (see section 3)
+
+================================================================================
+3) COMPANY DETAIL > ORG MAP TAB (TWO VIEWS + EDIT MODE)
+================================================================================
+
+3.1 Top controls inside Org Map tab
+At top of Org Map:
+- Segmented control: [ Org Chart | Influence Map ]
+- Toggle: [ View | Edit ]  (default View)
+
+3.2 Org Chart view (STRUCTURED + DEPARTMENT SWIMLANES)
+Render department “swimlanes” in this order:
+1) Exec
+2) Legal
+3) Project Delivery
+4) Sales
+5) Finance
+6) Ops
+7) Unknown
+
+Each swimlane:
+- Header label (e.g., LEGAL)
+- Contains contacts assigned to that department
+- Display a simple hierarchy inside the lane:
+  - Roots = contacts with reportsToId = null OR manager not found
+  - Show roots at top; direct reports beneath (2–3 levels is enough)
+  - If deeper, collapse with “+N more” for performance
+
+If a department has contacts but no reporting lines:
+- Show list but also show helper text: “Set managers to build structure”
+
+3.3 Edit Mode interactions (Org Chart)
+When Edit toggle is ON:
+- Contact cards become draggable.
+- Drag a contact onto another contact card:
+  - Prompt: “Set {A} to report to {B}?” Confirm / Cancel
+  - Confirm sets reportsToId = B.id
+  - Show toast with Undo (reverts the previous reportsToId for that contact)
+
+- Long-press or 3-dot on a contact card shows bottom sheet:
+  - Set Department
+  - Set Manager
+  - Clear Manager
+  - Set Role
+  - Set Influence
+
+Add a “Clear all reporting lines” action (danger) with confirmation:
+- Sets reportsToId = null for all company contacts
+- Toast with Undo (restore previous reporting lines)
+
+================================================================================
+4) INFLUENCE MAP (FLUID / PHYSICS UI)
+================================================================================
+
+Goal: A modern “liquid” 2D physics map that feels like you’re moving a globe,
+but stays usable on mobile. Build 2D first (do NOT implement real 3D).
+
+4.1 Library preference
+Try `react-force-graph-2d`. If incompatible, implement with `d3-force` using canvas or SVG.
+Keep performance acceptable for 50–200 nodes.
+
+4.2 Nodes
+- Node size = influence:
+  HIGH largest, MEDIUM medium, LOW smaller, UNKNOWN smallest
+- Node ring color = role:
+  CHAMPION = green tone
+  BLOCKER = red tone
+  NEUTRAL = blue/gray tone
+  UNKNOWN = light gray
+- Label = FirstName LastName (truncate if long)
+- Show subtle hover/tap highlight.
+
+4.3 Clustering by department
+Apply mild clustering so same departments gravitate together.
+Also render subtle floating department labels near cluster centers
+(not hard boxes, no heavy backgrounds).
+
+4.4 Edges
+- Reporting lines (reportsToId) render as solid lines.
+- If relationshipStrength exists, optionally render dotted edges for those links
+(otherwise skip relationshipStrength entirely).
+
+4.5 Navigation & feel (important)
+- Smooth pan/zoom with inertia
+- Pinch zoom on mobile
+- Double tap to zoom in
+- Tap node opens the same bottom sheet editor as everywhere else
+
+4.6 Edit interactions (Influence Map)
+When Edit is ON:
+- Drag nodes freely.
+- When dropping node A near node B (within a reasonable radius),
+  prompt: “Set {A} to report to {B}?” Confirm / Cancel
+- Confirm sets reportsToId, and show toast with Undo.
+
+================================================================================
+5) EMPTY STATES + UX POLISH (MAKE IT SELF-EXPLANATORY)
+================================================================================
+
+5.1 Empty state helpers
+If no departments assigned (most UNKNOWN) and no managers:
+- Show a helper card:
+  “Start building the org. Try Auto-group, then set managers.”
+  Buttons: [Auto-group] [Enable Edit]
+
+5.2 Undo toasts (must exist)
+Provide Undo for:
+- Auto-group
+- Set manager changes
+- Clear all reporting lines
+
+5.3 Don’t spam modals
+Prefer bottom sheets and toasts.
+Keep UI consistent with existing Carda components/styles.
+
+================================================================================
+6) TESTING CHECKLIST (MUST PASS)
+================================================================================
+- Existing stored contacts load without crash (migration works).
+- Auto-group groups titles correctly and does NOT overwrite non-UNKNOWN departments.
+- Setting manager updates Org Chart hierarchy instantly.
+- Changes reflect immediately in Contacts tab and both Org Map views.
+- Switching between tabs does not lose state.
+- Works on iPhone viewport (safe areas, scrolling, no clipped controls).
+- Performance remains smooth with 100+ contacts.
+
+================================================================================
+7) DELIVERABLES
+================================================================================
+- Implement code changes across storage + UI components.
+- Keep code typed, clean, and consistent with existing structure.
+- After implementation, output a short summary:
+  - Which files changed
+  - How to test Org Intelligence v2 end-to-end in the UI
+
+If Influence Map library is difficult:
+- Implement Org Chart + Edit Mode + data model first,
+- then add Influence Map immediately after (same run if possible).

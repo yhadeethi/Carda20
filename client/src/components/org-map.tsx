@@ -84,19 +84,19 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
       Staff: [],
     };
     
-    // First, try to build tree from managerContactId relationships
-    const hasManagerRelationships = contacts.some((c) => c.managerContactId);
+    // First, try to build tree from org.reportsToId relationships
+    const hasManagerRelationships = contacts.some((c) => c.org?.reportsToId);
     
     if (hasManagerRelationships) {
-      // Use managerContactId for structure
-      const rootContacts = contacts.filter((c) => !c.managerContactId);
+      // Use org.reportsToId for structure
+      const rootContacts = contacts.filter((c) => !c.org?.reportsToId);
       const midContacts = contacts.filter((c) => {
-        if (!c.managerContactId) return false;
+        if (!c.org?.reportsToId) return false;
         // Check if this contact has reports
-        return contacts.some((other) => other.managerContactId === c.id);
+        return contacts.some((other) => other.org?.reportsToId === c.id);
       });
       const leafContacts = contacts.filter((c) => {
-        return c.managerContactId && !contacts.some((other) => other.managerContactId === c.id);
+        return c.org?.reportsToId && !contacts.some((other) => other.org?.reportsToId === c.id);
       });
       
       groups.Exec = rootContacts;
@@ -114,20 +114,32 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
   }, [contacts]);
 
   const handleSetOrgRole = (contactId: string, role: OrgRole) => {
-    updateContact(contactId, { orgRole: role });
-    onContactUpdate();
+    const contact = contacts.find(c => c.id === contactId);
+    if (contact) {
+      const currentOrg = contact.org || { department: 'UNKNOWN', reportsToId: null, role: 'UNKNOWN', influence: 'UNKNOWN', relationshipStrength: 'UNKNOWN' };
+      updateContact(contactId, { org: { ...currentOrg, role } });
+      onContactUpdate();
+    }
   };
 
   const handleSetInfluence = (contactId: string, level: InfluenceLevel) => {
-    updateContact(contactId, { influenceLevel: level });
-    onContactUpdate();
+    const contact = contacts.find(c => c.id === contactId);
+    if (contact) {
+      const currentOrg = contact.org || { department: 'UNKNOWN', reportsToId: null, role: 'UNKNOWN', influence: 'UNKNOWN', relationshipStrength: 'UNKNOWN' };
+      updateContact(contactId, { org: { ...currentOrg, influence: level } });
+      onContactUpdate();
+    }
   };
 
   const handleSetManager = (contactId: string, managerId: string | null) => {
-    updateContact(contactId, { managerContactId: managerId });
-    setShowManagerPicker(false);
-    setEditingContact(null);
-    onContactUpdate();
+    const contact = contacts.find(c => c.id === contactId);
+    if (contact) {
+      const currentOrg = contact.org || { department: 'UNKNOWN', reportsToId: null, role: 'UNKNOWN', influence: 'UNKNOWN', relationshipStrength: 'UNKNOWN' };
+      updateContact(contactId, { org: { ...currentOrg, reportsToId: managerId } });
+      setShowManagerPicker(false);
+      setEditingContact(null);
+      onContactUpdate();
+    }
   };
 
   // Empty state
@@ -307,26 +319,26 @@ interface OrgNodeProps {
 
 function OrgNode({ contact, allContacts, onSetOrgRole, onSetInfluence, onSetManager, onViewContact }: OrgNodeProps) {
   const roleConfig: Record<OrgRole, { icon: typeof Shield; color: string }> = {
-    Champion: { icon: Shield, color: "text-green-600 dark:text-green-400" },
-    Neutral: { icon: Minus, color: "text-gray-500" },
-    Blocker: { icon: AlertTriangle, color: "text-red-600 dark:text-red-400" },
-    Unknown: { icon: CircleDot, color: "text-gray-400" },
+    CHAMPION: { icon: Shield, color: "text-green-600 dark:text-green-400" },
+    NEUTRAL: { icon: Minus, color: "text-gray-500" },
+    BLOCKER: { icon: AlertTriangle, color: "text-red-600 dark:text-red-400" },
+    UNKNOWN: { icon: CircleDot, color: "text-gray-400" },
   };
 
   const influenceColors: Record<InfluenceLevel, string> = {
-    High: "border-orange-400",
-    Medium: "border-yellow-400",
-    Low: "border-blue-400",
-    Unknown: "border-border",
+    HIGH: "border-orange-400",
+    MEDIUM: "border-yellow-400",
+    LOW: "border-blue-400",
+    UNKNOWN: "border-border",
   };
 
-  const RoleIcon = roleConfig[contact.orgRole || 'Unknown'].icon;
-  const roleColor = roleConfig[contact.orgRole || 'Unknown'].color;
-  const borderColor = influenceColors[contact.influenceLevel || 'Unknown'];
+  const RoleIcon = roleConfig[contact.org?.role || 'UNKNOWN'].icon;
+  const roleColor = roleConfig[contact.org?.role || 'UNKNOWN'].color;
+  const borderColor = influenceColors[contact.org?.influence || 'UNKNOWN'];
 
   // Find manager name
-  const manager = contact.managerContactId
-    ? allContacts.find((c) => c.id === contact.managerContactId)
+  const manager = contact.org?.reportsToId
+    ? allContacts.find((c) => c.id === contact.org?.reportsToId)
     : null;
 
   return (
@@ -360,27 +372,27 @@ function OrgNode({ contact, allContacts, onSetOrgRole, onSetInfluence, onSetMana
               
               <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-[10px]">Org Role</DropdownMenuLabel>
-              {(['Champion', 'Neutral', 'Blocker', 'Unknown'] as OrgRole[]).map((role) => (
+              {(['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN'] as OrgRole[]).map((role) => (
                 <DropdownMenuItem
                   key={role}
                   onClick={() => onSetOrgRole(contact.id, role)}
                 >
-                  {contact.orgRole === role && <Check className="w-4 h-4 mr-2" />}
-                  {contact.orgRole !== role && <span className="w-4 mr-2" />}
-                  {role}
+                  {contact.org?.role === role && <Check className="w-4 h-4 mr-2" />}
+                  {contact.org?.role !== role && <span className="w-4 mr-2" />}
+                  {role.charAt(0) + role.slice(1).toLowerCase()}
                 </DropdownMenuItem>
               ))}
               
               <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-[10px]">Influence</DropdownMenuLabel>
-              {(['High', 'Medium', 'Low', 'Unknown'] as InfluenceLevel[]).map((level) => (
+              {(['HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'] as InfluenceLevel[]).map((level) => (
                 <DropdownMenuItem
                   key={level}
                   onClick={() => onSetInfluence(contact.id, level)}
                 >
-                  {contact.influenceLevel === level && <Check className="w-4 h-4 mr-2" />}
-                  {contact.influenceLevel !== level && <span className="w-4 mr-2" />}
-                  {level}
+                  {contact.org?.influence === level && <Check className="w-4 h-4 mr-2" />}
+                  {contact.org?.influence !== level && <span className="w-4 mr-2" />}
+                  {level.charAt(0) + level.slice(1).toLowerCase()}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -389,15 +401,15 @@ function OrgNode({ contact, allContacts, onSetOrgRole, onSetInfluence, onSetMana
 
         {/* Role and Influence chips */}
         <div className="flex items-center gap-1 flex-wrap">
-          {contact.orgRole && contact.orgRole !== 'Unknown' && (
+          {contact.org?.role && contact.org.role !== 'UNKNOWN' && (
             <div className={`flex items-center gap-0.5 ${roleColor}`}>
               <RoleIcon className="w-3 h-3" />
-              <span className="text-[9px] font-medium">{contact.orgRole}</span>
+              <span className="text-[9px] font-medium">{contact.org.role.charAt(0) + contact.org.role.slice(1).toLowerCase()}</span>
             </div>
           )}
-          {contact.influenceLevel && contact.influenceLevel !== 'Unknown' && (
+          {contact.org?.influence && contact.org.influence !== 'UNKNOWN' && (
             <span className="text-[9px] text-muted-foreground">
-              {contact.influenceLevel}
+              {contact.org.influence.charAt(0) + contact.org.influence.slice(1).toLowerCase()}
             </span>
           )}
         </div>
