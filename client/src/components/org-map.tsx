@@ -714,7 +714,7 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
   }, [contacts]);
 
   const hasData = contacts.length > 0;
-  const hasInfluenceData = contacts.some(c => c.org?.influence && c.org.influence !== 'UNKNOWN');
+  const isLoading = !ForceGraph;
 
   if (!hasData) {
     return (
@@ -725,14 +725,11 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
     );
   }
 
-  if (!hasInfluenceData) {
+  if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 text-center">
-        <Network className="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p className="font-semibold">Influence Map</p>
-        <p className="text-sm mt-1 max-w-[240px]">
-          Assign influence levels and roles to contacts to visualize their network.
-        </p>
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3" />
+        <p className="text-sm">Loading influence map...</p>
       </div>
     );
   }
