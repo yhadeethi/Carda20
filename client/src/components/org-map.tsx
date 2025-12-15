@@ -772,8 +772,14 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
       </div>
 
       {/* Force Graph Canvas */}
-      <div ref={containerRef} className="flex-1 min-h-0 relative" data-testid="influence-map-canvas">
-        {ForceGraph && dimensions.height > 0 && (
+      <div ref={containerRef} className="flex-1 min-h-[300px] relative" data-testid="influence-map-canvas">
+        {/* Show spinner while waiting for dimensions */}
+        {ForceGraph && (dimensions.width === 0 || dimensions.height === 0) && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          </div>
+        )}
+        {ForceGraph && dimensions.width > 0 && dimensions.height > 0 && (
           <ForceGraph
             ref={graphRef}
             graphData={graphData}
