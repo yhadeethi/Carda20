@@ -98,7 +98,7 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
         relative rounded-2xl border shadow-sm cursor-pointer
         transition-all duration-200 ease-out
         ${colors.bg} ${colors.border}
-        ${selected ? 'ring-2 ring-primary shadow-lg scale-[1.02]' : 'hover:shadow-md hover:scale-[1.01]'}
+        ${selected ? 'ring-2 ring-primary shadow-lg scale-[1.02]' : 'hover:shadow-md hover:scale-[1.01] active:scale-[0.98] active:shadow-sm'}
       `}
       style={{ width: NODE_WIDTH, minHeight: NODE_HEIGHT - 8 }}
       onClick={handleClick}

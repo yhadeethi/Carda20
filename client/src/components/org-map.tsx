@@ -375,85 +375,101 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         </AnimatePresence>
       </div>
 
-      {/* Bottom Sheet for Node Tap */}
+      {/* Bottom Sheet for Node Tap - Apple-style Quick Edit */}
       <Drawer open={!!selectedContact} onOpenChange={(open) => !open && setSelectedContact(null)}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle className="flex items-center gap-2">
-              <User className="w-5 h-5" />
-              {selectedContact?.name || "Contact"}
-            </DrawerTitle>
-            {selectedContact?.title && (
-              <p className="text-sm text-muted-foreground">{selectedContact.title}</p>
-            )}
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="pb-2">
+            <div className="flex items-center gap-3">
+              {/* Avatar */}
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-lg shrink-0">
+                {selectedContact?.name?.charAt(0)?.toUpperCase() || '?'}
+              </div>
+              <div className="min-w-0">
+                <DrawerTitle className="text-lg truncate">
+                  {selectedContact?.name || "Contact"}
+                </DrawerTitle>
+                {selectedContact?.title && (
+                  <p className="text-sm text-muted-foreground truncate">{selectedContact.title}</p>
+                )}
+              </div>
+            </div>
           </DrawerHeader>
-          <div className="p-4 space-y-4">
-            {/* Department Select */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Department</label>
-              <Select
-                value={selectedContact?.org?.department || 'UNKNOWN'}
-                onValueChange={(value) => handleQuickEditField('department', value as Department)}
-              >
-                <SelectTrigger data-testid="select-department">
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DEPARTMENT_ORDER.map((dept) => (
-                    <SelectItem key={dept} value={dept}>
-                      {DEPARTMENT_LABELS[dept]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          
+          <div className="px-4 pb-4 space-y-4 overflow-y-auto">
+            {/* Two-column grid for compact layout */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Department Select */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Department</label>
+                <Select
+                  value={selectedContact?.org?.department || 'UNKNOWN'}
+                  onValueChange={(value) => handleQuickEditField('department', value as Department)}
+                >
+                  <SelectTrigger className="h-9" data-testid="select-department">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENT_ORDER.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {DEPARTMENT_LABELS[dept]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Influence Select */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Influence</label>
+                <Select
+                  value={selectedContact?.org?.influence || 'UNKNOWN'}
+                  onValueChange={(value) => handleQuickEditField('influence', value as InfluenceLevel)}
+                >
+                  <SelectTrigger className="h-9" data-testid="select-influence">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="UNKNOWN">Unknown</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {/* Influence Select */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Influence Level</label>
-              <Select
-                value={selectedContact?.org?.influence || 'UNKNOWN'}
-                onValueChange={(value) => handleQuickEditField('influence', value as InfluenceLevel)}
-              >
-                <SelectTrigger data-testid="select-influence">
-                  <SelectValue placeholder="Select influence" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="HIGH">High</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="LOW">Low</SelectItem>
-                  <SelectItem value="UNKNOWN">Unknown</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Role Select */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Org Role</label>
-              <Select
-                value={selectedContact?.org?.role || 'UNKNOWN'}
-                onValueChange={(value) => handleQuickEditField('role', value as OrgRole)}
-              >
-                <SelectTrigger data-testid="select-role">
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CHAMPION">Champion</SelectItem>
-                  <SelectItem value="NEUTRAL">Neutral</SelectItem>
-                  <SelectItem value="BLOCKER">Blocker</SelectItem>
-                  <SelectItem value="UNKNOWN">Unknown</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Role Select - full width with Unknown option */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Org Role</label>
+              <div className="flex gap-2">
+                {(['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN'] as const).map((role) => (
+                  <Button
+                    key={role}
+                    variant={selectedContact?.org?.role === role || (!selectedContact?.org?.role && role === 'UNKNOWN') ? "default" : "outline"}
+                    size="sm"
+                    className={`flex-1 text-xs ${
+                      selectedContact?.org?.role === role || (!selectedContact?.org?.role && role === 'UNKNOWN') ? '' :
+                      role === 'CHAMPION' ? 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950' :
+                      role === 'BLOCKER' ? 'border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950' :
+                      ''
+                    }`}
+                    onClick={() => handleQuickEditField('role', role)}
+                    data-testid={`button-role-${role.toLowerCase()}`}
+                  >
+                    {role === 'CHAMPION' ? 'Champion' : role === 'NEUTRAL' ? 'Neutral' : role === 'BLOCKER' ? 'Blocker' : '—'}
+                  </Button>
+                ))}
+              </div>
             </div>
 
             {/* Reports To Select */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Reports To</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Reports To</label>
               <Select
                 value={selectedContact?.org?.reportsToId || '_none'}
                 onValueChange={(value) => handleQuickEditField('reportsToId', value === '_none' ? null : value)}
               >
-                <SelectTrigger data-testid="select-manager">
+                <SelectTrigger className="h-9" data-testid="select-manager">
                   <SelectValue placeholder="Select manager" />
                 </SelectTrigger>
                 <SelectContent>
@@ -469,27 +485,28 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 </SelectContent>
               </Select>
             </div>
-
-            {/* View Full Profile Button */}
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                if (selectedContact) {
-                  onSelectContact(selectedContact);
-                  setSelectedContact(null);
-                }
-              }}
-              data-testid="button-view-profile"
-            >
-              <User className="w-4 h-4 mr-2" />
-              View Full Profile
-            </Button>
           </div>
-          <DrawerFooter>
-            <DrawerClose asChild>
-              <Button variant="outline" data-testid="button-close-drawer">Done</Button>
-            </DrawerClose>
+          
+          <DrawerFooter className="pt-2 border-t">
+            <div className="flex gap-2">
+              <DrawerClose asChild>
+                <Button variant="outline" className="flex-1" data-testid="button-close-drawer">Done</Button>
+              </DrawerClose>
+              <Button
+                variant="default"
+                className="flex-1"
+                onClick={() => {
+                  if (selectedContact) {
+                    onSelectContact(selectedContact);
+                    setSelectedContact(null);
+                  }
+                }}
+                data-testid="button-view-profile"
+              >
+                <User className="w-4 h-4 mr-2" />
+                Full Profile
+              </Button>
+            </div>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
@@ -533,6 +550,7 @@ interface GraphNode {
   department: Department;
   val: number;
   color: string;
+  gradientColors?: { inner: string; outer: string };
 }
 
 interface GraphLink {
@@ -542,8 +560,10 @@ interface GraphLink {
 
 function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const graphRef = useRef<any>(null);
   const [dimensions, setDimensions] = useState({ width: 300, height: 300 });
   const [ForceGraph, setForceGraph] = useState<any>(null);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   
   // Dynamically import react-force-graph-2d
   useEffect(() => {
@@ -562,24 +582,43 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
     };
     
     updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+    return () => resizeObserver.disconnect();
   }, []);
 
-  // Build graph data
+  // Fit to view after initial layout
+  useEffect(() => {
+    if (graphRef.current && dimensions.width > 0 && dimensions.height > 0) {
+      setTimeout(() => {
+        graphRef.current?.zoomToFit(400, 60);
+      }, 500);
+    }
+  }, [ForceGraph, dimensions]);
+
+  // Build graph data with improved sizing
   const graphData = useMemo(() => {
     const influenceSize: Record<InfluenceLevel, number> = {
-      HIGH: 20,
-      MEDIUM: 12,
-      LOW: 6,
-      UNKNOWN: 4,
+      HIGH: 24,
+      MEDIUM: 16,
+      LOW: 10,
+      UNKNOWN: 8,
     };
 
     const roleColors: Record<OrgRole, string> = {
       CHAMPION: '#22c55e',
-      NEUTRAL: '#6b7280',
+      NEUTRAL: '#71717a',
       BLOCKER: '#ef4444',
       UNKNOWN: '#a1a1aa',
+    };
+
+    const roleGradientColors: Record<OrgRole, { inner: string; outer: string }> = {
+      CHAMPION: { inner: '#4ade80', outer: '#16a34a' },
+      NEUTRAL: { inner: '#a1a1aa', outer: '#52525b' },
+      BLOCKER: { inner: '#f87171', outer: '#dc2626' },
+      UNKNOWN: { inner: '#d4d4d8', outer: '#a1a1aa' },
     };
 
     const nodes: GraphNode[] = contacts.map((c) => ({
@@ -591,6 +630,7 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
       department: c.org?.department || 'UNKNOWN',
       val: influenceSize[c.org?.influence || 'UNKNOWN'],
       color: roleColors[c.org?.role || 'UNKNOWN'],
+      gradientColors: roleGradientColors[c.org?.role || 'UNKNOWN'],
     }));
 
     // Create links from reporting relationships
@@ -618,11 +658,11 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
 
   if (!hasInfluenceData) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 text-center">
         <Network className="w-12 h-12 mx-auto mb-3 opacity-50" />
         <p className="font-medium">Influence Map</p>
-        <p className="text-sm mt-1">
-          Assign influence levels to contacts to visualize their network.
+        <p className="text-sm mt-1 max-w-[240px]">
+          Assign influence levels and roles to contacts to visualize their network.
         </p>
       </div>
     );
@@ -637,69 +677,126 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
 
   return (
     <div className="h-full flex flex-col">
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground justify-center py-2 px-3 border-b bg-background/50" data-testid="influence-map-legend">
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium">Size:</span>
-          <span>Influence level</span>
+      {/* Compact Legend with Glass Effect */}
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground justify-center py-1.5 px-3 bg-background/60 backdrop-blur-sm border-b" data-testid="influence-map-legend">
+        <div className="flex items-center gap-1">
+          <span className="font-medium text-foreground/70">Size</span>
+          <span>=</span>
+          <span>Influence</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-          <span>Champion</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-gray-500" />
-          <span>Neutral</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-          <span>Blocker</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-zinc-400" />
-          <span>Unknown</span>
+        <div className="h-3 w-px bg-border" />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-green-500 shadow-sm" />
+            <span>Champion</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-zinc-500 shadow-sm" />
+            <span>Neutral</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm" />
+            <span>Blocker</span>
+          </div>
         </div>
       </div>
 
-      {/* Force Graph */}
-      <div ref={containerRef} className="flex-1 min-h-0" data-testid="influence-map-canvas">
+      {/* Force Graph Canvas */}
+      <div ref={containerRef} className="flex-1 min-h-0 relative" data-testid="influence-map-canvas">
         {ForceGraph && dimensions.height > 0 && (
           <ForceGraph
+            ref={graphRef}
             graphData={graphData}
             width={dimensions.width}
             height={dimensions.height}
             nodeRelSize={1}
             nodeVal={(node: GraphNode) => node.val}
             nodeColor={(node: GraphNode) => node.color}
-            nodeLabel={(node: GraphNode) => `${node.name}${node.title ? ` - ${node.title}` : ''}`}
-            linkColor={() => '#d1d5db'}
-            linkWidth={1}
+            nodeLabel=""
+            linkColor={() => 'rgba(156, 163, 175, 0.4)'}
+            linkWidth={1.5}
+            linkDirectionalParticles={0}
             onNodeClick={handleNodeClick}
+            onNodeHover={(node: GraphNode | null) => setHoveredNode(node?.id || null)}
             cooldownTicks={100}
+            d3AlphaDecay={0.02}
+            d3VelocityDecay={0.3}
+            warmupTicks={50}
+            nodeCanvasObjectMode={() => 'replace'}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+              const isHovered = hoveredNode === node.id;
+              const radius = node.val * (isHovered ? 1.15 : 1);
               const label = node.name;
-              const fontSize = 10 / globalScale;
-              ctx.font = `${fontSize}px Sans-Serif`;
               
-              // Draw node circle
+              // Shadow for depth
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+              ctx.shadowBlur = 8;
+              ctx.shadowOffsetX = 0;
+              ctx.shadowOffsetY = 2;
+              
+              // Create gradient fill for bubble effect
+              const gradient = ctx.createRadialGradient(
+                node.x - radius * 0.3,
+                node.y - radius * 0.3,
+                0,
+                node.x,
+                node.y,
+                radius
+              );
+              gradient.addColorStop(0, node.gradientColors?.inner || node.color);
+              gradient.addColorStop(1, node.gradientColors?.outer || node.color);
+              
+              // Draw main bubble
               ctx.beginPath();
-              ctx.arc(node.x, node.y, node.val, 0, 2 * Math.PI);
-              ctx.fillStyle = node.color;
+              ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
+              ctx.fillStyle = gradient;
               ctx.fill();
               
-              // Draw ring for influence
-              if (node.influence !== 'UNKNOWN') {
-                ctx.strokeStyle = node.influence === 'HIGH' ? '#f97316' : 
-                                  node.influence === 'MEDIUM' ? '#eab308' : '#60a5fa';
-                ctx.lineWidth = 2 / globalScale;
+              // Reset shadow for other elements
+              ctx.shadowColor = 'transparent';
+              ctx.shadowBlur = 0;
+              
+              // Draw subtle highlight for gloss effect
+              ctx.beginPath();
+              ctx.arc(node.x - radius * 0.25, node.y - radius * 0.25, radius * 0.35, 0, 2 * Math.PI);
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+              ctx.fill();
+              
+              // Draw influence ring for HIGH influence
+              if (node.influence === 'HIGH') {
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, radius + 3, 0, 2 * Math.PI);
+                ctx.strokeStyle = 'rgba(249, 115, 22, 0.6)';
+                ctx.lineWidth = 2;
                 ctx.stroke();
               }
               
-              // Draw label below node
+              // Draw label with smart positioning
+              const fontSize = Math.max(10, 11 / globalScale);
+              ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
               ctx.textAlign = 'center';
               ctx.textBaseline = 'top';
+              
+              // Label background pill for readability
+              const textWidth = ctx.measureText(label).width;
+              const labelY = node.y + radius + 4;
+              const pillPadding = 4;
+              const pillHeight = fontSize + 4;
+              
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+              ctx.beginPath();
+              ctx.roundRect(
+                node.x - textWidth / 2 - pillPadding,
+                labelY - 2,
+                textWidth + pillPadding * 2,
+                pillHeight,
+                3
+              );
+              ctx.fill();
+              
+              // Draw text
               ctx.fillStyle = '#374151';
-              ctx.fillText(label, node.x, node.y + node.val + 2);
+              ctx.fillText(label, node.x, labelY);
             }}
           />
         )}
