@@ -43,7 +43,6 @@ import {
   Company,
   getCompanyById,
   upsertCompany,
-  getContactCountForCompany,
   normalizeCompanyName,
   extractDomainFromEmail,
 } from "@/lib/companiesStorage";
@@ -54,7 +53,6 @@ import {
   OrgRole,
   InfluenceLevel,
   Department,
-  RelationshipStrength,
   DEFAULT_ORG,
   autoGroupByDepartment,
   batchUpdateContacts,
