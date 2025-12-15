@@ -1,12 +1,13 @@
 /**
- * Org Map Component for Org Intelligence v2 - Apple-Grade Design
+ * Org Map Component v2 - Apple-Grade Design
  * Features:
- * - Full-canvas layout with glass toolbar
- * - Segmented control: Org | Influence
+ * - Full-canvas layout with glass toolbar (iOS-compliant backdrop-filter)
+ * - Segmented control with spring animations: Org | Influence
  * - Toolbar buttons: Fit, Zoom +/-, Auto-layout, Edit toggle
  * - React Flow canvas with dagre layout
  * - Bottom sheet for node tap
  * - Force-directed graph for Influence Map
+ * - Subtle canvas background patterns for depth
  */
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
@@ -64,6 +65,21 @@ import { useToast } from "@/hooks/use-toast";
 import { OrgChartCanvas } from "@/components/org-chart-canvas";
 import { motion, AnimatePresence } from "framer-motion";
 
+// Dev-only console log
+if (process.env.NODE_ENV === 'development') {
+  console.log('OrgMap v2 mounted');
+}
+
+// QA Mode detection from URL
+function useQAMode(): boolean {
+  const [qaMode, setQaMode] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setQaMode(params.get('qa') === '1');
+  }, []);
+  return qaMode;
+}
+
 interface OrgMapProps {
   companyId: string;
   contacts: StoredContact[];
@@ -86,15 +102,23 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
 
 const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
 
+// Segmented control spring animation config
+const SPRING_CONFIG = { type: "spring", stiffness: 500, damping: 30 };
+
 export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }: OrgMapProps) {
+  const qaMode = useQAMode();
   const [viewType, setViewType] = useState<ViewType>('org');
   const [editMode, setEditMode] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [relayoutKey, setRelayoutKey] = useState(0);
-  const [zoomLevel, setZoomLevel] = useState(1);
   const canvasRef = useRef<{ fitView: () => void; zoomIn: () => void; zoomOut: () => void } | null>(null);
   const { toast } = useToast();
+
+  // Count edges for QA mode
+  const edgeCount = useMemo(() => {
+    return contacts.filter(c => c.org?.reportsToId).length;
+  }, [contacts]);
 
   const handleNodeClick = useCallback((contact: StoredContact) => {
     setSelectedContact(contact);
@@ -213,16 +237,45 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
   return (
     <div className="flex flex-col h-[calc(100vh-280px)] min-h-[400px]">
-      {/* Glass Toolbar */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-xl bg-background/80 backdrop-blur-xl border shadow-sm">
-        {/* View Type Segmented Control */}
+      {/* QA Mode Debug Panel */}
+      {qaMode && (
+        <div className="mb-2 p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-xs font-mono">
+          <div className="flex flex-wrap gap-3">
+            <span className="font-bold text-yellow-800 dark:text-yellow-200">🔧 QA Mode</span>
+            <span>View: <strong>{viewType}</strong></span>
+            <span>Nodes: <strong>{contacts.length}</strong></span>
+            <span>Edges: <strong>{edgeCount}</strong></span>
+            <span>Glass: <strong className="text-green-600">✓ active</strong></span>
+            <span className="ml-auto">OrgMap v2</span>
+          </div>
+        </div>
+      )}
+
+      {/* Glass Toolbar - iOS Safari compliant */}
+      <div 
+        className="flex items-center justify-between gap-2 px-3 py-2.5 mb-2 rounded-xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/30 dark:border-white/10 shadow-lg relative z-10"
+        style={{ WebkitBackdropFilter: 'blur(20px)' }}
+        data-testid="org-map-toolbar"
+      >
+        {/* Subtle top highlight for depth */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent rounded-t-xl" />
+        
+        {/* View Type Segmented Control using Tabs */}
         <Tabs value={viewType} onValueChange={(v) => setViewType(v as ViewType)}>
-          <TabsList className="h-8 bg-muted/50">
-            <TabsTrigger value="org" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-org">
+          <TabsList className="h-9 bg-muted/60 p-0.5">
+            <TabsTrigger 
+              value="org" 
+              className="text-xs gap-1.5 px-3 h-8 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
+              data-testid="tab-org"
+            >
               <GitBranch className="w-3.5 h-3.5" />
               Org
             </TabsTrigger>
-            <TabsTrigger value="influence" className="text-xs gap-1.5 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-influence">
+            <TabsTrigger 
+              value="influence" 
+              className="text-xs gap-1.5 px-3 h-8 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
+              data-testid="tab-influence"
+            >
               <Network className="w-3.5 h-3.5" />
               Influence
             </TabsTrigger>
@@ -235,7 +288,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8"
+            className="h-8 w-8 hover:bg-white/50 dark:hover:bg-white/10 active:scale-95 transition-transform"
             onClick={handleFitView}
             data-testid="button-fit-view"
             title="Fit to view"
@@ -243,22 +296,23 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
             <Maximize2 className="w-4 h-4" />
           </Button>
 
-          {/* Zoom Controls */}
-          <div className="flex items-center border rounded-lg overflow-hidden">
+          {/* Zoom Controls with joined styling */}
+          <div className="flex items-center bg-white/40 dark:bg-white/10 rounded-lg overflow-hidden border border-white/30 dark:border-white/10">
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 rounded-none border-r"
+              className="h-8 w-8 rounded-none hover:bg-white/60 dark:hover:bg-white/20 active:scale-95 transition-transform"
               onClick={handleZoomOut}
               data-testid="button-zoom-out"
               title="Zoom out"
             >
               <Minus className="w-3.5 h-3.5" />
             </Button>
+            <div className="w-px h-4 bg-border/50" />
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 rounded-none"
+              className="h-8 w-8 rounded-none hover:bg-white/60 dark:hover:bg-white/20 active:scale-95 transition-transform"
               onClick={handleZoomIn}
               data-testid="button-zoom-in"
               title="Zoom in"
@@ -268,14 +322,14 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
           </div>
 
           {/* Divider */}
-          <div className="w-px h-5 bg-border mx-1" />
+          <div className="w-px h-5 bg-border/40 mx-1" />
 
           {/* Auto-layout (only for Org view) */}
           {viewType === 'org' && (
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-white/50 dark:hover:bg-white/10 active:scale-95 transition-transform"
               onClick={handleRelayout}
               data-testid="button-relayout"
               title="Auto-layout"
@@ -289,7 +343,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
             <Button
               size="icon"
               variant={editMode ? "default" : "ghost"}
-              className="h-8 w-8"
+              className={`h-8 w-8 active:scale-95 transition-transform ${!editMode ? 'hover:bg-white/50 dark:hover:bg-white/10' : ''}`}
               onClick={() => setEditMode(!editMode)}
               data-testid="button-edit-mode"
               title={editMode ? "Exit edit mode" : "Edit reporting lines"}
@@ -303,7 +357,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-destructive hover:text-destructive"
+              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-red-50 dark:hover:bg-red-950/30 active:scale-95 transition-transform"
               onClick={() => setShowClearConfirm(true)}
               data-testid="button-clear-reporting"
               title="Clear all reporting lines"
@@ -327,7 +381,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               <CardContent className="py-3 flex items-start gap-3">
                 <Info className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
                 <div className="text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground mb-1">Get started with Org Map</p>
+                  <p className="font-semibold text-foreground mb-1">Get started with Org Map</p>
                   <p>Use the People tab to assign departments via Auto-group. Tap nodes to set reporting lines.</p>
                 </div>
               </CardContent>
@@ -336,17 +390,26 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         )}
       </AnimatePresence>
 
-      {/* Main Canvas Container */}
-      <div className="flex-1 min-h-0 rounded-xl overflow-hidden border bg-muted/30">
+      {/* Main Canvas Container with subtle background pattern */}
+      <div className="flex-1 min-h-0 rounded-xl overflow-hidden border bg-gradient-to-br from-slate-50/80 via-white to-slate-100/50 dark:from-gray-900/80 dark:via-gray-900 dark:to-gray-800/50 relative">
+        {/* Subtle grid/dot pattern for depth */}
+        <div 
+          className="absolute inset-0 opacity-[0.35] dark:opacity-[0.15] pointer-events-none"
+          style={{
+            backgroundImage: `radial-gradient(circle, #94a3b8 0.5px, transparent 0.5px)`,
+            backgroundSize: '24px 24px',
+          }}
+        />
+        
         <AnimatePresence mode="wait">
           {viewType === 'org' ? (
             <motion.div
               key="org"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.2 }}
-              className="h-full"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              className="h-full relative z-0"
             >
               <OrgChartCanvas
                 key={relayoutKey}
@@ -360,11 +423,11 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
           ) : (
             <motion.div
               key="influence"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
-              className="h-full"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              className="h-full relative z-0"
             >
               <InfluenceMapView
                 contacts={contacts}
@@ -378,34 +441,34 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
       {/* Bottom Sheet for Node Tap - Apple-style Quick Edit */}
       <Drawer open={!!selectedContact} onOpenChange={(open) => !open && setSelectedContact(null)}>
         <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="pb-2">
-            <div className="flex items-center gap-3">
-              {/* Avatar */}
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-lg shrink-0">
+          <DrawerHeader className="pb-3">
+            <div className="flex items-center gap-4">
+              {/* Avatar with gradient background */}
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-primary-foreground font-bold text-xl shrink-0 shadow-lg shadow-primary/20">
                 {selectedContact?.name?.charAt(0)?.toUpperCase() || '?'}
               </div>
               <div className="min-w-0">
-                <DrawerTitle className="text-lg truncate">
+                <DrawerTitle className="text-xl font-bold truncate">
                   {selectedContact?.name || "Contact"}
                 </DrawerTitle>
                 {selectedContact?.title && (
-                  <p className="text-sm text-muted-foreground truncate">{selectedContact.title}</p>
+                  <p className="text-sm text-muted-foreground truncate mt-0.5">{selectedContact.title}</p>
                 )}
               </div>
             </div>
           </DrawerHeader>
           
-          <div className="px-4 pb-4 space-y-4 overflow-y-auto">
+          <div className="px-4 pb-4 space-y-5 overflow-y-auto">
             {/* Two-column grid for compact layout */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               {/* Department Select */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Department</label>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</label>
                 <Select
                   value={selectedContact?.org?.department || 'UNKNOWN'}
                   onValueChange={(value) => handleQuickEditField('department', value as Department)}
                 >
-                  <SelectTrigger className="h-9" data-testid="select-department">
+                  <SelectTrigger className="h-10" data-testid="select-department">
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
@@ -419,13 +482,13 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               </div>
 
               {/* Influence Select */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Influence</label>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Influence</label>
                 <Select
                   value={selectedContact?.org?.influence || 'UNKNOWN'}
                   onValueChange={(value) => handleQuickEditField('influence', value as InfluenceLevel)}
                 >
-                  <SelectTrigger className="h-9" data-testid="select-influence">
+                  <SelectTrigger className="h-10" data-testid="select-influence">
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
@@ -438,38 +501,44 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               </div>
             </div>
 
-            {/* Role Select - full width with Unknown option */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Org Role</label>
-              <div className="flex gap-2">
-                {(['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN'] as const).map((role) => (
-                  <Button
-                    key={role}
-                    variant={selectedContact?.org?.role === role || (!selectedContact?.org?.role && role === 'UNKNOWN') ? "default" : "outline"}
-                    size="sm"
-                    className={`flex-1 text-xs ${
-                      selectedContact?.org?.role === role || (!selectedContact?.org?.role && role === 'UNKNOWN') ? '' :
-                      role === 'CHAMPION' ? 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950' :
-                      role === 'BLOCKER' ? 'border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950' :
-                      ''
-                    }`}
-                    onClick={() => handleQuickEditField('role', role)}
-                    data-testid={`button-role-${role.toLowerCase()}`}
-                  >
-                    {role === 'CHAMPION' ? 'Champion' : role === 'NEUTRAL' ? 'Neutral' : role === 'BLOCKER' ? 'Blocker' : '—'}
-                  </Button>
-                ))}
+            {/* Role Select - full width with better toggle buttons */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Org Role</label>
+              <div className="grid grid-cols-4 gap-2">
+                {(['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN'] as const).map((role) => {
+                  const isSelected = selectedContact?.org?.role === role || (!selectedContact?.org?.role && role === 'UNKNOWN');
+                  return (
+                    <button
+                      key={role}
+                      className={`
+                        h-10 rounded-lg text-xs font-medium transition-all duration-200
+                        active:scale-95
+                        ${isSelected 
+                          ? role === 'CHAMPION' ? 'bg-green-500 text-white shadow-md shadow-green-500/30' :
+                            role === 'BLOCKER' ? 'bg-red-500 text-white shadow-md shadow-red-500/30' :
+                            role === 'NEUTRAL' ? 'bg-gray-500 text-white shadow-md shadow-gray-500/30' :
+                            'bg-primary text-primary-foreground shadow-md shadow-primary/30'
+                          : 'bg-muted hover:bg-muted/80 text-muted-foreground border border-border'
+                        }
+                      `}
+                      onClick={() => handleQuickEditField('role', role)}
+                      data-testid={`button-role-${role.toLowerCase()}`}
+                    >
+                      {role === 'CHAMPION' ? 'Champion' : role === 'NEUTRAL' ? 'Neutral' : role === 'BLOCKER' ? 'Blocker' : '—'}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Reports To Select */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Reports To</label>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reports To</label>
               <Select
                 value={selectedContact?.org?.reportsToId || '_none'}
                 onValueChange={(value) => handleQuickEditField('reportsToId', value === '_none' ? null : value)}
               >
-                <SelectTrigger className="h-9" data-testid="select-manager">
+                <SelectTrigger className="h-10" data-testid="select-manager">
                   <SelectValue placeholder="Select manager" />
                 </SelectTrigger>
                 <SelectContent>
@@ -487,14 +556,14 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
             </div>
           </div>
           
-          <DrawerFooter className="pt-2 border-t">
-            <div className="flex gap-2">
+          <DrawerFooter className="pt-3 border-t">
+            <div className="flex gap-3">
               <DrawerClose asChild>
-                <Button variant="outline" className="flex-1" data-testid="button-close-drawer">Done</Button>
+                <Button variant="outline" className="flex-1 h-11" data-testid="button-close-drawer">Done</Button>
               </DrawerClose>
               <Button
                 variant="default"
-                className="flex-1"
+                className="flex-1 h-11"
                 onClick={() => {
                   if (selectedContact) {
                     onSelectContact(selectedContact);
@@ -601,10 +670,10 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
   // Build graph data with improved sizing
   const graphData = useMemo(() => {
     const influenceSize: Record<InfluenceLevel, number> = {
-      HIGH: 24,
-      MEDIUM: 16,
-      LOW: 10,
-      UNKNOWN: 8,
+      HIGH: 28,
+      MEDIUM: 18,
+      LOW: 12,
+      UNKNOWN: 10,
     };
 
     const roleColors: Record<OrgRole, string> = {
@@ -615,10 +684,10 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
     };
 
     const roleGradientColors: Record<OrgRole, { inner: string; outer: string }> = {
-      CHAMPION: { inner: '#4ade80', outer: '#16a34a' },
-      NEUTRAL: { inner: '#a1a1aa', outer: '#52525b' },
-      BLOCKER: { inner: '#f87171', outer: '#dc2626' },
-      UNKNOWN: { inner: '#d4d4d8', outer: '#a1a1aa' },
+      CHAMPION: { inner: '#86efac', outer: '#16a34a' },
+      NEUTRAL: { inner: '#d4d4d8', outer: '#52525b' },
+      BLOCKER: { inner: '#fca5a5', outer: '#dc2626' },
+      UNKNOWN: { inner: '#e5e7eb', outer: '#9ca3af' },
     };
 
     const nodes: GraphNode[] = contacts.map((c) => ({
@@ -660,7 +729,7 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 text-center">
         <Network className="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p className="font-medium">Influence Map</p>
+        <p className="font-semibold">Influence Map</p>
         <p className="text-sm mt-1 max-w-[240px]">
           Assign influence levels and roles to contacts to visualize their network.
         </p>
@@ -677,25 +746,29 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
 
   return (
     <div className="h-full flex flex-col">
-      {/* Compact Legend with Glass Effect */}
-      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground justify-center py-1.5 px-3 bg-background/60 backdrop-blur-sm border-b" data-testid="influence-map-legend">
-        <div className="flex items-center gap-1">
-          <span className="font-medium text-foreground/70">Size</span>
-          <span>=</span>
+      {/* Compact Legend with Glass Effect - iOS Safari compliant */}
+      <div 
+        className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground justify-center py-2 px-4 bg-white/60 dark:bg-gray-900/60 backdrop-blur-lg border-b border-white/25 dark:border-white/10 relative z-10"
+        style={{ WebkitBackdropFilter: 'blur(16px)' }}
+        data-testid="influence-map-legend"
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold text-foreground/80">Size</span>
+          <span className="text-muted-foreground/60">=</span>
           <span>Influence</span>
         </div>
-        <div className="h-3 w-px bg-border" />
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-green-500 shadow-sm" />
+        <div className="h-3 w-px bg-border/50" />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-green-400 to-green-600 shadow-sm shadow-green-500/30" />
             <span>Champion</span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-zinc-500 shadow-sm" />
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-zinc-400 to-zinc-600 shadow-sm" />
             <span>Neutral</span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm" />
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-red-400 to-red-600 shadow-sm shadow-red-500/30" />
             <span>Blocker</span>
           </div>
         </div>
@@ -713,7 +786,7 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
             nodeVal={(node: GraphNode) => node.val}
             nodeColor={(node: GraphNode) => node.color}
             nodeLabel=""
-            linkColor={() => 'rgba(156, 163, 175, 0.4)'}
+            linkColor={() => 'rgba(156, 163, 175, 0.35)'}
             linkWidth={1.5}
             linkDirectionalParticles={0}
             onNodeClick={handleNodeClick}
@@ -725,25 +798,27 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
             nodeCanvasObjectMode={() => 'replace'}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
               const isHovered = hoveredNode === node.id;
-              const radius = node.val * (isHovered ? 1.15 : 1);
+              const baseRadius = node.val;
+              const radius = baseRadius * (isHovered ? 1.2 : 1);
               const label = node.name;
               
-              // Shadow for depth
-              ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-              ctx.shadowBlur = 8;
+              // Strong shadow for depth
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+              ctx.shadowBlur = 12;
               ctx.shadowOffsetX = 0;
-              ctx.shadowOffsetY = 2;
+              ctx.shadowOffsetY = 4;
               
               // Create gradient fill for bubble effect
               const gradient = ctx.createRadialGradient(
-                node.x - radius * 0.3,
-                node.y - radius * 0.3,
+                node.x - radius * 0.35,
+                node.y - radius * 0.35,
                 0,
                 node.x,
                 node.y,
                 radius
               );
               gradient.addColorStop(0, node.gradientColors?.inner || node.color);
+              gradient.addColorStop(0.7, node.color);
               gradient.addColorStop(1, node.gradientColors?.outer || node.color);
               
               // Draw main bubble
@@ -756,47 +831,65 @@ function InfluenceMapView({ contacts, onSelectContact }: InfluenceMapViewProps) 
               ctx.shadowColor = 'transparent';
               ctx.shadowBlur = 0;
               
-              // Draw subtle highlight for gloss effect
+              // Draw gloss highlight (larger, more visible)
               ctx.beginPath();
-              ctx.arc(node.x - radius * 0.25, node.y - radius * 0.25, radius * 0.35, 0, 2 * Math.PI);
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+              ctx.arc(node.x - radius * 0.3, node.y - radius * 0.3, radius * 0.4, 0, 2 * Math.PI);
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
               ctx.fill();
               
               // Draw influence ring for HIGH influence
               if (node.influence === 'HIGH') {
                 ctx.beginPath();
-                ctx.arc(node.x, node.y, radius + 3, 0, 2 * Math.PI);
-                ctx.strokeStyle = 'rgba(249, 115, 22, 0.6)';
+                ctx.arc(node.x, node.y, radius + 4, 0, 2 * Math.PI);
+                ctx.strokeStyle = 'rgba(249, 115, 22, 0.7)';
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+              }
+              
+              // Hover ring effect
+              if (isHovered) {
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, radius + 2, 0, 2 * Math.PI);
+                ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
               }
               
               // Draw label with smart positioning
-              const fontSize = Math.max(10, 11 / globalScale);
-              ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+              const fontSize = Math.max(11, 12 / globalScale);
+              ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
               ctx.textAlign = 'center';
               ctx.textBaseline = 'top';
               
               // Label background pill for readability
               const textWidth = ctx.measureText(label).width;
-              const labelY = node.y + radius + 4;
-              const pillPadding = 4;
-              const pillHeight = fontSize + 4;
+              const labelY = node.y + radius + 6;
+              const pillPadding = 5;
+              const pillHeight = fontSize + 6;
               
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+              // Pill shadow
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+              ctx.shadowBlur = 4;
+              ctx.shadowOffsetY = 1;
+              
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
               ctx.beginPath();
               ctx.roundRect(
                 node.x - textWidth / 2 - pillPadding,
                 labelY - 2,
                 textWidth + pillPadding * 2,
                 pillHeight,
-                3
+                4
               );
               ctx.fill();
               
+              // Reset shadow
+              ctx.shadowColor = 'transparent';
+              ctx.shadowBlur = 0;
+              
               // Draw text
-              ctx.fillStyle = '#374151';
-              ctx.fillText(label, node.x, labelY);
+              ctx.fillStyle = '#1f2937';
+              ctx.fillText(label, node.x, labelY + 1);
             }}
           />
         )}

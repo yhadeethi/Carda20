@@ -1,10 +1,12 @@
 /**
- * OrgChartCanvas - Interactive React Flow org chart with dagre layout
+ * OrgChartCanvas v2 - Interactive React Flow org chart with dagre layout
  * Features:
  * - Automatic tree layout using dagre
- * - Custom Apple-style contact nodes with avatar, name, title, department
+ * - Apple-style contact nodes with strong shadows, prominent accent bars
+ * - Avatar with initials, name (font-weight 600), title, department chips
  * - Edge rendering for reporting lines
  * - Pinch-zoom and pan on mobile
+ * - Press scale animation (0.97) for tactile feedback
  * - Imperative handle for parent control (fitView, zoom)
  */
 
@@ -34,24 +36,71 @@ import {
   InfluenceLevel,
 } from "@/lib/contactsStorage";
 
-// Department colors for node styling - Apple-inspired with subtle gradients
-const DEPARTMENT_COLORS: Record<Department, { bg: string; border: string; text: string; accent: string }> = {
-  EXEC: { bg: "bg-purple-50/90 dark:bg-purple-950/50", border: "border-purple-200 dark:border-purple-800", text: "text-purple-700 dark:text-purple-300", accent: "bg-purple-500" },
-  LEGAL: { bg: "bg-indigo-50/90 dark:bg-indigo-950/50", border: "border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300", accent: "bg-indigo-500" },
-  PROJECT_DELIVERY: { bg: "bg-emerald-50/90 dark:bg-emerald-950/50", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300", accent: "bg-emerald-500" },
-  SALES: { bg: "bg-pink-50/90 dark:bg-pink-950/50", border: "border-pink-200 dark:border-pink-800", text: "text-pink-700 dark:text-pink-300", accent: "bg-pink-500" },
-  FINANCE: { bg: "bg-amber-50/90 dark:bg-amber-950/50", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300", accent: "bg-amber-500" },
-  OPS: { bg: "bg-cyan-50/90 dark:bg-cyan-950/50", border: "border-cyan-200 dark:border-cyan-800", text: "text-cyan-700 dark:text-cyan-300", accent: "bg-cyan-500" },
-  UNKNOWN: { bg: "bg-gray-50/90 dark:bg-gray-900/50", border: "border-gray-200 dark:border-gray-700", text: "text-gray-600 dark:text-gray-400", accent: "bg-gray-400" },
+// Dev-only console log
+if (process.env.NODE_ENV === 'development') {
+  console.log('OrgChartCanvas v2 loaded');
+}
+
+// Department colors for node styling - Apple-inspired with vibrant accents
+const DEPARTMENT_COLORS: Record<Department, { bg: string; border: string; text: string; accent: string; accentLight: string }> = {
+  EXEC: { 
+    bg: "bg-purple-50/95 dark:bg-purple-950/60", 
+    border: "border-purple-200/80 dark:border-purple-700/60", 
+    text: "text-purple-700 dark:text-purple-300", 
+    accent: "bg-purple-500",
+    accentLight: "bg-purple-100 dark:bg-purple-900/50"
+  },
+  LEGAL: { 
+    bg: "bg-indigo-50/95 dark:bg-indigo-950/60", 
+    border: "border-indigo-200/80 dark:border-indigo-700/60", 
+    text: "text-indigo-700 dark:text-indigo-300", 
+    accent: "bg-indigo-500",
+    accentLight: "bg-indigo-100 dark:bg-indigo-900/50"
+  },
+  PROJECT_DELIVERY: { 
+    bg: "bg-emerald-50/95 dark:bg-emerald-950/60", 
+    border: "border-emerald-200/80 dark:border-emerald-700/60", 
+    text: "text-emerald-700 dark:text-emerald-300", 
+    accent: "bg-emerald-500",
+    accentLight: "bg-emerald-100 dark:bg-emerald-900/50"
+  },
+  SALES: { 
+    bg: "bg-pink-50/95 dark:bg-pink-950/60", 
+    border: "border-pink-200/80 dark:border-pink-700/60", 
+    text: "text-pink-700 dark:text-pink-300", 
+    accent: "bg-pink-500",
+    accentLight: "bg-pink-100 dark:bg-pink-900/50"
+  },
+  FINANCE: { 
+    bg: "bg-amber-50/95 dark:bg-amber-950/60", 
+    border: "border-amber-200/80 dark:border-amber-700/60", 
+    text: "text-amber-700 dark:text-amber-300", 
+    accent: "bg-amber-500",
+    accentLight: "bg-amber-100 dark:bg-amber-900/50"
+  },
+  OPS: { 
+    bg: "bg-cyan-50/95 dark:bg-cyan-950/60", 
+    border: "border-cyan-200/80 dark:border-cyan-700/60", 
+    text: "text-cyan-700 dark:text-cyan-300", 
+    accent: "bg-cyan-500",
+    accentLight: "bg-cyan-100 dark:bg-cyan-900/50"
+  },
+  UNKNOWN: { 
+    bg: "bg-gray-50/95 dark:bg-gray-900/60", 
+    border: "border-gray-200/80 dark:border-gray-700/60", 
+    text: "text-gray-600 dark:text-gray-400", 
+    accent: "bg-gray-400",
+    accentLight: "bg-gray-100 dark:bg-gray-800/50"
+  },
 };
 
 const DEPARTMENT_LABELS: Record<Department, string> = {
-  EXEC: 'Exec',
+  EXEC: 'Executive',
   LEGAL: 'Legal',
   PROJECT_DELIVERY: 'Delivery',
   SALES: 'Sales',
   FINANCE: 'Finance',
-  OPS: 'Ops',
+  OPS: 'Operations',
   UNKNOWN: 'Unknown',
 };
 
@@ -62,9 +111,9 @@ const INFLUENCE_LABELS: Record<InfluenceLevel, string> = {
   UNKNOWN: '',
 };
 
-// Node dimensions for dagre layout
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 88;
+// Node dimensions for dagre layout - slightly larger for better visuals
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 96;
 
 interface ContactNodeData extends Record<string, unknown> {
   contact: StoredContact;
@@ -79,7 +128,7 @@ function getInitials(name: string): string {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
-// Custom Apple-style Contact Node Component
+// Custom Apple-style Contact Node Component with enhanced visuals
 function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   const { contact, onNodeClick } = data;
   const department = contact.org?.department || 'UNKNOWN';
@@ -95,33 +144,48 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   return (
     <div
       className={`
-        relative rounded-2xl border shadow-sm cursor-pointer
+        group relative rounded-2xl border cursor-pointer overflow-hidden
         transition-all duration-200 ease-out
         ${colors.bg} ${colors.border}
-        ${selected ? 'ring-2 ring-primary shadow-lg scale-[1.02]' : 'hover:shadow-md hover:scale-[1.01] active:scale-[0.98] active:shadow-sm'}
+        ${selected 
+          ? 'ring-2 ring-primary ring-offset-2 shadow-xl scale-[1.02]' 
+          : 'shadow-lg shadow-black/8 dark:shadow-black/20 hover:shadow-xl hover:shadow-black/12 hover:scale-[1.01] active:scale-[0.97] active:shadow-md'
+        }
       `}
       style={{ width: NODE_WIDTH, minHeight: NODE_HEIGHT - 8 }}
       onClick={handleClick}
       data-testid={`org-node-${contact.id}`}
     >
-      {/* Left accent bar */}
-      <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${colors.accent}`} />
+      {/* Top highlight stroke for glass depth */}
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 dark:via-white/20 to-transparent" />
+      
+      {/* Left accent bar - more prominent */}
+      <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full ${colors.accent} shadow-sm`} />
       
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-gray-400 !w-2.5 !h-2.5 !border-2 !border-white dark:!border-gray-800"
+        className="!bg-gray-300 dark:!bg-gray-600 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800 !shadow-sm"
       />
       
-      <div className="flex items-start gap-3 p-3 pl-4">
-        {/* Avatar with initials */}
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white shrink-0 ${colors.accent}`}>
+      <div className="flex items-start gap-3 p-3.5 pl-5">
+        {/* Avatar with gradient and shadow */}
+        <div 
+          className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 shadow-md ${colors.accent}`}
+          style={{
+            background: `linear-gradient(135deg, ${getGradientColor(department, 'light')} 0%, ${getGradientColor(department, 'dark')} 100%)`,
+          }}
+        >
           {getInitials(contact.name || '')}
         </div>
         
         {/* Content */}
-        <div className="flex-1 min-w-0 space-y-1">
-          <p className="font-semibold text-sm truncate text-foreground" data-testid={`org-node-name-${contact.id}`}>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <p 
+            className="font-semibold text-sm truncate text-foreground leading-tight" 
+            style={{ fontWeight: 600 }}
+            data-testid={`org-node-name-${contact.id}`}
+          >
             {contact.name || 'Unknown'}
           </p>
           {contact.title && (
@@ -130,22 +194,22 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
             </p>
           )}
           
-          {/* Chips row */}
+          {/* Chips row - more prominent */}
           <div className="flex items-center gap-1.5 pt-0.5">
             <Badge 
               variant="secondary" 
-              className={`text-[10px] px-1.5 py-0 h-[18px] ${colors.text} bg-transparent border ${colors.border}`}
+              className={`text-[10px] px-2 py-0.5 h-[20px] font-medium ${colors.text} ${colors.accentLight} border-0`}
             >
               {DEPARTMENT_LABELS[department]}
             </Badge>
             {influence !== 'UNKNOWN' && (
               <Badge 
                 variant="secondary" 
-                className={`text-[10px] px-1.5 py-0 h-[18px] ${
-                  influence === 'HIGH' ? 'text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-700' :
-                  influence === 'MEDIUM' ? 'text-yellow-600 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700' :
-                  'text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-700'
-                } bg-transparent border`}
+                className={`text-[10px] px-2 py-0.5 h-[20px] font-medium border-0 ${
+                  influence === 'HIGH' ? 'text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/50' :
+                  influence === 'MEDIUM' ? 'text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/50' :
+                  'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50'
+                }`}
               >
                 {INFLUENCE_LABELS[influence]}
               </Badge>
@@ -157,10 +221,24 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-gray-400 !w-2.5 !h-2.5 !border-2 !border-white dark:!border-gray-800"
+        className="!bg-gray-300 dark:!bg-gray-600 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800 !shadow-sm"
       />
     </div>
   );
+}
+
+// Get gradient colors for avatar
+function getGradientColor(department: Department, shade: 'light' | 'dark'): string {
+  const gradients: Record<Department, { light: string; dark: string }> = {
+    EXEC: { light: '#a855f7', dark: '#7c3aed' },
+    LEGAL: { light: '#818cf8', dark: '#6366f1' },
+    PROJECT_DELIVERY: { light: '#34d399', dark: '#10b981' },
+    SALES: { light: '#f472b6', dark: '#ec4899' },
+    FINANCE: { light: '#fbbf24', dark: '#f59e0b' },
+    OPS: { light: '#22d3ee', dark: '#06b6d4' },
+    UNKNOWN: { light: '#9ca3af', dark: '#6b7280' },
+  };
+  return gradients[department][shade];
 }
 
 const nodeTypes = {
@@ -180,10 +258,10 @@ function buildGraphWithLayout(
   const g = new dagre.graphlib.Graph();
   g.setGraph({ 
     rankdir: 'TB', 
-    nodesep: 60, 
-    ranksep: 100,
-    marginx: 40,
-    marginy: 40,
+    nodesep: 70, 
+    ranksep: 110,
+    marginx: 50,
+    marginy: 50,
   });
   g.setDefaultEdgeLabel(() => ({}));
 
@@ -216,11 +294,15 @@ function buildGraphWithLayout(
         type: 'smoothstep',
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          width: 12,
-          height: 12,
+          width: 14,
+          height: 14,
           color: '#9ca3af',
         },
-        style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+        style: { 
+          stroke: '#9ca3af', 
+          strokeWidth: 2,
+          strokeLinecap: 'round',
+        },
         animated: false,
       });
     } else if (hasVirtualRoot) {
@@ -305,7 +387,7 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
       return (
         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
           <Users className="w-12 h-12 mb-3 opacity-50" />
-          <p>No contacts to display.</p>
+          <p className="font-medium">No contacts to display.</p>
           <p className="text-sm mt-1">Add contacts from the People tab.</p>
         </div>
       );
@@ -332,7 +414,7 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
           zoomOnPinch
           preventScrolling={false}
         >
-          <Background color="#e5e7eb" gap={20} />
+          <Background color="#cbd5e1" gap={24} size={1} />
         </ReactFlow>
       </div>
     );

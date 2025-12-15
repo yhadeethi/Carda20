@@ -1,0 +1,49 @@
+You said the 6 Org Map “Apple-Grade Enhancement” tasks are complete, but visually the changes are minimal. I need you to do VISUAL QA and make the deltas obvious without breaking functionality.
+
+DO THIS IN ORDER:
+
+A) PROVE what changed
+1) List the exact files changed (full paths) and what each change did (1–2 lines each).
+2) Add temporary /dev-only “UI QA” mode (enabled by query param ?qa=1) that shows:
+   - current view mode (Org / Influence)
+   - node count, edge count
+   - whether glass blur is active (boolean detection)
+   - component version label like “OrgMap v2”
+3) Provide 4 screenshots (or describe exactly where to look) showing:
+   - full-canvas toolbar glass
+   - node card styling
+   - influence bubble view
+   - bottom sheet layout
+
+B) FIX the most common reason glass looks flat on iOS
+1) Ensure ALL glass surfaces use BOTH:
+   - backdrop-filter: blur(20px);
+   - -webkit-backdrop-filter: blur(20px);
+2) Ensure glass layers have:
+   - background: rgba(255,255,255,0.55) (or dark equivalent)
+   - border: 1px solid rgba(255,255,255,0.25)
+   - subtle shadow
+3) Ensure correct stacking context (z-index) so blur samples content behind it.
+
+C) Make it visually “Apple-grade” (obvious changes)
+1) Increase perceived depth:
+   - Node cards: stronger shadow + lift on press (scale 0.98 on press, 1.0 idle)
+   - Add soft highlight stroke on top edge
+2) Typography + spacing:
+   - Title font weight 600, clearer hierarchy, more padding
+   - Department chip more prominent with a left accent bar that’s visible
+3) Transitions:
+   - Segmented control should animate with a spring-like movement
+   - View switch Org <-> Influence should fade+scale, not instant swap
+4) Background:
+   - Add a subtle canvas background (very light noise or faint grid) so the map doesn’t feel like a blank webpage.
+
+D) Verify we are actually using the new component
+1) Remove/rename any legacy OrgMap component and update routes to point to the v2 component only.
+2) Add a console log in dev ONLY: “OrgMap v2 mounted”.
+
+Constraints:
+- Do NOT change data model, scanning, contacts list, or anything outside org map.
+- Do NOT add heavy libraries.
+- Keep performance: virtualize if needed; no re-render storms.
+- When finished, summarize: what I should notice immediately that I couldn’t see before.
