@@ -2,13 +2,13 @@
  * OrgChartCanvas - Interactive React Flow org chart with dagre layout
  * Features:
  * - Automatic tree layout using dagre
- * - Custom contact nodes with name, title, department pill
+ * - Custom Apple-style contact nodes with avatar, name, title, department
  * - Edge rendering for reporting lines
  * - Pinch-zoom and pan on mobile
- * - Center/Fit floating button
+ * - Imperative handle for parent control (fitView, zoom)
  */
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from "react";
 import {
   ReactFlow,
   Node,
@@ -22,29 +22,27 @@ import {
   Position,
   NodeProps,
   MarkerType,
-  Panel,
   Connection,
-  addEdge,
 } from "@xyflow/react";
 import dagre from "dagre";
 import "@xyflow/react/dist/style.css";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Maximize2, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import {
   StoredContact,
   Department,
+  InfluenceLevel,
 } from "@/lib/contactsStorage";
 
-// Department colors for node styling
-const DEPARTMENT_COLORS: Record<Department, { bg: string; border: string; text: string }> = {
-  EXEC: { bg: "bg-purple-50 dark:bg-purple-900/20", border: "border-purple-300 dark:border-purple-700", text: "text-purple-700 dark:text-purple-300" },
-  LEGAL: { bg: "bg-indigo-50 dark:bg-indigo-900/20", border: "border-indigo-300 dark:border-indigo-700", text: "text-indigo-700 dark:text-indigo-300" },
-  PROJECT_DELIVERY: { bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-300 dark:border-emerald-700", text: "text-emerald-700 dark:text-emerald-300" },
-  SALES: { bg: "bg-pink-50 dark:bg-pink-900/20", border: "border-pink-300 dark:border-pink-700", text: "text-pink-700 dark:text-pink-300" },
-  FINANCE: { bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-300 dark:border-amber-700", text: "text-amber-700 dark:text-amber-300" },
-  OPS: { bg: "bg-cyan-50 dark:bg-cyan-900/20", border: "border-cyan-300 dark:border-cyan-700", text: "text-cyan-700 dark:text-cyan-300" },
-  UNKNOWN: { bg: "bg-gray-50 dark:bg-gray-800/50", border: "border-gray-300 dark:border-gray-600", text: "text-gray-600 dark:text-gray-400" },
+// Department colors for node styling - Apple-inspired with subtle gradients
+const DEPARTMENT_COLORS: Record<Department, { bg: string; border: string; text: string; accent: string }> = {
+  EXEC: { bg: "bg-purple-50/90 dark:bg-purple-950/50", border: "border-purple-200 dark:border-purple-800", text: "text-purple-700 dark:text-purple-300", accent: "bg-purple-500" },
+  LEGAL: { bg: "bg-indigo-50/90 dark:bg-indigo-950/50", border: "border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300", accent: "bg-indigo-500" },
+  PROJECT_DELIVERY: { bg: "bg-emerald-50/90 dark:bg-emerald-950/50", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300", accent: "bg-emerald-500" },
+  SALES: { bg: "bg-pink-50/90 dark:bg-pink-950/50", border: "border-pink-200 dark:border-pink-800", text: "text-pink-700 dark:text-pink-300", accent: "bg-pink-500" },
+  FINANCE: { bg: "bg-amber-50/90 dark:bg-amber-950/50", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300", accent: "bg-amber-500" },
+  OPS: { bg: "bg-cyan-50/90 dark:bg-cyan-950/50", border: "border-cyan-200 dark:border-cyan-800", text: "text-cyan-700 dark:text-cyan-300", accent: "bg-cyan-500" },
+  UNKNOWN: { bg: "bg-gray-50/90 dark:bg-gray-900/50", border: "border-gray-200 dark:border-gray-700", text: "text-gray-600 dark:text-gray-400", accent: "bg-gray-400" },
 };
 
 const DEPARTMENT_LABELS: Record<Department, string> = {
@@ -57,19 +55,35 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
   UNKNOWN: 'Unknown',
 };
 
+const INFLUENCE_LABELS: Record<InfluenceLevel, string> = {
+  HIGH: 'High',
+  MEDIUM: 'Med',
+  LOW: 'Low',
+  UNKNOWN: '',
+};
+
 // Node dimensions for dagre layout
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 80;
+const NODE_WIDTH = 200;
+const NODE_HEIGHT = 88;
 
 interface ContactNodeData extends Record<string, unknown> {
   contact: StoredContact;
   onNodeClick?: (contact: StoredContact) => void;
 }
 
-// Custom Contact Node Component
-function ContactNode({ data }: NodeProps<Node<ContactNodeData>>) {
+// Get initials from name
+function getInitials(name: string): string {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+// Custom Apple-style Contact Node Component
+function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   const { contact, onNodeClick } = data;
   const department = contact.org?.department || 'UNKNOWN';
+  const influence = contact.org?.influence || 'UNKNOWN';
   const colors = DEPARTMENT_COLORS[department];
 
   const handleClick = useCallback(() => {
@@ -80,36 +94,70 @@ function ContactNode({ data }: NodeProps<Node<ContactNodeData>>) {
 
   return (
     <div
-      className={`px-3 py-2 rounded-lg border-2 shadow-sm cursor-pointer transition-shadow hover:shadow-md ${colors.bg} ${colors.border}`}
-      style={{ width: NODE_WIDTH, minHeight: NODE_HEIGHT - 16 }}
+      className={`
+        relative rounded-2xl border shadow-sm cursor-pointer
+        transition-all duration-200 ease-out
+        ${colors.bg} ${colors.border}
+        ${selected ? 'ring-2 ring-primary shadow-lg scale-[1.02]' : 'hover:shadow-md hover:scale-[1.01]'}
+      `}
+      style={{ width: NODE_WIDTH, minHeight: NODE_HEIGHT - 8 }}
       onClick={handleClick}
       data-testid={`org-node-${contact.id}`}
     >
+      {/* Left accent bar */}
+      <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${colors.accent}`} />
+      
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-gray-400 !w-2 !h-2"
+        className="!bg-gray-400 !w-2.5 !h-2.5 !border-2 !border-white dark:!border-gray-800"
       />
-      <div className="flex flex-col gap-1">
-        <span className="font-medium text-sm truncate text-foreground" data-testid={`org-node-name-${contact.id}`}>
-          {contact.name || 'Unknown'}
-        </span>
-        {contact.title && (
-          <span className="text-xs text-muted-foreground truncate">
-            {contact.title}
-          </span>
-        )}
-        <Badge 
-          variant="secondary" 
-          className={`text-[10px] px-1.5 py-0 h-4 w-fit ${colors.text}`}
-        >
-          {DEPARTMENT_LABELS[department]}
-        </Badge>
+      
+      <div className="flex items-start gap-3 p-3 pl-4">
+        {/* Avatar with initials */}
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white shrink-0 ${colors.accent}`}>
+          {getInitials(contact.name || '')}
+        </div>
+        
+        {/* Content */}
+        <div className="flex-1 min-w-0 space-y-1">
+          <p className="font-semibold text-sm truncate text-foreground" data-testid={`org-node-name-${contact.id}`}>
+            {contact.name || 'Unknown'}
+          </p>
+          {contact.title && (
+            <p className="text-xs text-muted-foreground truncate leading-tight">
+              {contact.title}
+            </p>
+          )}
+          
+          {/* Chips row */}
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <Badge 
+              variant="secondary" 
+              className={`text-[10px] px-1.5 py-0 h-[18px] ${colors.text} bg-transparent border ${colors.border}`}
+            >
+              {DEPARTMENT_LABELS[department]}
+            </Badge>
+            {influence !== 'UNKNOWN' && (
+              <Badge 
+                variant="secondary" 
+                className={`text-[10px] px-1.5 py-0 h-[18px] ${
+                  influence === 'HIGH' ? 'text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-700' :
+                  influence === 'MEDIUM' ? 'text-yellow-600 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700' :
+                  'text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-700'
+                } bg-transparent border`}
+              >
+                {INFLUENCE_LABELS[influence]}
+              </Badge>
+            )}
+          </div>
+        </div>
       </div>
+      
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-gray-400 !w-2 !h-2"
+        className="!bg-gray-400 !w-2.5 !h-2.5 !border-2 !border-white dark:!border-gray-800"
       />
     </div>
   );
@@ -132,12 +180,24 @@ function buildGraphWithLayout(
   const g = new dagre.graphlib.Graph();
   g.setGraph({ 
     rankdir: 'TB', 
-    nodesep: 50, 
-    ranksep: 80,
-    marginx: 20,
-    marginy: 20,
+    nodesep: 60, 
+    ranksep: 100,
+    marginx: 40,
+    marginy: 40,
   });
   g.setDefaultEdgeLabel(() => ({}));
+
+  // Find root nodes (nodes with no manager or manager not in this company)
+  const contactIds = new Set(contacts.map(c => c.id));
+  const rootNodes = contacts.filter(c => !c.org?.reportsToId || !contactIds.has(c.org.reportsToId));
+  
+  // If multiple roots, add virtual company root
+  const hasVirtualRoot = rootNodes.length > 1;
+  const VIRTUAL_ROOT_ID = '__virtual_root__';
+  
+  if (hasVirtualRoot) {
+    g.setNode(VIRTUAL_ROOT_ID, { width: 1, height: 1 });
+  }
 
   // Add nodes to dagre
   contacts.forEach((contact) => {
@@ -147,25 +207,25 @@ function buildGraphWithLayout(
   // Add edges for reporting relationships
   const edges: Edge[] = [];
   contacts.forEach((contact) => {
-    if (contact.org?.reportsToId) {
-      const managerId = contact.org.reportsToId;
-      // Only add edge if manager exists in our contacts
-      if (contacts.some((c) => c.id === managerId)) {
-        g.setEdge(managerId, contact.id);
-        edges.push({
-          id: `${managerId}-${contact.id}`,
-          source: managerId,
-          target: contact.id,
-          type: 'smoothstep',
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: 15,
-            height: 15,
-            color: '#9ca3af',
-          },
-          style: { stroke: '#9ca3af', strokeWidth: 1.5 },
-        });
-      }
+    if (contact.org?.reportsToId && contactIds.has(contact.org.reportsToId)) {
+      g.setEdge(contact.org.reportsToId, contact.id);
+      edges.push({
+        id: `${contact.org.reportsToId}-${contact.id}`,
+        source: contact.org.reportsToId,
+        target: contact.id,
+        type: 'smoothstep',
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 12,
+          height: 12,
+          color: '#9ca3af',
+        },
+        style: { stroke: '#9ca3af', strokeWidth: 1.5 },
+        animated: false,
+      });
+    } else if (hasVirtualRoot) {
+      // Connect root nodes to virtual root
+      g.setEdge(VIRTUAL_ROOT_ID, contact.id);
     }
   });
 
@@ -192,6 +252,12 @@ function buildGraphWithLayout(
   return { nodes, edges };
 }
 
+export interface OrgChartCanvasHandle {
+  fitView: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+}
+
 interface OrgChartCanvasInnerProps {
   contacts: StoredContact[];
   onNodeClick?: (contact: StoredContact) => void;
@@ -199,87 +265,79 @@ interface OrgChartCanvasInnerProps {
   editMode?: boolean;
 }
 
-function OrgChartCanvasInner({ contacts, onNodeClick, onSetManager, editMode }: OrgChartCanvasInnerProps) {
-  const { fitView } = useReactFlow();
+const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInnerProps>(
+  function OrgChartCanvasInner({ contacts, onNodeClick, onSetManager, editMode }, ref) {
+    const { fitView, zoomIn, zoomOut } = useReactFlow();
 
-  // Build initial graph
-  const initialGraph = useMemo(
-    () => buildGraphWithLayout(contacts, onNodeClick),
-    [contacts, onNodeClick]
-  );
+    // Expose methods to parent
+    useImperativeHandle(ref, () => ({
+      fitView: () => fitView({ padding: 0.2, duration: 300 }),
+      zoomIn: () => zoomIn({ duration: 200 }),
+      zoomOut: () => zoomOut({ duration: 200 }),
+    }), [fitView, zoomIn, zoomOut]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
+    // Build initial graph
+    const initialGraph = useMemo(
+      () => buildGraphWithLayout(contacts, onNodeClick),
+      [contacts, onNodeClick]
+    );
 
-  // Update graph when contacts change
-  useEffect(() => {
-    const newGraph = buildGraphWithLayout(contacts, onNodeClick);
-    setNodes(newGraph.nodes);
-    setEdges(newGraph.edges);
-  }, [contacts, onNodeClick, setNodes, setEdges]);
+    const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
 
-  const handleFitView = useCallback(() => {
-    fitView({ padding: 0.2, duration: 300 });
-  }, [fitView]);
+    // Update graph when contacts change
+    useEffect(() => {
+      const newGraph = buildGraphWithLayout(contacts, onNodeClick);
+      setNodes(newGraph.nodes);
+      setEdges(newGraph.edges);
+    }, [contacts, onNodeClick, setNodes, setEdges]);
 
-  // Handle connection (drag from source to target)
-  // User drags FROM subordinate TO manager to set reporting line
-  const handleConnect = useCallback((connection: Connection) => {
-    if (!editMode || !onSetManager) return;
-    if (connection.source && connection.target) {
-      // source = person who will report, target = their new manager
-      onSetManager(connection.source, connection.target);
+    // Handle connection (drag from source to target)
+    const handleConnect = useCallback((connection: Connection) => {
+      if (!editMode || !onSetManager) return;
+      if (connection.source && connection.target) {
+        onSetManager(connection.source, connection.target);
+      }
+    }, [editMode, onSetManager]);
+
+    // Empty state
+    if (contacts.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+          <Users className="w-12 h-12 mb-3 opacity-50" />
+          <p>No contacts to display.</p>
+          <p className="text-sm mt-1">Add contacts from the People tab.</p>
+        </div>
+      );
     }
-  }, [editMode, onSetManager]);
 
-  // Empty state
-  if (contacts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-        <Users className="w-12 h-12 mb-3 opacity-50" />
-        <p>No contacts to display.</p>
-        <p className="text-sm mt-1">Add contacts from the People tab.</p>
+      <div className="h-full w-full" data-testid="org-chart-canvas">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          minZoom={0.2}
+          maxZoom={2.5}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable={editMode}
+          nodesConnectable={editMode}
+          onConnect={handleConnect}
+          elementsSelectable={true}
+          panOnScroll
+          zoomOnPinch
+          preventScrolling={false}
+        >
+          <Background color="#e5e7eb" gap={20} />
+        </ReactFlow>
       </div>
     );
   }
-
-  return (
-    <div className="h-[400px] w-full rounded-lg border bg-background/50" data-testid="org-chart-canvas">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.3}
-        maxZoom={2}
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable={editMode}
-        nodesConnectable={editMode}
-        onConnect={handleConnect}
-        elementsSelectable={true}
-        panOnScroll
-        zoomOnPinch
-        preventScrolling={false}
-      >
-        <Background color="#e5e7eb" gap={16} />
-        <Panel position="bottom-right" className="!m-2">
-          <Button
-            size="icon"
-            variant="outline"
-            className="h-9 w-9 bg-background shadow-md"
-            onClick={handleFitView}
-            data-testid="button-fit-view"
-          >
-            <Maximize2 className="w-4 h-4" />
-          </Button>
-        </Panel>
-      </ReactFlow>
-    </div>
-  );
-}
+);
 
 // Main exported component with ReactFlowProvider wrapper
 interface OrgChartCanvasProps {
@@ -289,15 +347,18 @@ interface OrgChartCanvasProps {
   editMode?: boolean;
 }
 
-export function OrgChartCanvas({ contacts, onNodeClick, onSetManager, editMode = false }: OrgChartCanvasProps) {
-  return (
-    <ReactFlowProvider>
-      <OrgChartCanvasInner 
-        contacts={contacts} 
-        onNodeClick={onNodeClick}
-        onSetManager={onSetManager}
-        editMode={editMode}
-      />
-    </ReactFlowProvider>
-  );
-}
+export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasProps>(
+  function OrgChartCanvas({ contacts, onNodeClick, onSetManager, editMode = false }, ref) {
+    return (
+      <ReactFlowProvider>
+        <OrgChartCanvasInner 
+          ref={ref}
+          contacts={contacts} 
+          onNodeClick={onNodeClick}
+          onSetManager={onSetManager}
+          editMode={editMode}
+        />
+      </ReactFlowProvider>
+    );
+  }
+);
