@@ -4,18 +4,10 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import {
   Drawer,
   DrawerContent,
@@ -32,34 +24,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import {
   ArrowLeft,
   Building2,
   Users,
   Network,
   StickyNote,
-  MapPin,
-  Globe,
   User,
-  ChevronDown,
-  Check,
   Shield,
   Minus,
   AlertTriangle,
   CircleDot,
-  Wand2,
-  Pencil,
-  Briefcase,
   Settings2,
   X,
+  Filter,
 } from "lucide-react";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { FilterSheet, getFilterSummary } from "@/components/filters/FilterSheet";
 import {
   Company,
   getCompanyById,
@@ -111,6 +90,8 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const [notes, setNotes] = useState("");
   const [notesSaved, setNotesSaved] = useState(true);
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'ALL'>('ALL');
+  const [influenceFilter, setInfluenceFilter] = useState<InfluenceLevel | 'ANY'>('ANY');
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [undoState, setUndoState] = useState<Map<string, Department> | null>(null);
   const [quickEditContact, setQuickEditContact] = useState<StoredContact | null>(null);
   const { toast } = useToast();
@@ -153,11 +134,17 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     }
   }, [company, companyId]);
 
-  // Filter contacts by department
+  // Filter contacts by department and influence
   const filteredContacts = useMemo(() => {
-    if (departmentFilter === 'ALL') return contacts;
-    return contacts.filter(c => (c.org?.department || 'UNKNOWN') === departmentFilter);
-  }, [contacts, departmentFilter]);
+    let result = contacts;
+    if (departmentFilter !== 'ALL') {
+      result = result.filter(c => (c.org?.department || 'UNKNOWN') === departmentFilter);
+    }
+    if (influenceFilter !== 'ANY') {
+      result = result.filter(c => (c.org?.influence || 'UNKNOWN') === influenceFilter);
+    }
+    return result;
+  }, [contacts, departmentFilter, influenceFilter]);
 
   // Auto-group handler
   const handleAutoGroup = useCallback(() => {
@@ -198,7 +185,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   }, []);
 
   // Quick edit org field handlers
-  const handleQuickEditField = useCallback((field: keyof StoredContact['org'], value: string | null) => {
+  const handleQuickEditField = useCallback((field: 'department' | 'role' | 'influence' | 'reportsToId', value: string | null) => {
     if (!quickEditContact) return;
     
     const currentOrg = quickEditContact.org || { ...DEFAULT_ORG };
@@ -247,40 +234,21 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
         Back to Companies
       </Button>
 
-      <Card className="glass">
-        <CardHeader className="pb-2">
-          <div className="flex items-start gap-3">
-            <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-              <Building2 className="w-6 h-6 text-primary" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <CardTitle className="text-xl font-semibold" data-testid="company-name">
-                {company.name}
-              </CardTitle>
-              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground flex-wrap">
-                {company.domain && (
-                  <div className="flex items-center gap-1">
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>{company.domain}</span>
-                  </div>
-                )}
-                {(company.city || company.state) && (
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span>{[company.city, company.state].filter(Boolean).join(", ")}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Users className="w-4 h-4" />
+      {/* Simplified Hero Header */}
+      <div className="flex items-center gap-4 py-2">
+        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <Building2 className="w-6 h-6 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-semibold truncate" data-testid="company-name">
+            {company.name}
+          </h1>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            {company.domain && <span>{company.domain}</span>}
             <span>{contacts.length} contact{contacts.length !== 1 ? 's' : ''}</span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="w-full grid grid-cols-3">
@@ -307,52 +275,21 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
             </div>
           ) : (
             <>
-              {/* Department filter chips */}
-              <ScrollArea className="w-full whitespace-nowrap">
-                <div className="flex gap-2 pb-2">
-                  <Badge
-                    variant={departmentFilter === 'ALL' ? 'default' : 'outline'}
-                    className="cursor-pointer shrink-0"
-                    onClick={() => setDepartmentFilter('ALL')}
-                    data-testid="filter-all"
-                  >
-                    All
-                  </Badge>
-                  {DEPARTMENT_ORDER.map((dept) => (
-                    <Badge
-                      key={dept}
-                      variant={departmentFilter === dept ? 'default' : 'outline'}
-                      className="cursor-pointer shrink-0"
-                      onClick={() => setDepartmentFilter(dept)}
-                      data-testid={`filter-${dept.toLowerCase()}`}
-                    >
-                      {DEPARTMENT_LABELS[dept]}
-                    </Badge>
-                  ))}
-                </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
-
-              {/* Action buttons */}
-              <div className="flex gap-2 flex-wrap">
+              {/* Filter Controls Row */}
+              <div className="flex items-center justify-between gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleAutoGroup}
-                  data-testid="button-auto-group"
+                  onClick={() => setShowFilterSheet(true)}
+                  className="gap-1.5"
+                  data-testid="button-open-filter"
                 >
-                  <Wand2 className="w-4 h-4 mr-1.5" />
-                  Auto-group
+                  <Filter className="w-4 h-4" />
+                  <span className="text-sm">{getFilterSummary({ department: departmentFilter, influence: influenceFilter })}</span>
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleEditOrg}
-                  data-testid="button-edit-org"
-                >
-                  <Pencil className="w-4 h-4 mr-1.5" />
-                  Edit Org
-                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {filteredContacts.length} of {contacts.length}
+                </span>
               </div>
 
               {/* Contacts list */}
@@ -441,6 +378,19 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Filter Sheet */}
+      <FilterSheet
+        open={showFilterSheet}
+        onOpenChange={setShowFilterSheet}
+        filters={{ department: departmentFilter, influence: influenceFilter }}
+        onApply={(f) => {
+          setDepartmentFilter(f.department);
+          setInfluenceFilter(f.influence);
+        }}
+        onAutoGroup={handleAutoGroup}
+        onEditOrg={handleEditOrg}
+      />
 
       {/* Quick Edit Bottom Sheet */}
       <Drawer open={!!quickEditContact} onOpenChange={(open) => !open && setQuickEditContact(null)}>

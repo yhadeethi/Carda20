@@ -21,7 +21,8 @@ import {
   autoGenerateCompaniesFromContacts,
   getContactCountForCompany,
 } from "@/lib/companiesStorage";
-import { Search, Trash2, User, Building, Building2, Calendar, Tag, Users, Plus, Network, Globe, MapPin } from "lucide-react";
+import { Search, Trash2, User, Building, Building2, Calendar, Tag, Users, Plus } from "lucide-react";
+import { CompanyGrid } from "@/components/companies/CompanyGrid";
 import { format } from "date-fns";
 
 type TabMode = "people" | "companies";
@@ -387,81 +388,15 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
                 </Button>
               </div>
 
-              <div className="max-h-[400px] overflow-y-auto space-y-2" data-testid="companies-list">
-                {filteredCompanies.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground" data-testid="companies-empty">
-                    {companies.length === 0 ? (
-                      <p>No companies yet. Scan contacts to auto-generate or add manually.</p>
-                    ) : (
-                      <p>No companies match your search.</p>
-                    )}
-                  </div>
-                ) : (
-                  filteredCompanies.map((company) => {
-                    const contactCount = getContactCountForCompany(company.id, contacts);
-                    return (
-                      <div
-                        key={company.id}
-                        className="p-3 rounded-lg border bg-card hover-elevate cursor-pointer"
-                        onClick={() => onSelectCompany?.(company.id)}
-                        data-testid={`company-row-${company.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Building2 className="w-4 h-4 text-primary shrink-0" />
-                              <span className="font-medium truncate" data-testid={`company-name-${company.id}`}>
-                                {company.name}
-                              </span>
-                            </div>
-                            
-                            <div className="flex items-center gap-3 mt-1.5 flex-wrap text-xs text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <Users className="w-3 h-3" />
-                                <span>{contactCount} contact{contactCount !== 1 ? 's' : ''}</span>
-                              </div>
-                              
-                              {company.domain && (
-                                <div className="flex items-center gap-1">
-                                  <Globe className="w-3 h-3" />
-                                  <span>{company.domain}</span>
-                                </div>
-                              )}
-                              
-                              {(company.city || company.state) && (
-                                <div className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
-                                  <span>{[company.city, company.state].filter(Boolean).join(", ")}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0 gap-1 text-xs"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectCompany?.(company.id);
-                            }}
-                            data-testid={`button-view-org-map-${company.id}`}
-                          >
-                            <Network className="w-3 h-3" />
-                            View Org Map
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+              <div className="max-h-[450px] overflow-y-auto" data-testid="companies-list">
+                <CompanyGrid
+                  companies={filteredCompanies}
+                  getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
+                  onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
+                  onAddCompany={() => setShowAddCompany(true)}
+                  searchQuery={searchQuery}
+                />
               </div>
-              
-              {filteredCompanies.length > 0 && (
-                <p className="text-xs text-center text-muted-foreground">
-                  {filteredCompanies.length} compan{filteredCompanies.length !== 1 ? 'ies' : 'y'}
-                </p>
-              )}
             </TabsContent>
           </Tabs>
         </CardContent>
