@@ -52,7 +52,6 @@ import {
   loadContacts,
   updateContact,
   OrgRole,
-  InfluenceLevel,
   Department,
   DEFAULT_ORG,
   autoGroupByDepartment,
@@ -89,7 +88,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const [notes, setNotes] = useState("");
   const [notesSaved, setNotesSaved] = useState(true);
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'ALL'>('ALL');
-  const [influenceFilter, setInfluenceFilter] = useState<InfluenceLevel | 'ANY'>('ANY');
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [undoState, setUndoState] = useState<Map<string, Department> | null>(null);
   const [quickEditContact, setQuickEditContact] = useState<StoredContact | null>(null);
@@ -133,17 +131,11 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     }
   }, [company, companyId]);
 
-  // Filter contacts by department and influence
+  // Filter contacts by department
   const filteredContacts = useMemo(() => {
-    let result = contacts;
-    if (departmentFilter !== 'ALL') {
-      result = result.filter(c => (c.org?.department || 'UNKNOWN') === departmentFilter);
-    }
-    if (influenceFilter !== 'ANY') {
-      result = result.filter(c => (c.org?.influence || 'UNKNOWN') === influenceFilter);
-    }
-    return result;
-  }, [contacts, departmentFilter, influenceFilter]);
+    if (departmentFilter === 'ALL') return contacts;
+    return contacts.filter(c => (c.org?.department || 'UNKNOWN') === departmentFilter);
+  }, [contacts, departmentFilter]);
 
   // Auto-group handler
   const handleAutoGroup = useCallback(() => {
@@ -184,7 +176,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   }, []);
 
   // Quick edit org field handlers
-  const handleQuickEditField = useCallback((field: 'department' | 'role' | 'influence' | 'reportsToId', value: string | null) => {
+  const handleQuickEditField = useCallback((field: 'department' | 'role' | 'reportsToId', value: string | null) => {
     if (!quickEditContact) return;
     
     const currentOrg = quickEditContact.org || { ...DEFAULT_ORG };
@@ -284,7 +276,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
                   data-testid="button-open-filter"
                 >
                   <Filter className="w-4 h-4" />
-                  <span className="text-sm">{getFilterSummary({ department: departmentFilter, influence: influenceFilter })}</span>
+                  <span className="text-sm">{getFilterSummary({ department: departmentFilter })}</span>
                 </Button>
                 <span className="text-xs text-muted-foreground">
                   {filteredContacts.length} of {contacts.length}
@@ -332,10 +324,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
                       {contact.org?.role && contact.org.role !== 'UNKNOWN' && (
                         <OrgRoleBadge role={contact.org.role} />
                       )}
-                      {/* Influence badge */}
-                      {contact.org?.influence && contact.org.influence !== 'UNKNOWN' && (
-                        <InfluenceBadge level={contact.org.influence} />
-                      )}
                     </div>
                   </div>
                 ))
@@ -382,10 +370,9 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       <FilterSheet
         open={showFilterSheet}
         onOpenChange={setShowFilterSheet}
-        filters={{ department: departmentFilter, influence: influenceFilter }}
+        filters={{ department: departmentFilter }}
         onApply={(f) => {
           setDepartmentFilter(f.department);
-          setInfluenceFilter(f.influence);
         }}
         onAutoGroup={handleAutoGroup}
         onEditOrg={handleEditOrg}
@@ -438,25 +425,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
                   <SelectItem value="CHAMPION">Champion</SelectItem>
                   <SelectItem value="NEUTRAL">Neutral</SelectItem>
                   <SelectItem value="BLOCKER">Blocker</SelectItem>
-                  <SelectItem value="UNKNOWN">Unknown</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Influence Select */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Influence Level</label>
-              <Select
-                value={quickEditContact?.org?.influence || 'UNKNOWN'}
-                onValueChange={(value) => handleQuickEditField('influence', value as InfluenceLevel)}
-              >
-                <SelectTrigger data-testid="select-influence">
-                  <SelectValue placeholder="Select influence" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="HIGH">High</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="LOW">Low</SelectItem>
                   <SelectItem value="UNKNOWN">Unknown</SelectItem>
                 </SelectContent>
               </Select>
@@ -530,23 +498,6 @@ function OrgRoleBadge({ role }: { role: OrgRole }) {
   );
 }
 
-// Influence Badge Component
-function InfluenceBadge({ level }: { level: InfluenceLevel }) {
-  const config: Record<InfluenceLevel, string> = {
-    HIGH: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-    MEDIUM: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-    LOW: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
-    UNKNOWN: "bg-gray-100 text-gray-500",
-  };
-  const displayName = level.charAt(0) + level.slice(1).toLowerCase();
-  
-  return (
-    <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-5 ${config[level]}`}>
-      {displayName} Influence
-    </Badge>
-  );
-}
-
 // Department Badge Component
 function DepartmentBadge({ department }: { department: Department }) {
   const config: Record<Department, string> = {
@@ -567,4 +518,4 @@ function DepartmentBadge({ department }: { department: Department }) {
   );
 }
 
-export { OrgRoleBadge, InfluenceBadge, DepartmentBadge };
+export { OrgRoleBadge, DepartmentBadge };

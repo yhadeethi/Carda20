@@ -1,6 +1,6 @@
 /**
  * FilterSheet - Bottom sheet for People filters
- * Replaces visible filter chips with a clean slide-up sheet
+ * Clean department-only filtering
  */
 
 import { useState, useEffect } from "react";
@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
-import { Department, InfluenceLevel } from "@/lib/contactsStorage";
+import { Department } from "@/lib/contactsStorage";
 
 // Department display names
 const DEPARTMENT_LABELS: Record<Department, string> = {
@@ -30,19 +30,8 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
 
 const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
 
-const INFLUENCE_LABELS: Record<InfluenceLevel | 'ANY', string> = {
-  ANY: 'Any',
-  HIGH: 'High',
-  MEDIUM: 'Medium',
-  LOW: 'Low',
-  UNKNOWN: 'Unknown',
-};
-
-const INFLUENCE_ORDER: (InfluenceLevel | 'ANY')[] = ['ANY', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'];
-
 interface FilterState {
   department: Department | 'ALL';
-  influence: InfluenceLevel | 'ANY';
 }
 
 interface FilterSheetProps {
@@ -77,10 +66,10 @@ export function FilterSheet({
   };
 
   const handleClear = () => {
-    setLocalFilters({ department: 'ALL', influence: 'ANY' });
+    setLocalFilters({ department: 'ALL' });
   };
 
-  const isDefault = localFilters.department === 'ALL' && localFilters.influence === 'ANY';
+  const isDefault = localFilters.department === 'ALL';
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -114,28 +103,11 @@ export function FilterSheet({
             </div>
           </div>
 
-          {/* Influence Filter */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium">Influence Level</label>
-            <div className="flex flex-wrap gap-2">
-              {INFLUENCE_ORDER.map((level) => (
-                <FilterChip
-                  key={level}
-                  selected={localFilters.influence === level}
-                  onClick={() => setLocalFilters(f => ({ ...f, influence: level }))}
-                  data-testid={`filter-chip-influence-${level.toLowerCase()}`}
-                >
-                  {INFLUENCE_LABELS[level]}
-                </FilterChip>
-              ))}
-            </div>
-          </div>
-
-          {/* Actions Section */}
+          {/* Quick Actions */}
           {(onAutoGroup || onEditOrg) && (
-            <div className="space-y-3 pt-2 border-t">
-              <label className="text-sm font-medium text-muted-foreground">Actions</label>
-              <div className="flex gap-2 flex-wrap">
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Quick Actions</label>
+              <div className="flex flex-wrap gap-2">
                 {onAutoGroup && (
                   <Button
                     variant="outline"
@@ -144,22 +116,9 @@ export function FilterSheet({
                       onAutoGroup();
                       onOpenChange(false);
                     }}
-                    data-testid="button-auto-group-sheet"
+                    data-testid="button-auto-group"
                   >
-                    Auto-group
-                  </Button>
-                )}
-                {onEditOrg && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      onEditOrg();
-                      onOpenChange(false);
-                    }}
-                    data-testid="button-edit-org-sheet"
-                  >
-                    Edit Org
+                    Auto-group by title
                   </Button>
                 )}
               </div>
@@ -168,29 +127,23 @@ export function FilterSheet({
         </div>
 
         <DrawerFooter className="flex-row gap-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={handleClear}
-            disabled={isDefault}
-            data-testid="button-clear-filters"
-          >
-            Clear
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={handleApply}
-            data-testid="button-apply-filters"
-          >
-            Apply
-          </Button>
+          {!isDefault && (
+            <Button variant="ghost" onClick={handleClear} className="flex-1">
+              Clear
+            </Button>
+          )}
+          <DrawerClose asChild>
+            <Button onClick={handleApply} className="flex-1" data-testid="button-apply-filters">
+              Apply
+            </Button>
+          </DrawerClose>
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
   );
 }
 
-// Reusable filter chip component
+// Filter chip component
 function FilterChip({
   selected,
   onClick,
@@ -204,8 +157,10 @@ function FilterChip({
 }) {
   return (
     <Badge
-      variant={selected ? 'default' : 'outline'}
-      className="cursor-pointer h-8 px-3 gap-1"
+      variant={selected ? "default" : "outline"}
+      className={`cursor-pointer transition-all ${
+        selected ? 'gap-1' : 'hover:bg-muted'
+      }`}
       onClick={onClick}
       {...props}
     >
@@ -215,19 +170,17 @@ function FilterChip({
   );
 }
 
-// Helper to get filter summary text
+// Helper to generate filter summary text
 export function getFilterSummary(filters: FilterState): string {
   const parts: string[] = [];
   
-  if (filters.department === 'ALL') {
-    parts.push('All');
-  } else {
+  if (filters.department !== 'ALL') {
     parts.push(DEPARTMENT_LABELS[filters.department]);
   }
   
-  if (filters.influence !== 'ANY') {
-    parts.push(`${INFLUENCE_LABELS[filters.influence]} influence`);
+  if (parts.length === 0) {
+    return 'All';
   }
   
-  return parts.join(' · ');
+  return parts.join(', ');
 }

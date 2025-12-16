@@ -11,7 +11,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
 import {
   Company,
@@ -176,82 +184,97 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={showAddCompany} onOpenChange={setShowAddCompany}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Company</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="company-name">Company Name *</Label>
-              <Input
-                id="company-name"
-                placeholder="Acme Corp"
-                value={newCompanyName}
-                onChange={(e) => setNewCompanyName(e.target.value)}
-                data-testid="input-new-company-name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-domain">Domain</Label>
-              <Input
-                id="company-domain"
-                placeholder="acme.com"
-                value={newCompanyDomain}
-                onChange={(e) => setNewCompanyDomain(e.target.value)}
-                data-testid="input-new-company-domain"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+      <Drawer open={showAddCompany} onOpenChange={setShowAddCompany}>
+        <DrawerContent className="max-h-[90vh]">
+          <DrawerHeader className="border-b pb-4">
+            <DrawerTitle className="text-xl font-semibold">Add Company</DrawerTitle>
+          </DrawerHeader>
+          <ScrollArea className="flex-1 overflow-y-auto">
+            <div className="p-4 pb-[env(safe-area-inset-bottom)] space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="company-city">City</Label>
+                <Label htmlFor="company-name" className="text-sm font-medium">Company Name *</Label>
                 <Input
-                  id="company-city"
-                  placeholder="Sydney"
-                  value={newCompanyCity}
-                  onChange={(e) => setNewCompanyCity(e.target.value)}
+                  id="company-name"
+                  placeholder="Acme Corp"
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  className="h-12"
+                  data-testid="input-new-company-name"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company-state">State</Label>
+                <Label htmlFor="company-domain" className="text-sm font-medium">Domain</Label>
                 <Input
-                  id="company-state"
-                  placeholder="NSW"
-                  value={newCompanyState}
-                  onChange={(e) => setNewCompanyState(e.target.value)}
+                  id="company-domain"
+                  placeholder="acme.com"
+                  value={newCompanyDomain}
+                  onChange={(e) => setNewCompanyDomain(e.target.value)}
+                  className="h-12"
+                  data-testid="input-new-company-domain"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="company-city" className="text-sm font-medium">City</Label>
+                  <Input
+                    id="company-city"
+                    placeholder="Sydney"
+                    value={newCompanyCity}
+                    onChange={(e) => setNewCompanyCity(e.target.value)}
+                    className="h-12"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company-state" className="text-sm font-medium">State</Label>
+                  <Input
+                    id="company-state"
+                    placeholder="NSW"
+                    value={newCompanyState}
+                    onChange={(e) => setNewCompanyState(e.target.value)}
+                    className="h-12"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company-country" className="text-sm font-medium">Country</Label>
+                <Input
+                  id="company-country"
+                  placeholder="Australia"
+                  value={newCompanyCountry}
+                  onChange={(e) => setNewCompanyCountry(e.target.value)}
+                  className="h-12"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company-notes" className="text-sm font-medium">Notes</Label>
+                <Textarea
+                  id="company-notes"
+                  placeholder="Notes about this company..."
+                  value={newCompanyNotes}
+                  onChange={(e) => setNewCompanyNotes(e.target.value)}
+                  rows={4}
+                  className="resize-none"
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-country">Country</Label>
-              <Input
-                id="company-country"
-                placeholder="Australia"
-                value={newCompanyCountry}
-                onChange={(e) => setNewCompanyCountry(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-notes">Notes</Label>
-              <Textarea
-                id="company-notes"
-                placeholder="Notes about this company..."
-                value={newCompanyNotes}
-                onChange={(e) => setNewCompanyNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={resetAddCompanyForm}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddCompany} disabled={!newCompanyName.trim()} data-testid="button-save-company">
+          </ScrollArea>
+          <DrawerFooter className="border-t pt-4 flex-row gap-3">
+            <DrawerClose asChild>
+              <Button variant="outline" onClick={resetAddCompanyForm} className="flex-1">
+                Cancel
+              </Button>
+            </DrawerClose>
+            <Button 
+              onClick={handleAddCompany} 
+              disabled={!newCompanyName.trim()} 
+              className="flex-1"
+              data-testid="button-save-company"
+            >
               Save Company
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       <Card className="glass">
         <CardHeader className="pb-2">

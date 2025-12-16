@@ -56,29 +56,28 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
    - 12 seed events across all three industries
    - Preferences persisted in localStorage (key: `carda_event_prefs_v1`)
    - Architecture ready for future AI + cron-based pipeline
-9. **Org Intelligence v2** - Company tracking and organizational mapping
+9. **Org Intelligence v3** - Company tracking and organizational mapping
    - **Contacts Hub redesign**: People/Companies segmented control (tabs)
+   - **Add Company Drawer**: iOS-optimized bottom sheet with ScrollArea, safe-area padding, sticky footer
    - **Companies auto-generation**: Companies created from contact data (company name or email domain)
    - **Company Detail page**: Three-tab interface (People, Org, Notes)
-   - **Quick Edit Bottom Sheet**: Drawer to edit Department, Role, Influence, Manager for any contact
-   - **Department Filter Chips**: Horizontal scroll filter by department (Exec, Legal, Project Delivery, Sales, Finance, Ops)
+   - **Quick Edit Bottom Sheet**: Drawer to edit Department, Role, Manager for any contact
+   - **Department Filter Chips**: Filter by department (Exec, Legal, Project Delivery, Sales, Finance, Ops)
    - **Auto-group Button**: Automatically assigns departments based on job titles with undo support
-   - **Org Map**: Segmented control for Org Chart vs Influence Map views
-     - **Org Chart (React Flow)**: Interactive canvas with dagre auto-layout
+   - **Org Map v3** - Hierarchy-first approach (iOS 26 style)
+     - **Hierarchy List (default view)**: Collapsible tree structure
+       - Avatar with initials, name, title, department badge per row
+       - Expand/collapse with smooth animations via Framer Motion
+       - Tap row to open PersonEditSheet (set "Reports To")
+       - Cycle detection prevents circular reporting structures
+     - **View Diagram button**: Opens full-screen modal for diagram view
+       - React Flow canvas with dagre auto-layout
        - Custom contact nodes with name, title, department pill
        - Department color-coded node styling
        - Pinch-zoom, pan, and fit-to-view controls
-       - Edit mode with drag-drop to set reporting lines
-       - Cycle detection prevents circular reporting structures
-       - Icon buttons: Pencil (edit), Sparkles (relayout), Trash (clear all)
-       - Bottom sheet on node tap for quick metadata editing
-     - **Influence Map**: Force-directed graph using react-force-graph-2d
-       - Node size = influence level (HIGH=20, MEDIUM=12, LOW=6)
-       - Node color = role (Champion=green, Neutral=gray, Blocker=red, Unknown=zinc)
-       - Links from reporting relationships
-       - Legend with all role colors
-       - Click node to view contact details
-   - **Contact org metadata**: department, role, influence, reportsToId, relationshipStrength fields
+       - Drag-drop to set reporting lines (edit mode always on)
+   - **Influence feature REMOVED** - Simplified to focus on hierarchy
+   - **Contact org metadata**: department, role, reportsToId fields
    - **View in Org Map button**: Quick navigation from contact detail to company org map
    - Companies persisted in localStorage (key: `carda_companies_v1`)
    - Data relationships: contacts link to companies via matching name or domain
@@ -91,7 +90,8 @@ Carda 2.0 is a mobile-first business card scanner with AI-powered company intell
 - `components/scan-tab.tsx` - Scan/paste modes, contact display, edit, vCard, View in Org Map
 - `components/contacts-hub.tsx` - People/Companies split view with search and filtering
 - `components/company-detail.tsx` - Company detail page with People/Org/Notes tabs
-- `components/org-map.tsx` - Org Map with Org/Influence segmented control, icon buttons, bottom sheet
+- `components/org-map.tsx` - Org Map v3 with hierarchy-first approach and optional diagram modal
+- `components/hierarchy-list.tsx` - Collapsible tree structure for org hierarchy (iOS 26 style)
 - `components/org-chart-canvas.tsx` - React Flow canvas with dagre layout, custom nodes, drag-drop
 - `components/company-intel-card.tsx` - AI-generated intel display
 - `lib/contactsStorage.ts` - Contact CRUD with localStorage persistence

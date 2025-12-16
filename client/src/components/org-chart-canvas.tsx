@@ -33,7 +33,6 @@ import { Users } from "lucide-react";
 import {
   StoredContact,
   Department,
-  InfluenceLevel,
 } from "@/lib/contactsStorage";
 
 // Dev-only console log
@@ -104,13 +103,6 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
   UNKNOWN: 'Unknown',
 };
 
-const INFLUENCE_LABELS: Record<InfluenceLevel, string> = {
-  HIGH: 'High',
-  MEDIUM: 'Med',
-  LOW: 'Low',
-  UNKNOWN: '',
-};
-
 // Node dimensions for dagre layout - slightly larger for better visuals
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 96;
@@ -132,7 +124,6 @@ function getInitials(name: string): string {
 function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   const { contact, onNodeClick } = data;
   const department = contact.org?.department || 'UNKNOWN';
-  const influence = contact.org?.influence || 'UNKNOWN';
   const colors = DEPARTMENT_COLORS[department];
 
   const handleClick = useCallback(() => {
@@ -202,18 +193,6 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
             >
               {DEPARTMENT_LABELS[department]}
             </Badge>
-            {influence !== 'UNKNOWN' && (
-              <Badge 
-                variant="secondary" 
-                className={`text-[10px] px-2 py-0.5 h-[20px] font-medium border-0 ${
-                  influence === 'HIGH' ? 'text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/50' :
-                  influence === 'MEDIUM' ? 'text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/50' :
-                  'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50'
-                }`}
-              >
-                {INFLUENCE_LABELS[influence]}
-              </Badge>
-            )}
           </div>
         </div>
       </div>
