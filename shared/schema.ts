@@ -154,6 +154,49 @@ export interface KeyDevelopment {
   note?: string;
 }
 
+// Funding round information
+export interface FundingRound {
+  type: string; // "Seed", "Series A", "Series B", etc.
+  amount?: string; // "$10M", "$50M", etc.
+  date?: string; // "March 2024", "2023", etc.
+  leadInvestors?: string[]; // ["Sequoia", "a16z"]
+}
+
+// Funding data structure
+export interface FundingData {
+  totalRaised?: string; // "$150M total"
+  latestRound?: FundingRound;
+  fundingStage?: string; // "Series B", "Pre-IPO", "Bootstrapped", etc.
+  investors?: string[]; // Notable investors
+  ipoStatus?: string; // "Private", "Public (NYSE: XYZ)", etc.
+}
+
+// Technology stack item
+export interface TechStackItem {
+  category: string; // "Frontend", "Backend", "Infrastructure", "Analytics", etc.
+  technologies: string[]; // ["React", "Next.js", "TypeScript"]
+}
+
+// Tech stack data structure
+export interface TechStackData {
+  categories: TechStackItem[];
+  highlights?: string[]; // Key takeaways about their tech choices
+}
+
+// Competitor information
+export interface CompetitorInfo {
+  name: string;
+  description?: string; // Brief description of what they do
+  differentiator?: string; // How target company differs from this competitor
+}
+
+// Competitive landscape data
+export interface CompetitiveLandscape {
+  directCompetitors: CompetitorInfo[];
+  indirectCompetitors?: CompetitorInfo[];
+  marketPosition?: string; // Brief analysis of where they stand
+}
+
 // Intel data structure - Focused Sales Brief format
 export interface CompanyIntelData {
   // 2-3 sentence overview of what the company actually does
@@ -173,6 +216,15 @@ export interface CompanyIntelData {
   
   // Key historical developments (not live news)
   keyDevelopments: KeyDevelopment[];
+  
+  // Enhanced intel: Funding data (Crunchbase-style)
+  funding?: FundingData;
+  
+  // Enhanced intel: Technology stack (BuiltWith-style)
+  techStack?: TechStackData;
+  
+  // Enhanced intel: Competitive landscape
+  competitors?: CompetitiveLandscape;
   
   // Metadata
   generatedAt: string;
