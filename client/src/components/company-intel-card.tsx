@@ -20,6 +20,10 @@ import {
   AlertTriangle,
   History,
   ExternalLink,
+  DollarSign,
+  Cpu,
+  Users,
+  TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -44,6 +48,9 @@ export function CompanyIntelCard({
   const [questionsOpen, setQuestionsOpen] = useState(true);
   const [developmentsOpen, setDevelopmentsOpen] = useState(true);
   const [risksOpen, setRisksOpen] = useState(true);
+  const [fundingOpen, setFundingOpen] = useState(true);
+  const [techStackOpen, setTechStackOpen] = useState(true);
+  const [competitorsOpen, setCompetitorsOpen] = useState(true);
 
   if (isLoading) {
     return (
@@ -375,6 +382,187 @@ export function CompanyIntelCard({
                       <p className="text-sm">{risk}</p>
                     </div>
                   ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Funding Section */}
+          {intel.funding && (intel.funding.fundingStage || intel.funding.totalRaised || intel.funding.investors?.length || intel.funding.ipoStatus || intel.funding.latestRound?.type) && (
+            <Collapsible open={fundingOpen} onOpenChange={setFundingOpen}>
+              <SectionHeader
+                icon={DollarSign}
+                title="Funding & Investment"
+                isOpen={fundingOpen}
+                onToggle={() => setFundingOpen(!fundingOpen)}
+              />
+              <CollapsibleContent>
+                <div className="mt-2 pl-8 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    {intel.funding.fundingStage && (
+                      <div className="p-2 rounded-md bg-primary/5" data-testid="funding-stage">
+                        <p className="text-xs text-muted-foreground">Stage</p>
+                        <p className="text-sm font-medium">{intel.funding.fundingStage}</p>
+                      </div>
+                    )}
+                    {intel.funding.totalRaised && intel.funding.totalRaised !== "null" && (
+                      <div className="p-2 rounded-md bg-primary/5" data-testid="funding-total">
+                        <p className="text-xs text-muted-foreground">Total Raised</p>
+                        <p className="text-sm font-medium">{intel.funding.totalRaised}</p>
+                      </div>
+                    )}
+                    {intel.funding.ipoStatus && (
+                      <div className="p-2 rounded-md bg-primary/5" data-testid="funding-ipo">
+                        <p className="text-xs text-muted-foreground">Status</p>
+                        <p className="text-sm font-medium">{intel.funding.ipoStatus}</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {intel.funding.latestRound && intel.funding.latestRound.type && (
+                    <div className="p-3 rounded-md border border-primary/10" data-testid="funding-latest-round">
+                      <div className="flex items-center gap-2 mb-2">
+                        <TrendingUp className="w-3.5 h-3.5 text-primary" />
+                        <span className="text-xs font-medium text-primary">Latest Round</span>
+                      </div>
+                      <p className="text-sm font-medium">
+                        {intel.funding.latestRound.type}
+                        {intel.funding.latestRound.amount && ` - ${intel.funding.latestRound.amount}`}
+                      </p>
+                      {intel.funding.latestRound.date && (
+                        <p className="text-xs text-muted-foreground mt-1">{intel.funding.latestRound.date}</p>
+                      )}
+                      {intel.funding.latestRound.leadInvestors && intel.funding.latestRound.leadInvestors.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Led by: {intel.funding.latestRound.leadInvestors.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {intel.funding.investors && intel.funding.investors.length > 0 && (
+                    <div data-testid="funding-investors">
+                      <p className="text-xs text-muted-foreground mb-2">Notable Investors</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {intel.funding.investors.map((investor, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary"
+                          >
+                            {investor}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Tech Stack Section */}
+          {intel.techStack && ((intel.techStack.categories?.length ?? 0) > 0 || (intel.techStack.highlights?.length ?? 0) > 0) && (
+            <Collapsible open={techStackOpen} onOpenChange={setTechStackOpen}>
+              <SectionHeader
+                icon={Cpu}
+                title="Technology Stack"
+                isOpen={techStackOpen}
+                onToggle={() => setTechStackOpen(!techStackOpen)}
+              />
+              <CollapsibleContent>
+                <div className="mt-2 pl-8 space-y-3">
+                  {(intel.techStack.categories ?? []).filter(c => c && (c.category || c.technologies?.length)).map((category, i) => (
+                    <div key={i} data-testid={`tech-category-${i}`}>
+                      <p className="text-xs font-medium text-muted-foreground mb-1.5">{category.category || "General"}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(category.technologies ?? []).map((tech, j) => (
+                          <span
+                            key={j}
+                            className="px-2 py-1 text-xs rounded-md bg-secondary/50 border border-border"
+                          >
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {intel.techStack.highlights && intel.techStack.highlights.length > 0 && (
+                    <div className="pt-2 border-t border-border/50" data-testid="tech-highlights">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Key Insights</p>
+                      {intel.techStack.highlights.map((highlight, i) => (
+                        <div key={i} className="flex items-start gap-2 mt-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0 mt-2" />
+                          <p className="text-sm text-muted-foreground">{highlight}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Competitive Landscape Section */}
+          {intel.competitors && ((intel.competitors.directCompetitors?.length ?? 0) > 0 || (intel.competitors.indirectCompetitors?.length ?? 0) > 0 || intel.competitors.marketPosition) && (
+            <Collapsible open={competitorsOpen} onOpenChange={setCompetitorsOpen}>
+              <SectionHeader
+                icon={Users}
+                title="Competitive Landscape"
+                isOpen={competitorsOpen}
+                onToggle={() => setCompetitorsOpen(!competitorsOpen)}
+              />
+              <CollapsibleContent>
+                <div className="mt-2 pl-8 space-y-3">
+                  {intel.competitors.marketPosition && (
+                    <div className="p-3 rounded-md bg-primary/5 border border-primary/10" data-testid="market-position">
+                      <p className="text-sm">{intel.competitors.marketPosition}</p>
+                    </div>
+                  )}
+                  
+                  {intel.competitors.directCompetitors && intel.competitors.directCompetitors.length > 0 && (
+                    <div data-testid="direct-competitors">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Direct Competitors</p>
+                      <div className="space-y-2">
+                        {intel.competitors.directCompetitors.map((comp, i) => (
+                          <div
+                            key={i}
+                            className="p-2 rounded-md border border-border"
+                            data-testid={`competitor-${i}`}
+                          >
+                            <p className="text-sm font-medium">{comp.name}</p>
+                            {comp.description && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{comp.description}</p>
+                            )}
+                            {comp.differentiator && (
+                              <p className="text-xs text-primary mt-1">
+                                Differentiator: {comp.differentiator}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {intel.competitors.indirectCompetitors && intel.competitors.indirectCompetitors.length > 0 && (
+                    <div data-testid="indirect-competitors">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Adjacent Players</p>
+                      <div className="flex flex-wrap gap-2">
+                        {intel.competitors.indirectCompetitors.map((comp, i) => (
+                          <div
+                            key={i}
+                            className="px-2 py-1.5 rounded-md bg-secondary/30 border border-border"
+                          >
+                            <p className="text-xs font-medium">{comp.name}</p>
+                            {comp.description && (
+                              <p className="text-xs text-muted-foreground">{comp.description}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CollapsibleContent>
             </Collapsible>

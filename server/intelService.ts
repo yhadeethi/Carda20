@@ -95,9 +95,9 @@ export async function getOrCreateCompanyIntel(
                                  !cachedIntel.whyTheyMatterToYou || 
                                  !cachedIntel.roleInsights;
           
-          // Check if missing enhanced intel (funding, techStack, competitors)
-          const isMissingEnhancedIntel = !cachedIntel.funding && 
-                                          !cachedIntel.techStack && 
+          // Check if missing any enhanced intel field (funding, techStack, or competitors)
+          const isMissingEnhancedIntel = !cachedIntel.funding || 
+                                          !cachedIntel.techStack || 
                                           !cachedIntel.competitors;
           
           if (!isLegacyFormat && !isMissingEnhancedIntel) {
