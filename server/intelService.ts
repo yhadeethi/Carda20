@@ -90,16 +90,21 @@ export async function getOrCreateCompanyIntel(
         if (cacheAge < cacheMaxAge && existingIntel.intelJson) {
           const cachedIntel = existingIntel.intelJson as CompanyIntelData;
           
-          // Check if this is legacy intel (missing new sales brief fields)
+          // Check if this is legacy intel (missing new sales brief fields or enhanced intel)
           const isLegacyFormat = !cachedIntel.companySnapshot || 
                                  !cachedIntel.whyTheyMatterToYou || 
                                  !cachedIntel.roleInsights;
           
-          if (!isLegacyFormat) {
+          // Check if missing enhanced intel (funding, techStack, competitors)
+          const isMissingEnhancedIntel = !cachedIntel.funding && 
+                                          !cachedIntel.techStack && 
+                                          !cachedIntel.competitors;
+          
+          if (!isLegacyFormat && !isMissingEnhancedIntel) {
             return cachedIntel;
           }
-          // Legacy format detected - regenerate with new structure
-          console.log(`Intel: Regenerating legacy intel for ${domain} with new sales brief format`);
+          // Legacy format or missing enhanced intel - regenerate with new structure
+          console.log(`Intel: Regenerating intel for ${domain} with enhanced format (funding/tech/competitors)`);
         }
       }
     } else {
@@ -207,7 +212,7 @@ async function generateCompanyIntel(
 
 ${userContextStr}
 
-Generate a focused sales brief in JSON format. Be specific, punchy, and actionable. Avoid generic corporate-speak. Everything should be role- and industry-specific.
+Generate a comprehensive sales brief in JSON format. Be specific, punchy, and actionable. Avoid generic corporate-speak. Everything should be role- and industry-specific.
 
 Return a JSON object with this EXACT structure:
 {
@@ -246,6 +251,57 @@ Return a JSON object with this EXACT structure:
     }
   ],
   
+  "funding": {
+    "totalRaised": "Total funding raised if known (e.g., '$150M total') or null if unknown/bootstrapped",
+    "fundingStage": "Current stage: 'Bootstrapped', 'Seed', 'Series A', 'Series B', 'Series C+', 'Pre-IPO', 'Public', etc.",
+    "ipoStatus": "'Private', 'Public (NYSE: XYZ)', or similar",
+    "latestRound": {
+      "type": "Series B (example)",
+      "amount": "$50M (example)",
+      "date": "March 2024 (example)",
+      "leadInvestors": ["Lead investor name if known"]
+    },
+    "investors": ["Notable investors if known - Sequoia, a16z, etc."]
+  },
+  
+  "techStack": {
+    "categories": [
+      {
+        "category": "Frontend/Web",
+        "technologies": ["React", "Next.js", "TypeScript", etc. - include what you know or can infer]
+      },
+      {
+        "category": "Backend/Infrastructure", 
+        "technologies": ["AWS", "Python", "PostgreSQL", etc.]
+      },
+      {
+        "category": "Analytics/Marketing",
+        "technologies": ["Google Analytics", "Salesforce", "HubSpot", etc.]
+      }
+    ],
+    "highlights": [
+      "Key insight about their tech choices relevant to sales (e.g., 'Heavy AWS investment suggests cloud-first strategy')",
+      "Another tech-related insight if relevant"
+    ]
+  },
+  
+  "competitors": {
+    "directCompetitors": [
+      {
+        "name": "Competitor name",
+        "description": "What they do in 1 line",
+        "differentiator": "How ${companyName} differs from them"
+      }
+    ],
+    "indirectCompetitors": [
+      {
+        "name": "Adjacent player name",
+        "description": "What they do"
+      }
+    ],
+    "marketPosition": "1-2 sentences on where ${companyName} stands competitively - leader, challenger, niche player, etc."
+  },
+  
   "generatedAt": "${new Date().toISOString()}"
 }
 
@@ -255,7 +311,10 @@ Guidelines:
 - highImpactQuestions should be questions you could literally read out in a meeting
 - keyDevelopments is NOT live news - just key historical developments you know about. Limit to 3-4 most important items
 - If you have little reliable info about the company, keep keyDevelopments short or empty rather than guessing
-- risksOrSensitivities should only include specific known issues, not generic warnings`;
+- risksOrSensitivities should only include specific known issues, not generic warnings
+- For funding: If unknown, set fields to null or use "Unknown" - don't guess amounts. Bootstrapped companies should have fundingStage: "Bootstrapped"
+- For techStack: Include technologies you're confident about. Categories can be: Frontend/Web, Backend/Infrastructure, Analytics/Marketing, DevOps/Cloud, Data/ML, Communication/Collaboration
+- For competitors: Include 2-4 direct competitors and 1-2 indirect if relevant. Focus on competitors the salesperson should know about`;
 
     console.log(`Intel: Generating intel for ${companyName}${domain ? ` (${domain})` : ""}`);
     
@@ -263,7 +322,7 @@ Guidelines:
       model: "gpt-4o", // Using gpt-4o for more reliable responses
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-      max_tokens: 2048,
+      max_tokens: 4096, // Increased for enhanced intel with funding/tech/competitors
     });
 
     const content = response.choices[0]?.message?.content;
