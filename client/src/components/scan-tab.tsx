@@ -18,11 +18,16 @@ import { CompanyIntelData } from "@shared/schema";
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
 import { loadContactsV2, ContactV2 } from "@/lib/contacts/storage";
 import { getContactCountForCompany, findCompanyByName, extractDomainFromEmail, findCompanyByDomain } from "@/lib/companiesStorage";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2, Network } from "lucide-react";
+import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2, Network, Layers } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
+import { BatchScanMode } from "@/components/batch-scan-mode";
+import { BatchReview } from "@/components/batch-review";
+import { QueuedScan, getAllQueueItems, clearBatchSession } from "@/lib/batchScanStorage";
+import { processBatchQueue } from "@/lib/batchProcessor";
 
 type ScanMode = "scan" | "paste";
+type BatchState = "idle" | "capturing" | "processing" | "reviewing";
 
 interface ParsedContact {
   fullName?: string;
@@ -88,6 +93,10 @@ export function ScanTab({
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
   const [contactDetailTab, setContactDetailTab] = useState<"details" | "actions" | "timeline">("details");
   const [v2RefreshKey, setV2RefreshKey] = useState(0);
+  
+  // Batch scan state
+  const [batchState, setBatchState] = useState<BatchState>("idle");
+  const [batchItems, setBatchItems] = useState<QueuedScan[]>([]);
 
   useEffect(() => {
     if (viewingContact) {
@@ -402,6 +411,43 @@ export function ScanTab({
     setShowEventNameDialog(true);
   };
 
+  // Batch scan handlers
+  const handleStartBatchMode = () => {
+    setBatchState("capturing");
+  };
+
+  const handleExitBatchMode = () => {
+    setBatchState("idle");
+    clearBatchSession();
+  };
+
+  const handleBatchProcess = async (items: QueuedScan[]) => {
+    setBatchState("processing");
+    setBatchItems(items);
+    
+    await processBatchQueue({
+      onComplete: ({ successful, failed }) => {
+        const updatedItems = getAllQueueItems();
+        setBatchItems(updatedItems);
+        setBatchState("reviewing");
+        toast({
+          title: `Processing complete`,
+          description: `${successful} successful, ${failed} failed`,
+        });
+      },
+    });
+  };
+
+  const handleBatchComplete = () => {
+    setBatchState("idle");
+    setBatchItems([]);
+    onContactSaved?.();
+  };
+
+  const handleBatchBack = () => {
+    setBatchState("capturing");
+  };
+
   const isProcessing = isCompressing || scanCardMutation.isPending || parseTextMutation.isPending;
 
   const currentContact = editedContact;
@@ -485,7 +531,27 @@ export function ScanTab({
         </AlertDialogContent>
       </AlertDialog>
 
-      {!contact && !isViewingFromHub && (
+      {/* Batch Scan Mode */}
+      {batchState === "capturing" && currentEventName && (
+        <BatchScanMode
+          eventName={currentEventName}
+          onProcess={handleBatchProcess}
+          onExit={handleExitBatchMode}
+        />
+      )}
+
+      {/* Batch Processing / Review */}
+      {(batchState === "processing" || batchState === "reviewing") && currentEventName && (
+        <BatchReview
+          items={batchItems}
+          eventName={currentEventName}
+          onComplete={handleBatchComplete}
+          onBack={handleBatchBack}
+        />
+      )}
+
+      {/* Normal Scan UI (only when not in batch mode) */}
+      {!contact && !isViewingFromHub && batchState === "idle" && (
         <Card className="glass">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl font-semibold">Scan Business Card</CardTitle>
@@ -521,6 +587,19 @@ export function ScanTab({
                   </div>
                 )}
               </div>
+              
+              {/* Batch Scan Button */}
+              {eventModeEnabled && currentEventName && (
+                <Button
+                  variant="outline"
+                  className="w-full mt-2 gap-2"
+                  onClick={handleStartBatchMode}
+                  data-testid="button-batch-scan"
+                >
+                  <Layers className="w-4 h-4" />
+                  Batch Scan (Multi-Photo)
+                </Button>
+              )}
             </div>
 
             <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
@@ -991,7 +1070,7 @@ export function ScanTab({
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3 rounded-lg bg-muted/50 text-center">
                         <div className="text-2xl font-bold">
-                          {contactV2.tasks?.filter(t => !t.completed).length || 0}
+                          {contactV2.tasks?.filter(t => !t.done).length || 0}
                         </div>
                         <div className="text-xs text-muted-foreground">Pending Tasks</div>
                       </div>
