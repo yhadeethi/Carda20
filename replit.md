@@ -31,6 +31,7 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Contact Timeline**: Comprehensive history of interactions with each contact, supporting various event types and filtering.
 -   **Duplicate Detection & Merge**: Fuzzy matching and scoring for contact deduplication, with a side-by-side merge UI and undo support.
 -   **Calendar Integration**: Generates ICS files for meeting invites with customizable dates, times, and durations.
+-   **Batch Scanning (Event Mode)**: Multi-photo capture mode that queues business cards for background processing. Users can snap multiple cards quickly, then process all at once with a review/approve workflow before saving.
 
 ### Feature Specifications
 -   **Business Card OCR**: Upload/scan images to extract text.
@@ -44,6 +45,7 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Contact Timeline**: Logs all interactions and events for a contact.
 -   **Duplicate Management**: Detects and helps merge duplicate contacts.
 -   **Calendar Integration**: Facilitates meeting scheduling and ICS export.
+-   **Batch Scanning**: In Event Mode, enables multi-photo capture with thumbnail previews, background OCR processing, and batch review/approve workflow for rapid networking events.
 
 ## External Dependencies
 -   **OCR.space API**: For Optical Character Recognition.
