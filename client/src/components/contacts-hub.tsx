@@ -29,11 +29,15 @@ import {
   autoGenerateCompaniesFromContacts,
   getContactCountForCompany,
 } from "@/lib/companiesStorage";
-import { Search, Trash2, User, Building, Building2, Calendar, Tag, Users, Plus } from "lucide-react";
+import { Search, Trash2, User, Building, Building2, Calendar, Tag, Users, Plus, Bell, Merge } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
+import { UpcomingView } from "@/components/upcoming-view";
+import { DuplicatesView } from "@/components/duplicates-view";
 import { format } from "date-fns";
 
 type TabMode = "people" | "companies";
+type PeopleSubView = "all" | "upcoming" | "duplicates";
 
 interface ContactsHubProps {
   onSelectContact: (contact: StoredContact) => void;
@@ -45,6 +49,7 @@ interface ContactsHubProps {
 
 export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onContactDeleted, onSelectCompany }: ContactsHubProps) {
   const [activeTab, setActiveTab] = useState<TabMode>("people");
+  const [peopleSubView, setPeopleSubView] = useState<PeopleSubView>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [contacts, setContacts] = useState<StoredContact[]>(() => loadContacts());
@@ -308,91 +313,142 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
 
             {/* People Tab */}
             <TabsContent value="people" className="mt-4 space-y-4">
-              {eventNames.length > 0 && (
-                <Select value={eventFilter} onValueChange={setEventFilter}>
-                  <SelectTrigger data-testid="select-event-filter">
-                    <SelectValue placeholder="All events" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All events</SelectItem>
-                    {eventNames.map((event) => (
-                      <SelectItem key={event} value={event}>
-                        {event}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Sub-view filter badges */}
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <Badge
+                  variant={peopleSubView === "all" ? "default" : "outline"}
+                  className="cursor-pointer whitespace-nowrap"
+                  onClick={() => setPeopleSubView("all")}
+                  data-testid="filter-all"
+                >
+                  <Users className="w-3 h-3 mr-1" />
+                  All
+                </Badge>
+                <Badge
+                  variant={peopleSubView === "upcoming" ? "default" : "outline"}
+                  className="cursor-pointer whitespace-nowrap"
+                  onClick={() => setPeopleSubView("upcoming")}
+                  data-testid="filter-upcoming"
+                >
+                  <Bell className="w-3 h-3 mr-1" />
+                  Upcoming
+                </Badge>
+                <Badge
+                  variant={peopleSubView === "duplicates" ? "default" : "outline"}
+                  className="cursor-pointer whitespace-nowrap"
+                  onClick={() => setPeopleSubView("duplicates")}
+                  data-testid="filter-duplicates"
+                >
+                  <Merge className="w-3 h-3 mr-1" />
+                  Duplicates
+                </Badge>
+              </div>
+
+              {/* Sub-views */}
+              {peopleSubView === "upcoming" && (
+                <div className="min-h-[300px]">
+                  <UpcomingView onSelectContact={(id) => {
+                    const contact = contacts.find(c => c.id === id);
+                    if (contact) onSelectContact(contact);
+                  }} />
+                </div>
               )}
 
-              <div className="max-h-[400px] overflow-y-auto space-y-2" data-testid="contacts-list">
-                {filteredContacts.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground" data-testid="contacts-empty">
-                    {contacts.length === 0 ? (
-                      <p>No contacts saved yet. Scan a business card to get started!</p>
+              {peopleSubView === "duplicates" && (
+                <div className="min-h-[300px]">
+                  <DuplicatesView onRefresh={() => setContacts(loadContacts())} />
+                </div>
+              )}
+
+              {peopleSubView === "all" && (
+                <>
+                  {eventNames.length > 0 && (
+                    <Select value={eventFilter} onValueChange={setEventFilter}>
+                      <SelectTrigger data-testid="select-event-filter">
+                        <SelectValue placeholder="All events" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All events</SelectItem>
+                        {eventNames.map((event) => (
+                          <SelectItem key={event} value={event}>
+                            {event}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  <div className="max-h-[400px] overflow-y-auto space-y-2" data-testid="contacts-list">
+                    {filteredContacts.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground" data-testid="contacts-empty">
+                        {contacts.length === 0 ? (
+                          <p>No contacts saved yet. Scan a business card to get started!</p>
+                        ) : (
+                          <p>No contacts match your search.</p>
+                        )}
+                      </div>
                     ) : (
-                      <p>No contacts match your search.</p>
-                    )}
-                  </div>
-                ) : (
-                  filteredContacts.map((contact) => (
-                    <div
-                      key={contact.id}
-                      className="p-3 rounded-lg border bg-card hover-elevate cursor-pointer group relative"
-                      onClick={() => onSelectContact(contact)}
-                      data-testid={`contact-row-${contact.id}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                            <span className="font-medium truncate" data-testid={`contact-name-${contact.id}`}>
-                              {contact.name || contact.email || "Unknown"}
-                            </span>
-                          </div>
-                          
-                          {(contact.company || contact.title) && (
-                            <div className="flex items-center gap-2 mt-1 min-w-0">
-                              <Building className="w-4 h-4 text-muted-foreground shrink-0 invisible" />
-                              <span className="text-sm text-muted-foreground truncate" data-testid={`contact-details-${contact.id}`}>
-                                {[contact.company, contact.title].filter(Boolean).join(" · ")}
-                              </span>
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Calendar className="w-3 h-3" />
-                              <span>Scanned on {formatDate(contact.createdAt)}</span>
+                      filteredContacts.map((contact) => (
+                        <div
+                          key={contact.id}
+                          className="p-3 rounded-lg border bg-card hover-elevate cursor-pointer group relative"
+                          onClick={() => onSelectContact(contact)}
+                          data-testid={`contact-row-${contact.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                                <span className="font-medium truncate" data-testid={`contact-name-${contact.id}`}>
+                                  {contact.name || contact.email || "Unknown"}
+                                </span>
+                              </div>
+                              
+                              {(contact.company || contact.title) && (
+                                <div className="flex items-center gap-2 mt-1 min-w-0">
+                                  <Building className="w-4 h-4 text-muted-foreground shrink-0 invisible" />
+                                  <span className="text-sm text-muted-foreground truncate" data-testid={`contact-details-${contact.id}`}>
+                                    {[contact.company, contact.title].filter(Boolean).join(" · ")}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Calendar className="w-3 h-3" />
+                                  <span>Scanned on {formatDate(contact.createdAt)}</span>
+                                </div>
+                                
+                                {contact.eventName && (
+                                  <div className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full" data-testid={`contact-event-${contact.id}`}>
+                                    <Tag className="w-3 h-3" />
+                                    {contact.eventName}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             
-                            {contact.eventName && (
-                              <div className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full" data-testid={`contact-event-${contact.id}`}>
-                                <Tag className="w-3 h-3" />
-                                {contact.eventName}
-                              </div>
-                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={(e) => handleDeleteClick(e, contact.id)}
+                              data-testid={`button-delete-contact-${contact.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
-                        
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="shrink-0 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => handleDeleteClick(e, contact.id)}
-                          data-testid={`button-delete-contact-${contact.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                      ))
+                    )}
+                  </div>
               
-              {filteredContacts.length > 0 && (
-                <p className="text-xs text-center text-muted-foreground">
-                  {filteredContacts.length} contact{filteredContacts.length !== 1 ? "s" : ""}
-                </p>
+                  {filteredContacts.length > 0 && (
+                    <p className="text-xs text-center text-muted-foreground">
+                      {filteredContacts.length} contact{filteredContacts.length !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                </>
               )}
             </TabsContent>
 

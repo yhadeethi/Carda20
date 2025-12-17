@@ -12,8 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CompanyIntelCard } from "@/components/company-intel-card";
+import { ContactActionsTab } from "@/components/contact-actions-tab";
+import { ContactTimelineTab } from "@/components/contact-timeline-tab";
 import { CompanyIntelData } from "@shared/schema";
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
+import { loadContactsV2, ContactV2 } from "@/lib/contacts/storage";
 import { getContactCountForCompany, findCompanyByName, extractDomainFromEmail, findCompanyByDomain } from "@/lib/companiesStorage";
 import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2, Network } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
@@ -82,6 +85,9 @@ export function ScanTab({
   const [showEventNameDialog, setShowEventNameDialog] = useState(false);
   const [tempEventName, setTempEventName] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
+  const [contactDetailTab, setContactDetailTab] = useState<"details" | "actions" | "timeline">("details");
+  const [v2RefreshKey, setV2RefreshKey] = useState(0);
 
   useEffect(() => {
     if (viewingContact) {
@@ -97,8 +103,13 @@ export function ScanTab({
       };
       setContact(parsed);
       setEditedContact(parsed);
+      
+      // Load V2 contact for Actions/Timeline tabs
+      const v2Contacts = loadContactsV2();
+      const v2 = v2Contacts.find(c => c.id === viewingContact.id);
+      setContactV2(v2 || null);
     }
-  }, [viewingContact]);
+  }, [viewingContact, v2RefreshKey]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -963,6 +974,55 @@ export function ScanTab({
               onRetry={handleGenerateIntel}
               companyName={editedContact?.companyName}
             />
+          )}
+
+          {/* Actions & Timeline Tabs - only when viewing from hub */}
+          {isViewingFromHub && contactV2 && (
+            <Card className="glass">
+              <CardContent className="p-0">
+                <Tabs value={contactDetailTab} onValueChange={(v) => setContactDetailTab(v as typeof contactDetailTab)}>
+                  <TabsList className="w-full grid grid-cols-3 rounded-t-lg rounded-b-none">
+                    <TabsTrigger value="details" data-testid="tab-contact-details">Details</TabsTrigger>
+                    <TabsTrigger value="actions" data-testid="tab-contact-actions">Actions</TabsTrigger>
+                    <TabsTrigger value="timeline" data-testid="tab-contact-timeline">Timeline</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="details" className="p-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg bg-muted/50 text-center">
+                        <div className="text-2xl font-bold">
+                          {contactV2.tasks?.filter(t => !t.completed).length || 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Pending Tasks</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50 text-center">
+                        <div className="text-2xl font-bold">
+                          {contactV2.reminders?.filter(r => !r.done).length || 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Active Reminders</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground text-center">
+                      Timeline: {contactV2.timeline?.length || 0} events
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="actions" className="p-0">
+                    <ContactActionsTab 
+                      contact={contactV2} 
+                      onUpdate={() => setV2RefreshKey(k => k + 1)} 
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="timeline" className="p-0">
+                    <ContactTimelineTab 
+                      contact={contactV2} 
+                      onUpdate={() => setV2RefreshKey(k => k + 1)} 
+                    />
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}
