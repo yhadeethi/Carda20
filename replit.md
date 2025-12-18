@@ -20,7 +20,8 @@ I prefer iterative development, so please break down tasks into smaller, managea
 ### Technical Implementations
 -   **Frontend**: React SPA using TypeScript.
 -   **Backend**: Express.js server using TypeScript.
--   **Contact Storage**: Uses `localStorage` for contacts, companies, event preferences, and merge history.
+-   **Authentication**: Replit Auth (OpenID Connect) supporting Google, GitHub, Apple, X, and email/password login. Sessions stored in PostgreSQL with 7-day TTL.
+-   **Contact Storage**: PostgreSQL database with user-specific contacts (authenticated) or `localStorage` (fallback for legacy features). User contacts are isolated per account.
 -   **Client-Side Image Compression**: Resizes images and progressively compresses them to optimize for OCR services, staying under 1MB.
 -   **Modular OCR**: Designed with a `OCRProvider` interface to allow easy swapping of OCR services (currently OCR.space).
 -   **AI-Powered Parsing (gpt-4o-mini)**: Primary parsing mechanism with a robust prompt for business card and email signature extraction, providing structured JSON output. It includes logo detection, OCR noise handling, and validation.

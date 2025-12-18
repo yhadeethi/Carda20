@@ -1,13 +1,22 @@
 import { useState, useCallback } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
+import { useAuth } from "@/hooks/useAuth";
 import { ScanTab } from "@/components/scan-tab";
 import { ContactsHub } from "@/components/contacts-hub";
 import { EventsHub } from "@/components/events-hub";
 import { CompanyDetail } from "@/components/company-detail";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { Button } from "@/components/ui/button";
-import { CreditCard, Moon, Sun, Camera, Users, Calendar } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { CreditCard, Moon, Sun, Camera, Users, Calendar, LogOut, User } from "lucide-react";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -17,6 +26,7 @@ type ViewMode = "scan" | "contacts" | "contact-detail" | "company-detail" | "eve
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
   const { isCompact } = useScrollDirectionNav();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
@@ -121,6 +131,37 @@ export default function HomePage() {
               <Moon className="w-4 h-4" />
             )}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
+                <Avatar className="w-8 h-8">
+                  <AvatarImage src={(user as any)?.profileImageUrl} alt="Profile" />
+                  <AvatarFallback>
+                    <User className="w-4 h-4" />
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <div className="px-2 py-1.5">
+                <p className="text-sm font-medium" data-testid="text-user-name">
+                  {(user as any)?.firstName || (user as any)?.fullName || 'User'}
+                </p>
+                {(user as any)?.email && (
+                  <p className="text-xs text-muted-foreground" data-testid="text-user-email">
+                    {(user as any)?.email}
+                  </p>
+                )}
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <a href="/api/logout" className="flex items-center gap-2 cursor-pointer" data-testid="button-logout">
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 

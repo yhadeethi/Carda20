@@ -1,6 +1,6 @@
 import { 
   users, contacts, companies, companyIntel,
-  type User, type InsertUser, 
+  type User, type InsertUser, type UpsertUser,
   type Contact, type InsertContact,
   type Company, type InsertCompany,
   type CompanyIntel, type InsertCompanyIntel,
@@ -8,23 +8,21 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
-import session from "express-session";
-import connectPg from "connect-pg-simple";
-import { pool } from "./db";
-
-const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
+  getUserByAuthId(authId: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByPublicSlug(slug: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
   
   getContact(id: number): Promise<Contact | undefined>;
   getContactsByUserId(userId: number, limit?: number): Promise<Contact[]>;
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: number, updates: Partial<Contact>): Promise<Contact | undefined>;
+  deleteContact(id: number): Promise<boolean>;
   findDuplicateContact(userId: number, email: string, companyName: string): Promise<Contact | undefined>;
   
   getCompanyByDomain(domain: string): Promise<Company | undefined>;
@@ -34,22 +32,16 @@ export interface IStorage {
   
   getCompanyIntelByCompanyId(companyId: number): Promise<CompanyIntel | undefined>;
   createCompanyIntel(intel: InsertCompanyIntel): Promise<CompanyIntel>;
-  
-  sessionStore: session.Store;
 }
 
 export class DatabaseStorage implements IStorage {
-  sessionStore: session.Store;
-
-  constructor() {
-    this.sessionStore = new PostgresSessionStore({ 
-      pool, 
-      createTableIfMissing: true 
-    });
-  }
-
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByAuthId(authId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.authId, authId));
     return user || undefined;
   }
 
@@ -78,6 +70,30 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user || undefined;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values({
+        authId: userData.authId,
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        profileImageUrl: userData.profileImageUrl,
+      })
+      .onConflictDoUpdate({
+        target: users.authId,
+        set: {
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          profileImageUrl: userData.profileImageUrl,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
   }
 
   async getContact(id: number): Promise<Contact | undefined> {
@@ -109,6 +125,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(contacts.id, id))
       .returning();
     return contact || undefined;
+  }
+
+  async deleteContact(id: number): Promise<boolean> {
+    const result = await db.delete(contacts).where(eq(contacts.id, id));
+    return true;
   }
 
   async findDuplicateContact(userId: number, email: string, companyName: string): Promise<Contact | undefined> {

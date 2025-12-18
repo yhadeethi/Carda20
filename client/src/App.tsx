@@ -4,13 +4,30 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { useAuth } from "@/hooks/useAuth";
 import HomePage from "@/pages/home-page";
+import LandingPage from "@/pages/landing-page";
 import NotFound from "@/pages/not-found";
+import { Loader2 } from "lucide-react";
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <Switch>
-      <Route path="/" component={HomePage} />
+      {!isAuthenticated ? (
+        <Route path="/" component={LandingPage} />
+      ) : (
+        <Route path="/" component={HomePage} />
+      )}
       <Route component={NotFound} />
     </Switch>
   );

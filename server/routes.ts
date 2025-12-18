@@ -1,10 +1,25 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
+import { z } from "zod";
 import { extractTextFromImage, initializeOCR } from "./ocrService";
 import { parseContact, ParsedContact, splitAuAddress } from "./parseService";
 import { getOrCreateCompanyIntel } from "./intelService";
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
+import { setupAuth, isAuthenticated } from "./replitAuth";
+import { storage } from "./storage";
+
+const contactInputSchema = z.object({
+  fullName: z.string().nullable().optional(),
+  companyName: z.string().nullable().optional(),
+  jobTitle: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  website: z.string().nullable().optional(),
+  linkedinUrl: z.string().nullable().optional(),
+  rawText: z.string().nullable().optional(),
+  companyDomain: z.string().nullable().optional(),
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -49,8 +64,6 @@ function generateVCard(contact: ParsedContact): string {
     lines.push(`X-SOCIALPROFILE;TYPE=linkedin:${contact.linkedinUrl}`);
   }
 
-  // Add address using vCard ADR field format
-  // ADR;TYPE=WORK:;;street;city;state;postcode;country
   if (contact.address) {
     const { street, city, state, postcode, country } = splitAuAddress(contact.address);
     if (street || city || state || postcode || country) {
@@ -68,6 +81,110 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   initializeOCR();
+  
+  await setupAuth(app);
+
+  app.get('/api/auth/user', async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user?.claims?.sub) {
+        return res.json(null);
+      }
+      const authId = req.user.claims.sub;
+      const user = await storage.getUserByAuthId(authId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.json(null);
+    }
+  });
+
+  app.get("/api/contacts", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const authId = req.user.claims.sub;
+      const user = await storage.getUserByAuthId(authId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const limit = parseInt(req.query.limit as string) || 100;
+      const contacts = await storage.getContactsByUserId(user.id, limit);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      res.status(500).json({ message: "Failed to fetch contacts" });
+    }
+  });
+
+  app.post("/api/contacts", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const authId = req.user.claims.sub;
+      const user = await storage.getUserByAuthId(authId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const parsed = contactInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid contact data", errors: parsed.error.errors });
+      }
+      const contact = await storage.createContact({
+        userId: user.id,
+        ...parsed.data,
+      });
+      res.json(contact);
+    } catch (error) {
+      console.error("Error creating contact:", error);
+      res.status(500).json({ message: "Failed to create contact" });
+    }
+  });
+
+  app.patch("/api/contacts/:id", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const authId = req.user.claims.sub;
+      const user = await storage.getUserByAuthId(authId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const contactId = parseInt(req.params.id);
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+      const existing = await storage.getContact(contactId);
+      if (!existing || existing.userId !== user.id) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      const parsed = contactInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid contact data", errors: parsed.error.errors });
+      }
+      const contact = await storage.updateContact(contactId, parsed.data);
+      res.json(contact);
+    } catch (error) {
+      console.error("Error updating contact:", error);
+      res.status(500).json({ message: "Failed to update contact" });
+    }
+  });
+
+  app.delete("/api/contacts/:id", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const authId = req.user.claims.sub;
+      const user = await storage.getUserByAuthId(authId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const contactId = parseInt(req.params.id);
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+      const existing = await storage.getContact(contactId);
+      if (!existing || existing.userId !== user.id) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      await storage.deleteContact(contactId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+      res.status(500).json({ message: "Failed to delete contact" });
+    }
+  });
 
   app.post("/api/scan", upload.single("image"), async (req: Request, res: Response) => {
     try {
@@ -141,8 +258,8 @@ export async function registerRoutes(
       const intel = await getOrCreateCompanyIntel(
         companyName,
         companyDomain,
-        {}, // userContext
-        { contactName, contactTitle } // contactContext for role-specific insights
+        {},
+        { contactName, contactTitle }
       );
 
       if (!intel) {

@@ -1,14 +1,29 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, json } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, json, index, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Session storage table - required for Replit Auth
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
+
 // Users table - stores user accounts and profile data
+// Uses authId for Replit Auth (OpenID sub claim) while keeping integer PK for foreign keys
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  email: text("email").notNull().unique(),
-  password: text("password").notNull(),
+  authId: varchar("auth_id").unique(), // Replit Auth sub claim
+  email: text("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
   fullName: text("full_name"),
   companyName: text("company_name"),
   jobTitle: text("job_title"),
@@ -110,17 +125,14 @@ export const insertCompanyIntelSchema = createInsertSchema(companyIntel).omit({
   createdAt: true,
 });
 
-// Auth schemas
-export const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-export const registerSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  fullName: z.string().min(1, "Full name is required"),
-});
+// Upsert user type for Replit Auth
+export type UpsertUser = {
+  authId: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+};
 
 // Profile update schema
 export const updateProfileSchema = z.object({
