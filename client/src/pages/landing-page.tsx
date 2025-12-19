@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowRight,
   Building2,
+  CalendarDays,
   CreditCard,
   GitBranch,
   ScanLine,
@@ -129,7 +130,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
             <FeatureCard
               icon={<ScanLine className="w-5 h-5 text-primary" />}
               title="Smart Scanning"
@@ -148,6 +149,12 @@ export default function LandingPage() {
               description="Auto-group contacts by company. Visualize reporting lines. Know who influences who."
               mediaLabel="Org Map Demo"
             />
+            <FeatureCard
+              icon={<CalendarDays className="w-5 h-5 text-primary" />}
+              title="Events Hub"
+              description="Track industry events. Link contacts to where you met them. Build a repeatable networking playbook."
+              mediaLabel="Events Demo"
+            />
           </div>
         </section>
 
@@ -155,14 +162,14 @@ export default function LandingPage() {
         <section className="container mx-auto px-4 py-16 border-t">
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-2xl font-bold mb-3">
-              Ready to stop losing contacts?
+              Try it out
             </h2>
             <p className="text-muted-foreground mb-6">
-              Join the pilot and turn every meeting into momentum.
+              Currently in private pilot. Free to use.
             </p>
             <Button size="lg" asChild data-testid="button-start-now">
               <a href="/api/login">
-                Start Free <ArrowRight className="ml-2 w-4 h-4" />
+                Get Started <ArrowRight className="ml-2 w-4 h-4" />
               </a>
             </Button>
           </div>
