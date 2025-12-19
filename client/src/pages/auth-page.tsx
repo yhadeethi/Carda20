@@ -67,10 +67,10 @@ export default function AuthPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1 text-center">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                <CreditCard className="w-5 h-5 text-primary-foreground" />
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <CreditCard className="w-4 h-4 text-primary-foreground" />
               </div>
-              <span className="text-2xl font-bold">Carda</span>
+              <span className="font-semibold text-lg">Carda</span>
             </div>
             <CardTitle className="text-2xl font-bold">
               {activeTab === "login" ? "Welcome back" : "Create an account"}
