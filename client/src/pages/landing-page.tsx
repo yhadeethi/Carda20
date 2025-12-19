@@ -118,11 +118,11 @@ export default function LandingPage() {
           </div>
 
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
-            Powerful contacts. <span className="text-primary">With intelligence.</span>
+            Your network circle. <span className="text-primary">With powerful intelligence.</span>
           </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            A mini CRM for capture, context, and next steps.
+            A CRM, like no other.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
@@ -160,10 +160,10 @@ export default function LandingPage() {
         <section className="container mx-auto px-4 py-16 border-t">
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-3xl font-bold mb-3">
-              Everything you need after a meeting
+              Built for the busy professional
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              From scan to follow-up in minutes.
+              Carda is mini CRM that enhances the way you interact with your network
             </p>
           </div>
 
@@ -171,25 +171,25 @@ export default function LandingPage() {
             <FeatureCard
               icon={<ScanLine className="w-5 h-5 text-primary" />}
               title="Smart Scanning"
-              description="Scan cards or paste signatures. Auto-extract fields."
+              description="Scan cards or paste signatures. Auto-extract fields. Powerful, intelligent Follow-ups"
               mediaLabel="Scanning Demo"
             />
             <FeatureCard
               icon={<Building2 className="w-5 h-5 text-primary" />}
               title="Company Intel"
-              description="One-tap brief and talking points before a call."
+              description="One-tap Co-pilot level intelligence, to help you to know your customers better."
               mediaLabel="Intel Demo"
             />
             <FeatureCard
               icon={<GitBranch className="w-5 h-5 text-primary" />}
               title="Org Intelligence"
-              description="Group by company. Visual org map."
+              description="Map stakeholders. Spot decision-makers and influencers."
               mediaLabel="Org Map Demo"
             />
             <FeatureCard
               icon={<CalendarDays className="w-5 h-5 text-primary" />}
               title="Events Hub"
-              description="Track events. Link contacts. Follow up faster."
+              description="Track industry events near you. Batch scan in Event Mode, saves hours of time"
               mediaLabel="Events Demo"
             />
           </div>
