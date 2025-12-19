@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -27,7 +28,7 @@ function FeatureCard({
   description,
   mediaLabel,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   description: string;
   mediaLabel: string;
@@ -47,6 +48,44 @@ function FeatureCard({
         <p className="text-muted-foreground text-sm">{description}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function LogoPill({
+  name,
+  logo,
+}: {
+  name: string;
+  logo: ReactNode;
+}) {
+  return (
+    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-muted/20 text-sm text-muted-foreground">
+      <span className="h-4 w-4 flex items-center justify-center">{logo}</span>
+      <span>{name}</span>
+    </span>
+  );
+}
+
+// Minimal inline SVGs (safe, no external requests)
+function HubSpotLogo() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 2a2 2 0 0 0-2 2v2.1A6.9 6.9 0 0 0 6.1 10H4a2 2 0 1 0 0 4h2.1A6.9 6.9 0 0 0 10 17.9V20a2 2 0 1 0 4 0v-2.1A6.9 6.9 0 0 0 17.9 14H20a2 2 0 1 0 0-4h-2.1A6.9 6.9 0 0 0 14 6.1V4a2 2 0 0 0-2-2Zm0 6a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"
+      />
+    </svg>
+  );
+}
+
+function SalesforceLogo() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M10.4 7.2a4.5 4.5 0 0 1 8.2 2.1 3.7 3.7 0 0 1 .3 7.4H8.4a3.9 3.9 0 0 1-1.1-7.7 4.6 4.6 0 0 1 3.1-1.8Zm-.2 2a2.6 2.6 0 0 0-2.4 1.7l-.2.6-.6.1a2 2 0 0 0 .3 4h10.6a1.8 1.8 0 0 0 0-3.6l-.7-.1-.1-.7a2.5 2.5 0 0 0-4.8-.8l-.3.6-.7-.1a2.7 2.7 0 0 0-1.1.3Z"
+      />
+    </svg>
   );
 }
 
@@ -75,27 +114,25 @@ export default function LandingPage() {
         <section className="container mx-auto px-4 py-16 md:py-24 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-sm mb-6">
             <Zap className="w-4 h-4 text-primary" />
-            <span>Scan. Enrich. Follow up. Export.</span>
+            <span>Contact Intelligence</span>
           </div>
 
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
-            Turn contacts into
-            <span className="text-primary"> workflow</span>
+            Powerful contacts. <span className="text-primary">With intelligence.</span>
           </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            Capture business cards and signatures. Get AI-powered company intel. 
-            Map organizations. Never lose momentum after a meeting again.
+            A mini CRM for capture, context, and next steps.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
             <Button size="lg" asChild data-testid="button-get-started">
               <a href="/api/login">
-                Get Started Free <ArrowRight className="ml-2 w-4 h-4" />
+                Get Started <ArrowRight className="ml-2 w-4 h-4" />
               </a>
             </Button>
             <Button size="lg" variant="outline" asChild data-testid="button-see-demo">
-              <a href="#demo">See how it works</a>
+              <a href="#demo">See demo</a>
             </Button>
           </div>
         </section>
@@ -126,7 +163,7 @@ export default function LandingPage() {
               Everything you need after a meeting
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              From scan to follow-up in minutes, not days.
+              From scan to follow-up in minutes.
             </p>
           </div>
 
@@ -134,39 +171,48 @@ export default function LandingPage() {
             <FeatureCard
               icon={<ScanLine className="w-5 h-5 text-primary" />}
               title="Smart Scanning"
-              description="Snap a photo or paste an email signature. AI extracts name, title, company, email, phone, and more."
+              description="Scan cards or paste signatures. Auto-extract fields."
               mediaLabel="Scanning Demo"
             />
             <FeatureCard
               icon={<Building2 className="w-5 h-5 text-primary" />}
               title="Company Intel"
-              description="Get AI-generated briefs with talking points, recent news, and competitive context before your next call."
+              description="One-tap brief and talking points before a call."
               mediaLabel="Intel Demo"
             />
             <FeatureCard
               icon={<GitBranch className="w-5 h-5 text-primary" />}
               title="Org Intelligence"
-              description="Auto-group contacts by company. Visualize reporting lines. Know who influences who."
+              description="Group by company. Visual org map."
               mediaLabel="Org Map Demo"
             />
             <FeatureCard
               icon={<CalendarDays className="w-5 h-5 text-primary" />}
               title="Events Hub"
-              description="Track industry events. Link contacts to where you met them. Build a repeatable networking playbook."
+              description="Track events. Link contacts. Follow up faster."
               mediaLabel="Events Demo"
             />
+          </div>
+        </section>
+
+        {/* CRM Coming Soon (logos only) */}
+        <section className="container mx-auto px-4 pb-2">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="px-3 py-1 rounded-full bg-muted text-sm text-muted-foreground">
+                CRM integrations coming soon
+              </span>
+              <LogoPill name="HubSpot" logo={<HubSpotLogo />} />
+              <LogoPill name="Salesforce" logo={<SalesforceLogo />} />
+            </div>
           </div>
         </section>
 
         {/* Simple CTA */}
         <section className="container mx-auto px-4 py-16 border-t">
           <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-2xl font-bold mb-3">
-              Try it out
-            </h2>
-            <p className="text-muted-foreground mb-6">
-              Currently in private pilot. Free to use.
-            </p>
+            <h2 className="text-2xl font-bold mb-3">Try it out</h2>
+            <p className="text-muted-foreground mb-6">Currently in private pilot.</p>
             <Button size="lg" asChild data-testid="button-start-now">
               <a href="/api/login">
                 Get Started <ArrowRight className="ml-2 w-4 h-4" />
@@ -179,7 +225,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          Carda — Capture. Enrich. Follow up.
+          Carda — Contact Intelligence
         </div>
       </footer>
     </div>
