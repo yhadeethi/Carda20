@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScanLine, Building2, Users, Zap, ArrowRight } from "lucide-react";
+import { ScanLine, Building2, Users, Zap, ArrowRight, CreditCard } from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -8,8 +8,8 @@ export default function LandingPage() {
       <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <ScanLine className="w-5 h-5 text-primary-foreground" />
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <CreditCard className="w-4 h-4 text-primary-foreground" />
             </div>
             <span className="font-semibold text-lg">Carda</span>
           </div>
