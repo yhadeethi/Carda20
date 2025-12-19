@@ -114,15 +114,15 @@ export default function LandingPage() {
         <section className="container mx-auto px-4 py-16 md:py-24 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-sm mb-6">
             <Zap className="w-4 h-4 text-primary" />
-            <span>Contact Intelligence</span>
+            <span>Powered by AI</span>
           </div>
 
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
-            Your network circle. <span className="text-primary">With powerful intelligence.</span>
+            Your network. <span className="text-primary">With powerful intelligence.</span>
           </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            A CRM, like no other.
+            A mini CRM, for your contacts on-the-go. With AI enrichment tools. 
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
