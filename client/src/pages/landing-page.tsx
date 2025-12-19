@@ -192,6 +192,7 @@ export default function LandingPage() {
         <Section
           id="capture"
           icon={<ScanLine className="w-4 h-4 text-primary" />}
+          eyebrow="Capture"
           title="Smart Scanning"
           subtitle="Capture contacts from anywhere — camera, screenshots, signatures — and share yours instantly."
           mediaLabel="Smart Scanning — GIF/Screenshot"
@@ -215,6 +216,7 @@ export default function LandingPage() {
           id="org"
           reverse
           icon={<GitBranch className="w-4 h-4 text-primary" />}
+          eyebrow="Companies"
           title="Org Intelligence"
           subtitle="Group contacts by company and understand how people connect — fast."
           mediaLabel="Org Intelligence — GIF/Screenshot"
@@ -237,6 +239,7 @@ export default function LandingPage() {
         <Section
           id="events"
           icon={<CalendarDays className="w-4 h-4 text-primary" />}
+          eyebrow="Events"
           title="Events Hub"
           subtitle="Plan your networking. Capture leads per event. Follow up while it’s still warm."
           mediaLabel="Events Hub — GIF/Screenshot"
