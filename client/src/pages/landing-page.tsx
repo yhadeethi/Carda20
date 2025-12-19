@@ -1,113 +1,66 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowRight,
-  CalendarDays,
+  Building2,
   CreditCard,
   GitBranch,
-  Mail,
-  Plug,
   ScanLine,
-  Sparkles,
+  Zap,
 } from "lucide-react";
 
-function Chip({ children }: { children: React.ReactNode }) {
+function MediaPlaceholder({ label }: { label: string }) {
   return (
-    <span className="px-3 py-1 rounded-full border bg-muted/30 text-xs text-muted-foreground">
-      {children}
-    </span>
-  );
-}
-
-function MediaSlot({ label }: { label: string }) {
-  return (
-    <div className="rounded-2xl border bg-muted/30 overflow-hidden">
-      <div className="px-4 py-3 border-b bg-background/40 flex items-center justify-between">
-        <div className="text-sm font-medium">{label}</div>
-        <div className="text-xs text-muted-foreground">GIF / Screenshot</div>
-      </div>
-      <div className="h-56 md:h-72 flex items-center justify-center text-sm text-muted-foreground">
-        Drop media here
+    <div className="rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/20 flex items-center justify-center text-sm text-muted-foreground aspect-video">
+      <div className="text-center p-4">
+        <div className="font-medium">{label}</div>
+        <div className="text-xs mt-1 opacity-70">Drop GIF or screenshot here</div>
       </div>
     </div>
   );
 }
 
-function FeatureBlock({
-  id,
+function FeatureCard({
   icon,
   title,
-  oneLiner,
-  chips,
+  description,
   mediaLabel,
-  reverse,
 }: {
-  id: string;
   icon: React.ReactNode;
   title: string;
-  oneLiner: string;
-  chips: string[];
+  description: string;
   mediaLabel: string;
-  reverse?: boolean;
 }) {
   return (
-    <section id={id} className="max-w-6xl mx-auto mb-12">
-      <div
-        className={`grid md:grid-cols-2 gap-8 items-stretch ${
-          reverse ? "md:[&>*:first-child]:order-2" : ""
-        }`}
-      >
-        <Card className="bg-background/60 backdrop-blur-sm">
-          <CardHeader>
-            <div className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-muted w-fit">
-              {icon}
-              <span className="text-muted-foreground">Main feature</span>
-            </div>
-
-            <CardTitle className="text-2xl mt-4">{title}</CardTitle>
-            <div className="text-sm text-muted-foreground mt-2">{oneLiner}</div>
-
-            <div className="mt-5 flex flex-wrap gap-2">
-              {chips.map((c) => (
-                <Chip key={c}>{c}</Chip>
-              ))}
-            </div>
-
-            <div className="mt-6 flex gap-3">
-              <Button asChild>
-                <a href="/api/login">
-                  Try <ArrowRight className="ml-2 w-4 h-4" />
-                </a>
-              </Button>
-              <Button variant="outline" asChild>
-                <a href="#crm">CRM</a>
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent />
-        </Card>
-
-        <MediaSlot label={mediaLabel} />
+    <Card className="overflow-hidden">
+      <div className="p-4 sm:p-6">
+        <MediaPlaceholder label={mediaLabel} />
       </div>
-    </section>
+      <CardContent className="pt-0">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            {icon}
+          </div>
+          <h3 className="font-semibold text-lg">{title}</h3>
+        </div>
+        <p className="text-muted-foreground text-sm">{description}</p>
+      </CardContent>
+    </Card>
   );
 }
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-      <header className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b sticky top-0 z-50 bg-background/95 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <CreditCard className="w-4 h-4 text-primary-foreground" />
             </div>
             <span className="font-semibold text-lg">Carda</span>
-            <span className="ml-2 text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-              Pilot
-            </span>
           </div>
-
           <Button asChild data-testid="button-login">
             <a href="/api/login">
               Sign In <ArrowRight className="ml-2 w-4 h-4" />
@@ -116,116 +69,110 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-14">
-        {/* HERO */}
-        <section className="text-center max-w-4xl mx-auto mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-sm mb-5">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span>Contact intelligence</span>
+      <main>
+        {/* Hero Section */}
+        <section className="container mx-auto px-4 py-16 md:py-24 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-sm mb-6">
+            <Zap className="w-4 h-4 text-primary" />
+            <span>Scan. Enrich. Follow up. Export.</span>
           </div>
 
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-            Scan. Organize. Follow up.
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
+            Turn contacts into
+            <span className="text-primary"> workflow</span>
           </h1>
 
-          <p className="text-base md:text-lg text-muted-foreground mt-4">
-            Clean contacts + company context — in one place.
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
+            Capture business cards and signatures. Get AI-powered company intel. 
+            Map organizations. Never lose momentum after a meeting again.
           </p>
 
-          <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
             <Button size="lg" asChild data-testid="button-get-started">
               <a href="/api/login">
-                Get Started <ArrowRight className="ml-2 w-4 h-4" />
+                Get Started Free <ArrowRight className="ml-2 w-4 h-4" />
               </a>
             </Button>
-            <Button size="lg" variant="outline" asChild>
-              <a href="#scan">See features</a>
+            <Button size="lg" variant="outline" asChild data-testid="button-see-demo">
+              <a href="#demo">See how it works</a>
             </Button>
           </div>
         </section>
 
-        {/* MAIN FEATURES */}
-        <FeatureBlock
-          id="scan"
-          icon={<ScanLine className="w-4 h-4 text-primary" />}
-          title="Smart Scanning"
-          oneLiner="Capture contacts from cards or signatures."
-          chips={["Camera scan", "Paste signature", "Your QR"]}
-          mediaLabel="Smart Scanning"
-        />
-
-        <FeatureBlock
-          id="org"
-          reverse
-          icon={<GitBranch className="w-4 h-4 text-primary" />}
-          title="Org Intelligence"
-          oneLiner="See contacts grouped by company."
-          chips={["Org chart", "Influence view", "Company notes"]}
-          mediaLabel="Org Intelligence"
-        />
-
-        <FeatureBlock
-          id="events"
-          icon={<CalendarDays className="w-4 h-4 text-primary" />}
-          title="Events Hub"
-          oneLiner="Plan events. Capture leads. Track follow-ups."
-          chips={["Pin events", "Attending status", "Event notes"]}
-          mediaLabel="Events Hub"
-        />
-
-        {/* CRM (COMING SOON) */}
-        <section id="crm" className="max-w-6xl mx-auto mb-14">
-          <div className="grid md:grid-cols-2 gap-8 items-stretch">
-            <Card className="bg-background/60 backdrop-blur-sm">
-              <CardHeader>
-                <div className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-muted w-fit">
-                  <Plug className="w-4 h-4 text-primary" />
-                  <span className="text-muted-foreground">Coming soon</span>
+        {/* Main Demo Section */}
+        <section id="demo" className="container mx-auto px-4 pb-16">
+          <div className="max-w-4xl mx-auto">
+            <div className="rounded-2xl border bg-card p-2 sm:p-4 shadow-sm">
+              <div className="rounded-xl overflow-hidden bg-muted aspect-video flex items-center justify-center">
+                <div className="text-center p-8">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <ScanLine className="w-8 h-8 text-primary" />
+                  </div>
+                  <div className="font-medium text-lg">App Demo</div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Add a GIF or video showing the full workflow
+                  </div>
                 </div>
-
-                <CardTitle className="text-2xl mt-4">CRM Integration</CardTitle>
-                <div className="text-sm text-muted-foreground mt-2">
-                  Export or sync clean contacts.
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <Chip>HubSpot</Chip>
-                  <Chip>Salesforce</Chip>
-                  <Chip>Dynamics 365</Chip>
-                  <Chip>Pipedrive</Chip>
-                  <Chip>Zoho</Chip>
-                  <Chip>CSV</Chip>
-                </div>
-
-                <div className="mt-6">
-                  <Button asChild>
-                    <a href="/api/login">
-                      Start Pilot <ArrowRight className="ml-2 w-4 h-4" />
-                    </a>
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent />
-            </Card>
-
-            <MediaSlot label="CRM Sync / Export" />
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* CTA */}
-        <section className="text-center mt-6">
-          <Button size="lg" asChild data-testid="button-start-now">
-            <a href="/api/login">
-              Start <ArrowRight className="ml-2 w-4 h-4" />
-            </a>
-          </Button>
-          <div className="text-xs text-muted-foreground mt-3">Private pilot • quick signup</div>
+        {/* Features Section */}
+        <section className="container mx-auto px-4 py-16 border-t">
+          <div className="text-center mb-12">
+            <h2 className="text-2xl md:text-3xl font-bold mb-3">
+              Everything you need after a meeting
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              From scan to follow-up in minutes, not days.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            <FeatureCard
+              icon={<ScanLine className="w-5 h-5 text-primary" />}
+              title="Smart Scanning"
+              description="Snap a photo or paste an email signature. AI extracts name, title, company, email, phone, and more."
+              mediaLabel="Scanning Demo"
+            />
+            <FeatureCard
+              icon={<Building2 className="w-5 h-5 text-primary" />}
+              title="Company Intel"
+              description="Get AI-generated briefs with talking points, recent news, and competitive context before your next call."
+              mediaLabel="Intel Demo"
+            />
+            <FeatureCard
+              icon={<GitBranch className="w-5 h-5 text-primary" />}
+              title="Org Intelligence"
+              description="Auto-group contacts by company. Visualize reporting lines. Know who influences who."
+              mediaLabel="Org Map Demo"
+            />
+          </div>
+        </section>
+
+        {/* Simple CTA */}
+        <section className="container mx-auto px-4 py-16 border-t">
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="text-2xl font-bold mb-3">
+              Ready to stop losing contacts?
+            </h2>
+            <p className="text-muted-foreground mb-6">
+              Join the pilot and turn every meeting into momentum.
+            </p>
+            <Button size="lg" asChild data-testid="button-start-now">
+              <a href="/api/login">
+                Start Free <ArrowRight className="ml-2 w-4 h-4" />
+              </a>
+            </Button>
+          </div>
         </section>
       </main>
 
-      <footer className="border-t mt-20 py-10">
+      {/* Footer */}
+      <footer className="border-t py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>Carda</p>
+          Carda — Capture. Enrich. Follow up.
         </div>
       </footer>
     </div>
