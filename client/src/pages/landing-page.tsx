@@ -166,29 +166,29 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth px-4 pb-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <div className="flex-none w-[280px] sm:w-[300px] h-[180px] snap-center first:ml-auto">
+          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth px-4 pb-4 items-stretch" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="flex-none w-[280px] sm:w-[300px] min-h-[240px] sm:min-h-[200px] snap-center first:ml-auto">
               <FeatureCard
                 icon={<ScanLine className="w-5 h-5 text-primary" />}
                 title="Smart Scanning"
                 description="Snap a photo or paste an email signature. Our AI extracts names, titles, companies, emails, phones, and addresses automatically. Works with business cards, signatures, and even handwritten notes."
               />
             </div>
-            <div className="flex-none w-[280px] sm:w-[300px] h-[180px] snap-center">
+            <div className="flex-none w-[280px] sm:w-[300px] min-h-[240px] sm:min-h-[200px] snap-center">
               <FeatureCard
                 icon={<Building2 className="w-5 h-5 text-primary" />}
                 title="Company Intel"
                 description="One-tap AI intelligence on any company. Get funding history, tech stack, competitive landscape, and talking points. Know your prospect before the first call. Always be prepared."
               />
             </div>
-            <div className="flex-none w-[280px] sm:w-[300px] h-[180px] snap-center">
+            <div className="flex-none w-[280px] sm:w-[300px] min-h-[240px] sm:min-h-[200px] snap-center">
               <FeatureCard
                 icon={<GitBranch className="w-5 h-5 text-primary" />}
                 title="Org Intelligence"
                 description="Map entire organizations visually. See who reports to whom, identify decision-makers, and understand the power dynamics. Build your stakeholder map as you collect contacts."
               />
             </div>
-            <div className="flex-none w-[280px] sm:w-[300px] h-[180px] snap-center last:mr-auto">
+            <div className="flex-none w-[280px] sm:w-[300px] min-h-[240px] sm:min-h-[200px] snap-center last:mr-auto">
               <FeatureCard
                 icon={<CalendarDays className="w-5 h-5 text-primary" />}
                 title="Events Hub"
