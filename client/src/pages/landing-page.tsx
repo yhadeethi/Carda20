@@ -11,13 +11,13 @@ import {
   Zap,
 } from "lucide-react";
 
-import scanningImg from "@assets/Image_(14)_1766194507081.jpg";
-import companyIntelImg from "@assets/Image_(15)_1766194507081.jpg";
-import timelineImg from "@assets/Image_(9)_1766194507083.jpg";
-import eventsImg from "@assets/Image_(16)_1766194507080.jpg";
-import qrCodeImg from "@assets/Image_(11)_1766194507082.jpg";
-import actionsImg from "@assets/Image_(10)_1766194507082.jpg";
-import eventModalImg from "@assets/Image_(12)_1766194507082.jpg";
+import scanningImg from "@assets/IMG_8483_1766202180372.jpeg";
+import companyIntelImg from "@assets/IMG_8488_1766202180372.jpeg";
+import orgIntelImg from "@assets/IMG_8486_1766202180372.jpeg";
+import eventsImg from "@assets/IMG_8489_1766202180372.jpeg";
+import qrCodeImg from "@assets/IMG_8480_1766202180372.jpeg";
+import timelineImg from "@assets/IMG_8482_1766202180372.jpeg";
+import contactsImg from "@assets/IMG_8485_1766202180372.jpeg";
 
 function FeatureCard({
   icon,
@@ -102,12 +102,12 @@ function HeroCollage() {
       <div
         className="absolute left-[35%] top-[5%] w-36 sm:w-44 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10"
       >
-        <img src={actionsImg} alt="Quick Actions" className="w-full h-auto" />
+        <img src={timelineImg} alt="Contact Timeline" className="w-full h-auto" />
       </div>
       <div
         className="absolute right-[5%] top-[15%] w-32 sm:w-40 md:w-48 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-6 hover:rotate-0 transition-transform duration-300"
       >
-        <img src={eventModalImg} alt="Event Mode" className="w-full h-auto" />
+        <img src={contactsImg} alt="Contacts List" className="w-full h-auto" />
       </div>
     </div>
   );
@@ -188,7 +188,7 @@ export default function LandingPage() {
               icon={<GitBranch className="w-5 h-5 text-primary" />}
               title="Org Intelligence"
               description="Map stakeholders. Spot decision-makers and influencers."
-              image={timelineImg}
+              image={orgIntelImg}
             />
             <FeatureCard
               icon={<CalendarDays className="w-5 h-5 text-primary" />}
