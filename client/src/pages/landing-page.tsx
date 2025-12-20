@@ -23,32 +23,21 @@ function FeatureCard({
   icon,
   title,
   description,
-  image,
 }: {
   icon: ReactNode;
   title: string;
   description: string;
-  image: string;
 }) {
   return (
-    <Card className="overflow-hidden">
-      <div className="p-4 sm:p-6">
-        <div className="rounded-xl overflow-hidden bg-muted">
-          <img
-            src={image}
-            alt={title}
-            className="w-full h-auto object-cover"
-          />
-        </div>
-      </div>
-      <CardContent className="pt-0">
-        <div className="flex items-center gap-3 mb-2">
+    <Card className="h-full">
+      <CardContent className="p-6 h-full flex flex-col">
+        <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
             {icon}
           </div>
           <h3 className="font-semibold text-lg">{title}</h3>
         </div>
-        <p className="text-muted-foreground text-sm">{description}</p>
+        <p className="text-muted-foreground text-sm leading-relaxed flex-1">{description}</p>
       </CardContent>
     </Card>
   );
@@ -93,21 +82,27 @@ function SalesforceLogo() {
 
 function HeroCollage() {
   return (
-    <div className="relative w-full max-w-3xl mx-auto h-64 sm:h-80 md:h-96">
-      <div
-        className="absolute left-[5%] top-[10%] w-32 sm:w-40 md:w-48 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-6 hover:rotate-0 transition-transform duration-300"
-      >
-        <img src={qrCodeImg} alt="QR Code feature" className="w-full h-auto" />
+    <div className="relative w-full max-w-4xl mx-auto h-80 sm:h-96 md:h-[28rem]">
+      <div className="absolute left-[2%] top-[5%] w-24 sm:w-32 md:w-40 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-6 hover:rotate-0 transition-transform duration-300">
+        <img src={scanningImg} alt="Smart Scanning" className="w-full h-auto" />
       </div>
-      <div
-        className="absolute left-[35%] top-[5%] w-36 sm:w-44 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10"
-      >
+      <div className="absolute left-[18%] top-[25%] w-28 sm:w-36 md:w-44 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10">
+        <img src={qrCodeImg} alt="QR Code" className="w-full h-auto" />
+      </div>
+      <div className="absolute left-[38%] top-[2%] w-32 sm:w-40 md:w-48 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-2 hover:rotate-0 transition-transform duration-300 z-20">
         <img src={timelineImg} alt="Contact Timeline" className="w-full h-auto" />
       </div>
-      <div
-        className="absolute right-[5%] top-[15%] w-32 sm:w-40 md:w-48 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-6 hover:rotate-0 transition-transform duration-300"
-      >
+      <div className="absolute right-[28%] top-[30%] w-28 sm:w-36 md:w-44 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10">
+        <img src={companyIntelImg} alt="Quick Actions" className="w-full h-auto" />
+      </div>
+      <div className="absolute right-[8%] top-[8%] w-28 sm:w-36 md:w-44 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-6 hover:rotate-0 transition-transform duration-300">
         <img src={contactsImg} alt="Contacts List" className="w-full h-auto" />
+      </div>
+      <div className="absolute right-[2%] top-[40%] w-24 sm:w-32 md:w-40 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-3 hover:rotate-0 transition-transform duration-300 z-[5]">
+        <img src={orgIntelImg} alt="Org Intelligence" className="w-full h-auto" />
+      </div>
+      <div className="absolute left-[5%] top-[55%] w-28 sm:w-36 md:w-44 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-2 hover:rotate-0 transition-transform duration-300">
+        <img src={eventsImg} alt="Events Hub" className="w-full h-auto" />
       </div>
     </div>
   );
@@ -171,37 +166,33 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth px-4 pb-4 -mx-0 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <div className="flex-none w-[280px] sm:w-[320px] snap-center first:ml-auto last:mr-auto">
+          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth px-4 pb-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="flex-none w-[280px] sm:w-[300px] h-[180px] snap-center first:ml-auto">
               <FeatureCard
                 icon={<ScanLine className="w-5 h-5 text-primary" />}
                 title="Smart Scanning"
-                description="Scan cards or paste signatures. Auto-extract fields. Powerful, intelligent Follow-ups"
-                image={scanningImg}
+                description="Snap a photo or paste an email signature. Our AI extracts names, titles, companies, emails, phones, and addresses automatically. Works with business cards, signatures, and even handwritten notes."
               />
             </div>
-            <div className="flex-none w-[280px] sm:w-[320px] snap-center">
+            <div className="flex-none w-[280px] sm:w-[300px] h-[180px] snap-center">
               <FeatureCard
                 icon={<Building2 className="w-5 h-5 text-primary" />}
                 title="Company Intel"
-                description="One-tap Co-pilot level intelligence, to help you to know your customers better."
-                image={companyIntelImg}
+                description="One-tap AI intelligence on any company. Get funding history, tech stack, competitive landscape, and talking points. Know your prospect before the first call. Always be prepared."
               />
             </div>
-            <div className="flex-none w-[280px] sm:w-[320px] snap-center">
+            <div className="flex-none w-[280px] sm:w-[300px] h-[180px] snap-center">
               <FeatureCard
                 icon={<GitBranch className="w-5 h-5 text-primary" />}
                 title="Org Intelligence"
-                description="Map stakeholders. Spot decision-makers and influencers."
-                image={orgIntelImg}
+                description="Map entire organizations visually. See who reports to whom, identify decision-makers, and understand the power dynamics. Build your stakeholder map as you collect contacts."
               />
             </div>
-            <div className="flex-none w-[280px] sm:w-[320px] snap-center last:mr-auto">
+            <div className="flex-none w-[280px] sm:w-[300px] h-[180px] snap-center last:mr-auto">
               <FeatureCard
                 icon={<CalendarDays className="w-5 h-5 text-primary" />}
                 title="Events Hub"
-                description="Track industry events near you. Batch scan in Event Mode, saves hours of time"
-                image={eventsImg}
+                description="Discover industry events near you. Enable Event Mode to batch-scan dozens of cards in minutes. Track attendance, add notes, and never lose a conference connection again."
               />
             </div>
           </div>
