@@ -14,8 +14,6 @@ import {
 import scanningImg from "@assets/IMG_8483_1766202180372.jpeg";
 import companyIntelImg from "@assets/IMG_8488_1766202180372.jpeg";
 import orgIntelImg from "@assets/IMG_8486_1766202180372.jpeg";
-import eventsImg from "@assets/IMG_8489_1766202180372.jpeg";
-import qrCodeImg from "@assets/IMG_8480_1766202180372.jpeg";
 import timelineImg from "@assets/IMG_8482_1766202180372.jpeg";
 import contactsImg from "@assets/IMG_8485_1766202180372.jpeg";
 
@@ -82,27 +80,21 @@ function SalesforceLogo() {
 
 function HeroCollage() {
   return (
-    <div className="relative w-full max-w-4xl mx-auto h-80 sm:h-96 md:h-[28rem]">
-      <div className="absolute left-[2%] top-[5%] w-24 sm:w-32 md:w-40 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-6 hover:rotate-0 transition-transform duration-300">
+    <div className="relative w-full max-w-4xl mx-auto h-72 sm:h-80 md:h-96">
+      <div className="absolute left-[2%] top-[5%] w-32 sm:w-40 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-6 hover:rotate-0 transition-transform duration-300">
         <img src={scanningImg} alt="Smart Scanning" className="w-full h-auto" />
       </div>
-      <div className="absolute left-[18%] top-[25%] w-28 sm:w-36 md:w-44 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10">
-        <img src={qrCodeImg} alt="QR Code" className="w-full h-auto" />
-      </div>
-      <div className="absolute left-[38%] top-[2%] w-32 sm:w-40 md:w-48 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-2 hover:rotate-0 transition-transform duration-300 z-20">
+      <div className="absolute left-[28%] top-[0%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-2 hover:rotate-0 transition-transform duration-300 z-20">
         <img src={timelineImg} alt="Contact Timeline" className="w-full h-auto" />
       </div>
-      <div className="absolute right-[28%] top-[30%] w-28 sm:w-36 md:w-44 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10">
-        <img src={companyIntelImg} alt="Quick Actions" className="w-full h-auto" />
-      </div>
-      <div className="absolute right-[8%] top-[8%] w-28 sm:w-36 md:w-44 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-6 hover:rotate-0 transition-transform duration-300">
+      <div className="absolute right-[2%] top-[5%] w-32 sm:w-40 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-6 hover:rotate-0 transition-transform duration-300">
         <img src={contactsImg} alt="Contacts List" className="w-full h-auto" />
       </div>
-      <div className="absolute right-[2%] top-[40%] w-24 sm:w-32 md:w-40 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-3 hover:rotate-0 transition-transform duration-300 z-[5]">
-        <img src={orgIntelImg} alt="Org Intelligence" className="w-full h-auto" />
+      <div className="absolute left-[8%] top-[45%] w-32 sm:w-40 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10">
+        <img src={companyIntelImg} alt="Company Intel" className="w-full h-auto" />
       </div>
-      <div className="absolute left-[5%] top-[55%] w-28 sm:w-36 md:w-44 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-2 hover:rotate-0 transition-transform duration-300">
-        <img src={eventsImg} alt="Events Hub" className="w-full h-auto" />
+      <div className="absolute right-[8%] top-[42%] w-32 sm:w-40 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-4 hover:rotate-0 transition-transform duration-300 z-10">
+        <img src={orgIntelImg} alt="Org Intelligence" className="w-full h-auto" />
       </div>
     </div>
   );
