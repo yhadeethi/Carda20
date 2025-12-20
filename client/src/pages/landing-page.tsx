@@ -161,8 +161,8 @@ export default function LandingPage() {
           <HeroCollage />
         </section>
 
-        <section id="features" className="container mx-auto px-4 py-16 border-t">
-          <div className="text-center mb-12">
+        <section id="features" className="py-16 border-t">
+          <div className="container mx-auto px-4 text-center mb-8">
             <h2 className="text-2xl md:text-3xl font-bold mb-3">
               Built for the busy professional
             </h2>
@@ -171,31 +171,39 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            <FeatureCard
-              icon={<ScanLine className="w-5 h-5 text-primary" />}
-              title="Smart Scanning"
-              description="Scan cards or paste signatures. Auto-extract fields. Powerful, intelligent Follow-ups"
-              image={scanningImg}
-            />
-            <FeatureCard
-              icon={<Building2 className="w-5 h-5 text-primary" />}
-              title="Company Intel"
-              description="One-tap Co-pilot level intelligence, to help you to know your customers better."
-              image={companyIntelImg}
-            />
-            <FeatureCard
-              icon={<GitBranch className="w-5 h-5 text-primary" />}
-              title="Org Intelligence"
-              description="Map stakeholders. Spot decision-makers and influencers."
-              image={orgIntelImg}
-            />
-            <FeatureCard
-              icon={<CalendarDays className="w-5 h-5 text-primary" />}
-              title="Events Hub"
-              description="Track industry events near you. Batch scan in Event Mode, saves hours of time"
-              image={eventsImg}
-            />
+          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth px-4 pb-4 -mx-0 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="flex-none w-[280px] sm:w-[320px] snap-center first:ml-auto last:mr-auto">
+              <FeatureCard
+                icon={<ScanLine className="w-5 h-5 text-primary" />}
+                title="Smart Scanning"
+                description="Scan cards or paste signatures. Auto-extract fields. Powerful, intelligent Follow-ups"
+                image={scanningImg}
+              />
+            </div>
+            <div className="flex-none w-[280px] sm:w-[320px] snap-center">
+              <FeatureCard
+                icon={<Building2 className="w-5 h-5 text-primary" />}
+                title="Company Intel"
+                description="One-tap Co-pilot level intelligence, to help you to know your customers better."
+                image={companyIntelImg}
+              />
+            </div>
+            <div className="flex-none w-[280px] sm:w-[320px] snap-center">
+              <FeatureCard
+                icon={<GitBranch className="w-5 h-5 text-primary" />}
+                title="Org Intelligence"
+                description="Map stakeholders. Spot decision-makers and influencers."
+                image={orgIntelImg}
+              />
+            </div>
+            <div className="flex-none w-[280px] sm:w-[320px] snap-center last:mr-auto">
+              <FeatureCard
+                icon={<CalendarDays className="w-5 h-5 text-primary" />}
+                title="Events Hub"
+                description="Track industry events near you. Batch scan in Event Mode, saves hours of time"
+                image={eventsImg}
+              />
+            </div>
           </div>
         </section>
 
