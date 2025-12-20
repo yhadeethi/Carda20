@@ -11,32 +11,35 @@ import {
   Zap,
 } from "lucide-react";
 
-function MediaPlaceholder({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/20 flex items-center justify-center text-sm text-muted-foreground aspect-video">
-      <div className="text-center p-4">
-        <div className="font-medium">{label}</div>
-        <div className="text-xs mt-1 opacity-70">Drop GIF or screenshot here</div>
-      </div>
-    </div>
-  );
-}
+import scanningImg from "@assets/Image_(14)_1766194507081.jpg";
+import companyIntelImg from "@assets/Image_(15)_1766194507081.jpg";
+import timelineImg from "@assets/Image_(9)_1766194507083.jpg";
+import eventsImg from "@assets/Image_(16)_1766194507080.jpg";
+import qrCodeImg from "@assets/Image_(11)_1766194507082.jpg";
+import actionsImg from "@assets/Image_(10)_1766194507082.jpg";
+import eventModalImg from "@assets/Image_(12)_1766194507082.jpg";
 
 function FeatureCard({
   icon,
   title,
   description,
-  mediaLabel,
+  image,
 }: {
   icon: ReactNode;
   title: string;
   description: string;
-  mediaLabel: string;
+  image: string;
 }) {
   return (
     <Card className="overflow-hidden">
       <div className="p-4 sm:p-6">
-        <MediaPlaceholder label={mediaLabel} />
+        <div className="rounded-xl overflow-hidden bg-muted">
+          <img
+            src={image}
+            alt={title}
+            className="w-full h-auto object-cover"
+          />
+        </div>
       </div>
       <CardContent className="pt-0">
         <div className="flex items-center gap-3 mb-2">
@@ -66,7 +69,6 @@ function LogoPill({
   );
 }
 
-// Official brand logos from Simple Icons
 function HubSpotLogo() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
@@ -89,10 +91,31 @@ function SalesforceLogo() {
   );
 }
 
+function HeroCollage() {
+  return (
+    <div className="relative w-full max-w-3xl mx-auto h-64 sm:h-80 md:h-96">
+      <div
+        className="absolute left-[5%] top-[10%] w-32 sm:w-40 md:w-48 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-6 hover:rotate-0 transition-transform duration-300"
+      >
+        <img src={qrCodeImg} alt="QR Code feature" className="w-full h-auto" />
+      </div>
+      <div
+        className="absolute left-[35%] top-[5%] w-36 sm:w-44 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10"
+      >
+        <img src={actionsImg} alt="Quick Actions" className="w-full h-auto" />
+      </div>
+      <div
+        className="absolute right-[5%] top-[15%] w-32 sm:w-40 md:w-48 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-6 hover:rotate-0 transition-transform duration-300"
+      >
+        <img src={eventModalImg} alt="Event Mode" className="w-full h-auto" />
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b sticky top-0 z-50 bg-background/95 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -110,8 +133,7 @@ export default function LandingPage() {
       </header>
 
       <main>
-        {/* Hero Section */}
-        <section className="container mx-auto px-4 py-16 md:py-24 text-center">
+        <section className="container mx-auto px-4 py-12 md:py-16 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-sm mb-6">
             <Zap className="w-4 h-4 text-primary" />
             <span>Powered by AI</span>
@@ -122,7 +144,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            A mini CRM, for your contacts on-the-go. With AI enrichment tools. 
+            A mini CRM, for your contacts on-the-go. With AI enrichment tools.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
@@ -132,32 +154,14 @@ export default function LandingPage() {
               </a>
             </Button>
             <Button size="lg" variant="outline" asChild data-testid="button-see-demo">
-              <a href="#demo">See demo</a>
+              <a href="#features">See features</a>
             </Button>
           </div>
+
+          <HeroCollage />
         </section>
 
-        {/* Main Demo Section */}
-        <section id="demo" className="container mx-auto px-4 pb-16">
-          <div className="max-w-4xl mx-auto">
-            <div className="rounded-2xl border bg-card p-2 sm:p-4 shadow-sm">
-              <div className="rounded-xl overflow-hidden bg-muted aspect-video flex items-center justify-center">
-                <div className="text-center p-8">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <ScanLine className="w-8 h-8 text-primary" />
-                  </div>
-                  <div className="font-medium text-lg">App Demo</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Add a GIF or video showing the full workflow
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Features Section */}
-        <section className="container mx-auto px-4 py-16 border-t">
+        <section id="features" className="container mx-auto px-4 py-16 border-t">
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-3xl font-bold mb-3">
               Built for the busy professional
@@ -172,30 +176,29 @@ export default function LandingPage() {
               icon={<ScanLine className="w-5 h-5 text-primary" />}
               title="Smart Scanning"
               description="Scan cards or paste signatures. Auto-extract fields. Powerful, intelligent Follow-ups"
-              mediaLabel="Scanning Demo"
+              image={scanningImg}
             />
             <FeatureCard
               icon={<Building2 className="w-5 h-5 text-primary" />}
               title="Company Intel"
               description="One-tap Co-pilot level intelligence, to help you to know your customers better."
-              mediaLabel="Intel Demo"
+              image={companyIntelImg}
             />
             <FeatureCard
               icon={<GitBranch className="w-5 h-5 text-primary" />}
               title="Org Intelligence"
               description="Map stakeholders. Spot decision-makers and influencers."
-              mediaLabel="Org Map Demo"
+              image={timelineImg}
             />
             <FeatureCard
               icon={<CalendarDays className="w-5 h-5 text-primary" />}
               title="Events Hub"
               description="Track industry events near you. Batch scan in Event Mode, saves hours of time"
-              mediaLabel="Events Demo"
+              image={eventsImg}
             />
           </div>
         </section>
 
-        {/* CRM Coming Soon (logos only) */}
         <section className="container mx-auto px-4 pb-2">
           <div className="max-w-4xl mx-auto text-center">
             <div className="flex flex-wrap items-center justify-center gap-2">
@@ -208,7 +211,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Simple CTA */}
         <section className="container mx-auto px-4 py-16 border-t">
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-2xl font-bold mb-3">Try it out</h2>
@@ -222,7 +224,6 @@ export default function LandingPage() {
         </section>
       </main>
 
-      {/* Footer */}
       <footer className="border-t py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           Carda — Contact Intelligence
