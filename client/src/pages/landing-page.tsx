@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight, CreditCard, Zap } from "lucide-react";
+import { ArrowRight, CreditCard } from "lucide-react";
 
 import eventsImg from "@assets/Image_(16)_1766300783521.jpg";
 import scanCardImg from "@assets/Image_(13)_1766300783522.jpg";
@@ -199,11 +199,6 @@ export default function LandingPage() {
 
       <main>
         <section className="container mx-auto px-4 py-12 md:py-16 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-sm mb-6">
-            <Zap className="w-4 h-4 text-primary" />
-            <span>Powered by AI</span>
-          </div>
-
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-4">
             Your network. <span className="text-primary">With powerful intelligence.</span>
           </h1>
@@ -309,7 +304,7 @@ export default function LandingPage() {
 
       <footer className="border-t py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          Carda — Contact Intelligence
+          Carda. All rights reserved.
         </div>
       </footer>
     </div>
