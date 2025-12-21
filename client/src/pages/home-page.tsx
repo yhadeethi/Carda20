@@ -25,7 +25,7 @@ type ViewMode = "scan" | "contacts" | "contact-detail" | "company-detail" | "eve
 
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
-  const { isCompact, isHidden } = useScrollDirectionNav();
+  const { isHidden } = useScrollDirectionNav();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
@@ -35,6 +35,7 @@ export default function HomePage() {
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
+  const [navMinimized, setNavMinimized] = useState(false);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -100,7 +101,7 @@ export default function HomePage() {
 
   const tabs = [
     { id: "scan" as TabMode, label: "Scan", icon: Camera },
-    { id: "contacts" as TabMode, label: "Contacts", icon: Users },
+    { id: "contacts" as TabMode, label: "Network", icon: Users },
     { id: "events" as TabMode, label: "Events", icon: Calendar },
   ];
 
@@ -255,17 +256,17 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar - Hides on scroll down, shows on scroll up */}
+      {/* Bottom Navigation Bar - Click to toggle between full and minimized */}
       <nav 
         className={`fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ease-out ${
           isHidden ? "translate-y-full" : "translate-y-0"
         }`}
       >
         <div 
-          className={`mb-3 inline-flex items-center gap-8 rounded-full bg-white dark:bg-slate-900 px-6 py-3 transition-all duration-200 ease-out ${
-            isCompact
-              ? "shadow-lg scale-[0.96]"
-              : "shadow-xl scale-100"
+          className={`mb-3 inline-flex items-center rounded-full bg-white dark:bg-slate-900 shadow-xl transition-all duration-300 ease-out ${
+            navMinimized 
+              ? "gap-3 px-3 py-2 scale-90" 
+              : "gap-8 px-6 py-3 scale-100"
           }`}
           data-testid="nav-bottom"
         >
@@ -275,21 +276,41 @@ export default function HomePage() {
             return (
               <button
                 key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`flex flex-col items-center justify-center gap-0.5 transition-colors duration-150 ${
+                onClick={() => {
+                  if (navMinimized) {
+                    setNavMinimized(false);
+                  }
+                  handleTabChange(tab.id);
+                }}
+                className={`flex flex-col items-center justify-center transition-all duration-200 ${
+                  navMinimized ? "gap-0" : "gap-0.5"
+                } ${
                   isActive
                     ? "text-foreground"
                     : "text-foreground/50 hover:text-foreground/80"
                 }`}
                 data-testid={`nav-tab-${tab.id}`}
               >
-                <Icon className="w-5 h-5" />
-                <span className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}>
+                <Icon className={`transition-all duration-200 ${navMinimized ? "w-4 h-4" : "w-5 h-5"}`} />
+                <span 
+                  className={`transition-all duration-200 overflow-hidden ${
+                    navMinimized 
+                      ? "max-h-0 opacity-0 text-[0px]" 
+                      : "max-h-4 opacity-100 text-[10px]"
+                  } ${isActive ? "font-semibold" : "font-medium"}`}
+                >
                   {tab.label}
                 </span>
               </button>
             );
           })}
+          {/* Minimize toggle button */}
+          <button
+            onClick={() => setNavMinimized(!navMinimized)}
+            className="ml-1 w-1.5 h-6 rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/40 transition-colors"
+            data-testid="nav-minimize-toggle"
+            aria-label={navMinimized ? "Expand navigation" : "Minimize navigation"}
+          />
         </div>
       </nav>
     </div>

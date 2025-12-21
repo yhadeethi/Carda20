@@ -283,18 +283,18 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
 
       <Card className="glass">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">Contacts</CardTitle>
+          <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">Network</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* People / Companies Segmented Control */}
+          {/* Network / Companies Segmented Control */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-            <TabsList className="w-full grid grid-cols-2">
-              <TabsTrigger value="people" className="gap-1.5" data-testid="tab-people">
-                <User className="w-4 h-4" />
-                People
+            <TabsList className="w-full grid grid-cols-2 h-12">
+              <TabsTrigger value="people" className="gap-2 text-base font-medium" data-testid="tab-people">
+                <User className="w-5 h-5" />
+                Network
               </TabsTrigger>
-              <TabsTrigger value="companies" className="gap-1.5" data-testid="tab-companies">
-                <Building2 className="w-4 h-4" />
+              <TabsTrigger value="companies" className="gap-2 text-base font-medium" data-testid="tab-companies">
+                <Building2 className="w-5 h-5" />
                 Companies
               </TabsTrigger>
             </TabsList>

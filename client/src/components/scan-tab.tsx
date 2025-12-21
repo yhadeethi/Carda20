@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CompanyIntelCard } from "@/components/company-intel-card";
 import { ContactActionsTab } from "@/components/contact-actions-tab";
@@ -482,29 +481,6 @@ export function ScanTab({
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
-      <Dialog open={showEventNameDialog} onOpenChange={setShowEventNameDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>What event are you at?</DialogTitle>
-          </DialogHeader>
-          <Input
-            placeholder="e.g. All-Energy 2025"
-            value={tempEventName}
-            onChange={(e) => setTempEventName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
-            autoFocus
-            data-testid="input-event-name"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEventNameDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleEventNameSubmit} disabled={!tempEventName.trim()} data-testid="button-save-event">
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
@@ -587,6 +563,39 @@ export function ScanTab({
                   </div>
                 )}
               </div>
+              
+              {/* Inline event name input - slides in when event mode enabled without name */}
+              {showEventNameDialog && (
+                <div className="mt-3 flex gap-2 items-center animate-in slide-in-from-top-2 duration-200">
+                  <Input
+                    placeholder="e.g. All-Energy 2025"
+                    value={tempEventName}
+                    onChange={(e) => setTempEventName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
+                    autoFocus
+                    className="flex-1"
+                    data-testid="input-event-name"
+                  />
+                  <Button 
+                    size="sm" 
+                    onClick={handleEventNameSubmit} 
+                    disabled={!tempEventName.trim()} 
+                    data-testid="button-save-event"
+                  >
+                    Save
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => {
+                      setShowEventNameDialog(false);
+                      onEventModeChange(false);
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
               
               {/* Batch Scan Button */}
               {eventModeEnabled && currentEventName && (

@@ -81,7 +81,10 @@ export function CompanyTile({ company, contactCount, onClick, onOpenOrg, onAddNo
             src={logoUrl}
             alt={`${company.name} logo`}
             className="w-8 h-8 object-contain"
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
             onError={() => setLogoError(true)}
+            loading="lazy"
           />
         ) : monogram ? (
           <span className="text-sm font-semibold text-primary">{monogram}</span>

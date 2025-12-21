@@ -96,7 +96,10 @@ function CompanyHeader({ company, contactCount }: { company: Company; contactCou
             src={logoUrl}
             alt={`${company.name} logo`}
             className="w-10 h-10 object-contain"
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
             onError={() => setLogoError(true)}
+            loading="lazy"
           />
         ) : (
           <Building2 className="w-6 h-6 text-primary" />
