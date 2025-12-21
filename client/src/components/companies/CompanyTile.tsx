@@ -1,7 +1,8 @@
 /**
- * CompanyTile - Clean, minimal company tile for grid layout
+ * CompanyTile - Clean, minimal company tile with logo support
  */
 
+import { useState } from "react";
 import { Building2, MoreHorizontal, Users, Globe, Network, StickyNote } from "lucide-react";
 import {
   DropdownMenu,
@@ -21,15 +22,22 @@ interface CompanyTileProps {
 }
 
 export function CompanyTile({ company, contactCount, onClick, onOpenOrg, onAddNote }: CompanyTileProps) {
+  const [logoError, setLogoError] = useState(false);
+  
   const monogram = company.name
     .split(/\s+/)
     .slice(0, 2)
     .map(word => word[0]?.toUpperCase() || '')
     .join('');
 
+  // Use Clearbit Logo API if domain is available
+  const logoUrl = company.domain && !logoError
+    ? `https://logo.clearbit.com/${company.domain}`
+    : null;
+
   return (
     <div
-      className="relative p-4 rounded-xl border bg-card cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] active:shadow-sm"
+      className="relative p-4 rounded-xl border bg-card cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] active:shadow-sm group"
       onClick={onClick}
       data-testid={`company-tile-${company.id}`}
     >
@@ -66,9 +74,16 @@ export function CompanyTile({ company, contactCount, onClick, onOpenOrg, onAddNo
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Monogram icon */}
-      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
-        {monogram ? (
+      {/* Logo or Monogram */}
+      <div className="w-10 h-10 rounded-lg bg-white dark:bg-gray-800 border flex items-center justify-center mb-3 overflow-hidden">
+        {logoUrl ? (
+          <img
+            src={logoUrl}
+            alt={`${company.name} logo`}
+            className="w-8 h-8 object-contain"
+            onError={() => setLogoError(true)}
+          />
+        ) : monogram ? (
           <span className="text-sm font-semibold text-primary">{monogram}</span>
         ) : (
           <Building2 className="w-5 h-5 text-primary" />

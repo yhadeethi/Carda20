@@ -273,13 +273,13 @@ function buildGraphWithLayout(
         type: 'smoothstep',
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          width: 14,
-          height: 14,
-          color: '#9ca3af',
+          width: 12,
+          height: 12,
+          color: '#a78bfa',
         },
         style: { 
-          stroke: '#9ca3af', 
-          strokeWidth: 2,
+          stroke: 'url(#edge-gradient)', 
+          strokeWidth: 2.5,
           strokeLinecap: 'round',
         },
         animated: false,
@@ -393,7 +393,16 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
           zoomOnPinch
           preventScrolling={false}
         >
-          <Background color="#cbd5e1" gap={24} size={1} />
+          <Background color="#e2e8f0" gap={20} size={1} />
+          {/* Gradient definition for edges */}
+          <svg style={{ position: 'absolute', width: 0, height: 0 }}>
+            <defs>
+              <linearGradient id="edge-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#c4b5fd" />
+                <stop offset="100%" stopColor="#a78bfa" />
+              </linearGradient>
+            </defs>
+          </svg>
         </ReactFlow>
       </div>
     );

@@ -25,7 +25,7 @@ type ViewMode = "scan" | "contacts" | "contact-detail" | "company-detail" | "eve
 
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
-  const { isCompact } = useScrollDirectionNav();
+  const { isCompact, isHidden } = useScrollDirectionNav();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
@@ -255,8 +255,12 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar - Fixed to safe-area, never moves vertically */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[env(safe-area-inset-bottom)]">
+      {/* Bottom Navigation Bar - Hides on scroll down, shows on scroll up */}
+      <nav 
+        className={`fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ease-out ${
+          isHidden ? "translate-y-full" : "translate-y-0"
+        }`}
+      >
         <div 
           className={`mb-3 inline-flex items-center gap-8 rounded-full bg-white dark:bg-slate-900 px-6 py-3 transition-all duration-200 ease-out ${
             isCompact

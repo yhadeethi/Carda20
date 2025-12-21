@@ -81,6 +81,41 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
 
 const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
 
+// Company Header with Logo
+function CompanyHeader({ company, contactCount }: { company: Company; contactCount: number }) {
+  const [logoError, setLogoError] = useState(false);
+  const logoUrl = company.domain && !logoError
+    ? `https://logo.clearbit.com/${company.domain}`
+    : null;
+
+  return (
+    <div className="flex items-center gap-4 py-2">
+      <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-800 border flex items-center justify-center shrink-0 overflow-hidden">
+        {logoUrl ? (
+          <img
+            src={logoUrl}
+            alt={`${company.name} logo`}
+            className="w-10 h-10 object-contain"
+            onError={() => setLogoError(true)}
+          />
+        ) : (
+          <Building2 className="w-6 h-6 text-primary" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h1 className="text-xl font-semibold truncate" data-testid="company-name">
+          {company.name}
+        </h1>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {company.domain && <span>{company.domain}</span>}
+          <span className="text-muted-foreground/50">·</span>
+          <span>{contactCount} contact{contactCount !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab = 'orgmap' }: CompanyDetailProps) {
   const [company, setCompany] = useState<Company | null>(null);
   const [contacts, setContacts] = useState<StoredContact[]>([]);
@@ -225,21 +260,8 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
         Back to Companies
       </Button>
 
-      {/* Simplified Hero Header */}
-      <div className="flex items-center gap-4 py-2">
-        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-          <Building2 className="w-6 h-6 text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold truncate" data-testid="company-name">
-            {company.name}
-          </h1>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            {company.domain && <span>{company.domain}</span>}
-            <span>{contacts.length} contact{contacts.length !== 1 ? 's' : ''}</span>
-          </div>
-        </div>
-      </div>
+      {/* Simplified Hero Header with Logo */}
+      <CompanyHeader company={company} contactCount={contacts.length} />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="w-full grid grid-cols-3">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 export function useScrollDirectionNav() {
+  const [isHidden, setIsHidden] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
@@ -17,15 +18,21 @@ export function useScrollDirectionNav() {
             return;
           }
 
-          if (delta > 0 && !isCompact && currentScrollY > 50) {
+          // Hide nav when scrolling down past threshold
+          if (delta > 0 && currentScrollY > 80) {
+            setIsHidden(true);
             setIsCompact(true);
           }
 
-          if (delta < 0 && isCompact) {
+          // Show nav when scrolling up
+          if (delta < 0) {
+            setIsHidden(false);
             setIsCompact(false);
           }
 
-          if (currentScrollY <= 20 && isCompact) {
+          // Always show at top
+          if (currentScrollY <= 20) {
+            setIsHidden(false);
             setIsCompact(false);
           }
 
@@ -42,7 +49,7 @@ export function useScrollDirectionNav() {
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [isCompact]);
+  }, []);
 
-  return { isCompact, expanded: !isCompact };
+  return { isHidden, isCompact, expanded: !isCompact };
 }

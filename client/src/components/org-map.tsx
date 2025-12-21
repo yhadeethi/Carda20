@@ -117,25 +117,24 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     <div className="flex flex-col h-full">
       {/* Minimal header with View Diagram button */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <GitBranch className="w-4 h-4" />
-          <span>{contacts.length} {contacts.length === 1 ? 'person' : 'people'}</span>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{contacts.length} people</span>
           {hasReportingLines && (
             <>
-              <span className="text-muted-foreground/50">·</span>
-              <span>{contacts.filter(c => c.org?.reportsToId).length} reporting lines</span>
+              <span>·</span>
+              <span>{contacts.filter(c => c.org?.reportsToId).length} lines</span>
             </>
           )}
         </div>
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs"
+          className="gap-1 h-8 text-xs px-3"
           onClick={() => setShowDiagram(true)}
           data-testid="button-view-diagram"
         >
           <Maximize2 className="w-3.5 h-3.5" />
-          View Diagram
+          Diagram
         </Button>
       </div>
 
