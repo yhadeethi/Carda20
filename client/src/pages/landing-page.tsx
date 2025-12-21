@@ -158,21 +158,25 @@ function SalesforceLogo() {
 
 function HeroCollage() {
   return (
-    <div className="relative w-full max-w-4xl mx-auto h-80 sm:h-96 md:h-[26rem]">
-      <div className="absolute left-[3%] top-[2%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-3 hover:rotate-0 transition-transform duration-300">
-        <img src={scanCardImg} alt="Scan Business Card" className="w-full h-auto" />
-      </div>
-      <div className="absolute left-[32%] top-[0%] w-40 sm:w-48 md:w-60 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-1 hover:rotate-0 transition-transform duration-300 z-20">
-        <img src={qrCodeImg} alt="My QR Code" className="w-full h-auto" />
-      </div>
-      <div className="absolute right-[3%] top-[2%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300">
-        <img src={eventsImg} alt="Events Hub" className="w-full h-auto" />
-      </div>
-      <div className="absolute left-[12%] top-[48%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-2 hover:rotate-0 transition-transform duration-300 z-10">
-        <img src={actionsImg} alt="Quick Actions" className="w-full h-auto" />
-      </div>
-      <div className="absolute right-[12%] top-[48%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-2 hover:rotate-0 transition-transform duration-300 z-10">
-        <img src={timelineImg} alt="Contact Timeline" className="w-full h-auto" />
+    <div className="w-full max-w-5xl mx-auto px-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 md:gap-5">
+        <div className="rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-2 hover:rotate-0 transition-transform duration-300 hover:scale-105 hover:z-10">
+          <img src={scanCardImg} alt="Scan Business Card" className="w-full h-auto" />
+        </div>
+        <div className="rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-1 hover:rotate-0 transition-transform duration-300 hover:scale-105 hover:z-10">
+          <img src={qrCodeImg} alt="My QR Code" className="w-full h-auto" />
+        </div>
+        <div className="rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-2 hover:rotate-0 transition-transform duration-300 hover:scale-105 hover:z-10">
+          <img src={eventsImg} alt="Events Hub" className="w-full h-auto" />
+        </div>
+        <div className="col-span-3 grid grid-cols-2 gap-3 sm:gap-4 md:gap-5 max-w-2xl mx-auto">
+          <div className="rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-1 hover:rotate-0 transition-transform duration-300 hover:scale-105 hover:z-10">
+            <img src={actionsImg} alt="Quick Actions" className="w-full h-auto" />
+          </div>
+          <div className="rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-1 hover:rotate-0 transition-transform duration-300 hover:scale-105 hover:z-10">
+            <img src={timelineImg} alt="Contact Timeline" className="w-full h-auto" />
+          </div>
+        </div>
       </div>
     </div>
   );
