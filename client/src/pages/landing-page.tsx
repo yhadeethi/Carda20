@@ -4,11 +4,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowRight,
   Building2,
-  CalendarDays,
   CreditCard,
   GitBranch,
   ScanLine,
   Zap,
+  MessageSquare,
+  Camera,
+  Clock,
 } from "lucide-react";
 
 import eventsImg from "@assets/Image_(16)_1766300783521.jpg";
@@ -149,42 +151,46 @@ export default function LandingPage() {
         </section>
 
         <section id="features" className="py-16 border-t">
-          <div className="container mx-auto px-4 text-center mb-8">
+          <div className="container mx-auto px-4 text-center mb-10">
             <h2 className="text-2xl md:text-3xl font-bold mb-3">
               Built for the busy professional
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Carda is mini CRM that enhances the way you interact with your network
+              Carda is a mini CRM that enhances the way you interact with your network
             </p>
           </div>
 
-          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth px-4 pb-4 items-stretch" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <div className="flex-none w-[280px] sm:w-[300px] min-h-[240px] sm:min-h-[200px] snap-center first:ml-auto">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
               <FeatureCard
                 icon={<ScanLine className="w-5 h-5 text-primary" />}
-                title="Smart Scanning"
-                description="Snap a photo or paste an email signature. Our AI extracts names, titles, companies, emails, phones, and addresses automatically. Works with business cards, signatures, and even handwritten notes."
+                title="Smart Capture"
+                description="Snap a photo or paste an email signature. AI extracts names, titles, emails, and phones instantly. Works with cards, signatures, and handwritten notes."
               />
-            </div>
-            <div className="flex-none w-[280px] sm:w-[300px] min-h-[240px] sm:min-h-[200px] snap-center">
               <FeatureCard
                 icon={<Building2 className="w-5 h-5 text-primary" />}
                 title="Company Intel"
-                description="One-tap AI intelligence on any company. Get funding history, tech stack, competitive landscape, and talking points. Know your prospect before the first call. Always be prepared."
+                description="One-tap AI research on any company. Get funding history, tech stack, competitors, and talking points. Know your prospect before the call."
               />
-            </div>
-            <div className="flex-none w-[280px] sm:w-[300px] min-h-[240px] sm:min-h-[200px] snap-center">
               <FeatureCard
                 icon={<GitBranch className="w-5 h-5 text-primary" />}
-                title="Org Intelligence"
-                description="Map entire organizations visually. See who reports to whom, identify decision-makers, and understand the power dynamics. Build your stakeholder map as you collect contacts."
+                title="Org Map"
+                description="Visualize entire organizations. See who reports to whom, spot decision-makers, and map the power dynamics as you collect contacts."
               />
-            </div>
-            <div className="flex-none w-[280px] sm:w-[300px] min-h-[240px] sm:min-h-[200px] snap-center last:mr-auto">
               <FeatureCard
-                icon={<CalendarDays className="w-5 h-5 text-primary" />}
-                title="Events Hub"
-                description="Discover industry events near you. Enable Event Mode to batch-scan dozens of cards in minutes. Track attendance, add notes, and never lose a conference connection again."
+                icon={<MessageSquare className="w-5 h-5 text-primary" />}
+                title="Follow-Up"
+                description="AI-drafted emails and LinkedIn messages in your tone. Set reminders, track tasks, and never let a warm lead go cold."
+              />
+              <FeatureCard
+                icon={<Camera className="w-5 h-5 text-primary" />}
+                title="Event Mode"
+                description="Batch-scan dozens of cards at conferences. Snap, queue, and process later. Review and approve before saving. Built for speed."
+              />
+              <FeatureCard
+                icon={<Clock className="w-5 h-5 text-primary" />}
+                title="Timeline"
+                description="Full history of every interaction with each contact. Calls, emails, meetings, notes—all in one place. Never forget context again."
               />
             </div>
           </div>
