@@ -25,7 +25,7 @@ type ViewMode = "scan" | "contacts" | "contact-detail" | "company-detail" | "eve
 
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
-  const { isHidden } = useScrollDirectionNav();
+  const { isHidden, isCompact } = useScrollDirectionNav();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
@@ -35,7 +35,6 @@ export default function HomePage() {
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
-  const [navMinimized, setNavMinimized] = useState(false);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -256,17 +255,18 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar - Click to toggle between full and minimized */}
+      {/* Bottom Navigation Bar - iOS Photos style morph on scroll */}
       <nav 
-        className={`fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ease-out ${
-          isHidden ? "translate-y-full" : "translate-y-0"
+        className={`fixed inset-x-0 bottom-0 z-30 flex justify-center transition-all duration-300 ease-out ${
+          isHidden ? "translate-y-full opacity-0" : "translate-y-0 opacity-100"
         }`}
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
       >
         <div 
-          className={`mb-3 inline-flex items-center rounded-full bg-white dark:bg-slate-900 shadow-xl transition-all duration-300 ease-out ${
-            navMinimized 
-              ? "gap-3 px-3 py-2 scale-90" 
-              : "gap-8 px-6 py-3 scale-100"
+          className={`inline-flex items-center rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-out ${
+            isCompact 
+              ? "gap-4 px-4 py-2" 
+              : "gap-6 px-5 py-3"
           }`}
           data-testid="nav-bottom"
         >
@@ -276,41 +276,31 @@ export default function HomePage() {
             return (
               <button
                 key={tab.id}
-                onClick={() => {
-                  if (navMinimized) {
-                    setNavMinimized(false);
-                  }
-                  handleTabChange(tab.id);
-                }}
+                onClick={() => handleTabChange(tab.id)}
                 className={`flex flex-col items-center justify-center transition-all duration-200 ${
-                  navMinimized ? "gap-0" : "gap-0.5"
+                  isCompact ? "gap-0" : "gap-0.5"
                 } ${
                   isActive
                     ? "text-foreground"
                     : "text-foreground/50 hover:text-foreground/80"
                 }`}
+                style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
                 data-testid={`nav-tab-${tab.id}`}
               >
-                <Icon className={`transition-all duration-200 ${navMinimized ? "w-4 h-4" : "w-5 h-5"}`} />
+                <Icon className={`transition-all duration-200 ${isCompact ? "w-5 h-5" : "w-5 h-5"}`} />
                 <span 
-                  className={`transition-all duration-200 overflow-hidden ${
-                    navMinimized 
-                      ? "max-h-0 opacity-0 text-[0px]" 
-                      : "max-h-4 opacity-100 text-[10px]"
-                  } ${isActive ? "font-semibold" : "font-medium"}`}
+                  className={`transition-all duration-200 overflow-hidden whitespace-nowrap ${
+                    isCompact 
+                      ? "max-h-0 opacity-0 scale-y-0" 
+                      : "max-h-4 opacity-100 scale-y-100"
+                  } text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}
+                  style={{ transformOrigin: 'top' }}
                 >
                   {tab.label}
                 </span>
               </button>
             );
           })}
-          {/* Minimize toggle button */}
-          <button
-            onClick={() => setNavMinimized(!navMinimized)}
-            className="ml-1 w-1.5 h-6 rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/40 transition-colors"
-            data-testid="nav-minimize-toggle"
-            aria-label={navMinimized ? "Expand navigation" : "Minimize navigation"}
-          />
         </div>
       </nav>
     </div>

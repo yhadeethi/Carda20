@@ -1,15 +1,10 @@
 /**
  * CompanyTile - Clean, minimal company tile with logo support
+ * Single-tap opens company - secondary actions shown inline at bottom
  */
 
 import { useState } from "react";
-import { Building2, MoreHorizontal, Users, Globe, Network, StickyNote } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Building2, Users, Globe, Network, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Company } from "@/lib/companiesStorage";
 
@@ -23,6 +18,7 @@ interface CompanyTileProps {
 
 export function CompanyTile({ company, contactCount, onClick, onOpenOrg, onAddNote }: CompanyTileProps) {
   const [logoError, setLogoError] = useState(false);
+  const [logoLoading, setLogoLoading] = useState(true);
   
   const monogram = company.name
     .split(/\s+/)
@@ -30,62 +26,34 @@ export function CompanyTile({ company, contactCount, onClick, onOpenOrg, onAddNo
     .map(word => word[0]?.toUpperCase() || '')
     .join('');
 
-  // Use Clearbit Logo API if domain is available
+  // Use Google Favicon API for better reliability
   const logoUrl = company.domain && !logoError
-    ? `https://logo.clearbit.com/${company.domain}`
+    ? `https://www.google.com/s2/favicons?domain=${company.domain}&sz=128`
     : null;
 
   return (
     <div
       className="relative p-4 rounded-xl border bg-card cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] active:shadow-sm group"
       onClick={onClick}
+      style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
       data-testid={`company-tile-${company.id}`}
     >
-      {/* Quick action menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 hover:opacity-100 focus:opacity-100 transition-opacity"
-            onClick={(e) => e.stopPropagation()}
-            data-testid={`company-menu-${company.id}`}
-          >
-            <MoreHorizontal className="w-4 h-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onClick(); }}>
-            <Building2 className="w-4 h-4 mr-2" />
-            Open Company
-          </DropdownMenuItem>
-          {onOpenOrg && (
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenOrg(); }}>
-              <Network className="w-4 h-4 mr-2" />
-              Open Org
-            </DropdownMenuItem>
-          )}
-          {onAddNote && (
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAddNote(); }}>
-              <StickyNote className="w-4 h-4 mr-2" />
-              Add Note
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
       {/* Logo or Monogram */}
       <div className="w-10 h-10 rounded-lg bg-white dark:bg-gray-800 border flex items-center justify-center mb-3 overflow-hidden">
         {logoUrl ? (
-          <img
-            src={logoUrl}
-            alt={`${company.name} logo`}
-            className="w-8 h-8 object-contain"
-            referrerPolicy="no-referrer"
-            crossOrigin="anonymous"
-            onError={() => setLogoError(true)}
-            loading="lazy"
-          />
+          <>
+            {logoLoading && (
+              <div className="w-8 h-8 rounded bg-muted animate-pulse" />
+            )}
+            <img
+              src={logoUrl}
+              alt={`${company.name} logo`}
+              className={`w-8 h-8 object-contain ${logoLoading ? 'hidden' : ''}`}
+              onLoad={() => setLogoLoading(false)}
+              onError={() => { setLogoError(true); setLogoLoading(false); }}
+              loading="lazy"
+            />
+          </>
         ) : monogram ? (
           <span className="text-sm font-semibold text-primary">{monogram}</span>
         ) : (
@@ -109,6 +77,32 @@ export function CompanyTile({ company, contactCount, onClick, onOpenOrg, onAddNo
         <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5 truncate">
           <Globe className="w-3 h-3 shrink-0" />
           <span className="truncate">{company.domain}</span>
+        </div>
+      )}
+
+      {/* Quick actions - always visible as small text links */}
+      {(onOpenOrg || onAddNote) && (
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t">
+          {onOpenOrg && (
+            <button
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+              onClick={(e) => { e.stopPropagation(); onOpenOrg(); }}
+              style={{ touchAction: 'manipulation' }}
+            >
+              <Network className="w-3 h-3" />
+              <span>Org</span>
+            </button>
+          )}
+          {onAddNote && (
+            <button
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+              onClick={(e) => { e.stopPropagation(); onAddNote(); }}
+              style={{ touchAction: 'manipulation' }}
+            >
+              <StickyNote className="w-3 h-3" />
+              <span>Note</span>
+            </button>
+          )}
         </div>
       )}
     </div>

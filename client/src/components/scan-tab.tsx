@@ -564,15 +564,23 @@ export function ScanTab({
                 )}
               </div>
               
-              {/* Inline event name input - slides in when event mode enabled without name */}
-              {showEventNameDialog && (
-                <div className="mt-3 flex gap-2 items-center animate-in slide-in-from-top-2 duration-200">
+              {/* Inline event name input - smooth expand/collapse animation */}
+              <div 
+                className="overflow-hidden transition-all duration-300 ease-out"
+                style={{
+                  maxHeight: showEventNameDialog ? '72px' : '0',
+                  opacity: showEventNameDialog ? 1 : 0,
+                  transform: showEventNameDialog ? 'translateY(0)' : 'translateY(-4px)',
+                  pointerEvents: showEventNameDialog ? 'auto' : 'none',
+                }}
+              >
+                <div className="mt-3 flex gap-2 items-center">
                   <Input
                     placeholder="e.g. All-Energy 2025"
                     value={tempEventName}
                     onChange={(e) => setTempEventName(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
-                    autoFocus
+                    autoFocus={showEventNameDialog}
                     className="flex-1"
                     data-testid="input-event-name"
                   />
@@ -595,7 +603,7 @@ export function ScanTab({
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
-              )}
+              </div>
               
               {/* Batch Scan Button */}
               {eventModeEnabled && currentEventName && (
@@ -1009,6 +1017,76 @@ export function ScanTab({
                   )}
                 </div>
               )}
+
+              {/* Follow-Up Quick Actions */}
+              <div className="pt-4 border-t">
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  Follow Up
+                </h4>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-col gap-1 h-auto py-3"
+                    onClick={() => {
+                      // Simple reminder - could integrate with reminder system later
+                      toast({
+                        title: "Reminder set",
+                        description: `Follow up with ${currentContact?.fullName || 'contact'} tomorrow`,
+                      });
+                    }}
+                    data-testid="button-add-reminder"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    <span className="text-xs">Reminder</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-col gap-1 h-auto py-3"
+                    disabled={!currentContact?.email}
+                    asChild={!!currentContact?.email}
+                    data-testid="button-draft-email"
+                  >
+                    {currentContact?.email ? (
+                      <a href={`mailto:${currentContact.email}?subject=Great meeting you${currentContact?.companyName ? ` - ${currentContact.companyName}` : ''}`}>
+                        <Mail className="w-4 h-4" />
+                        <span className="text-xs">Email</span>
+                      </a>
+                    ) : (
+                      <>
+                        <Mail className="w-4 h-4" />
+                        <span className="text-xs">Email</span>
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-col gap-1 h-auto py-3"
+                    disabled={!currentContact?.fullName && !currentContact?.companyName}
+                    asChild={!!(currentContact?.fullName || currentContact?.companyName)}
+                    data-testid="button-linkedin-search"
+                  >
+                    {(currentContact?.fullName || currentContact?.companyName) ? (
+                      <a 
+                        href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent([currentContact?.fullName, currentContact?.companyName].filter(Boolean).join(' '))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <SiLinkedin className="w-4 h-4 text-[#0A66C2]" />
+                        <span className="text-xs">LinkedIn</span>
+                      </a>
+                    ) : (
+                      <>
+                        <SiLinkedin className="w-4 h-4" />
+                        <span className="text-xs">LinkedIn</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
 
               <div className="pt-4 flex flex-col gap-2">
                 <Button

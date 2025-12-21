@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 
+/**
+ * Hook for iOS Photos-style nav morphing based on scroll direction
+ * - Scrolling UP (reading more content) = compact nav (labels hidden)
+ * - Scrolling DOWN (back to top) or idle = expanded nav (labels visible)
+ */
 export function useScrollDirectionNav() {
   const [isHidden, setIsHidden] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
@@ -13,27 +18,31 @@ export function useScrollDirectionNav() {
           const currentScrollY = window.scrollY;
           const delta = currentScrollY - lastScrollY.current;
 
-          if (Math.abs(delta) < 8) {
+          // Need meaningful scroll (>5px) to trigger change
+          if (Math.abs(delta) < 5) {
             ticking.current = false;
             return;
           }
 
-          // Hide nav when scrolling down past threshold
-          if (delta > 0 && currentScrollY > 80) {
-            setIsHidden(true);
+          // Scrolling DOWN into content = compact nav (labels fade out), hide after threshold
+          if (delta > 0 && currentScrollY > 50) {
             setIsCompact(true);
+            // Hide completely when scrolled far enough down
+            if (currentScrollY > 200) {
+              setIsHidden(true);
+            }
           }
 
-          // Show nav when scrolling up
+          // Scrolling UP = expand nav (labels fade in), show nav
           if (delta < 0) {
-            setIsHidden(false);
             setIsCompact(false);
+            setIsHidden(false);
           }
 
-          // Always show at top
+          // At top of page = always expanded and visible
           if (currentScrollY <= 20) {
-            setIsHidden(false);
             setIsCompact(false);
+            setIsHidden(false);
           }
 
           lastScrollY.current = currentScrollY;

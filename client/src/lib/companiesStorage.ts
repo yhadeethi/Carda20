@@ -94,6 +94,24 @@ export function extractDomainFromEmail(email: string): string | null {
 }
 
 /**
+ * Extract domain from website URL
+ */
+export function extractDomainFromWebsite(website: string): string | null {
+  if (!website) return null;
+  try {
+    // Handle URLs without protocol
+    const urlString = website.includes('://') ? website : `https://${website}`;
+    const url = new URL(urlString);
+    // Remove www. prefix if present
+    return url.hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    // Fallback regex for malformed URLs
+    const match = website.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    return match ? match[1].toLowerCase() : null;
+  }
+}
+
+/**
  * Normalize company name for comparison
  */
 export function normalizeCompanyName(name: string): string {
@@ -130,6 +148,7 @@ export function createCompany(data: Partial<Company>): Company {
 export function autoGenerateCompaniesFromContacts(contacts: Array<{
   company: string;
   email: string;
+  website?: string;
   companyId?: string | null;
 }>): Company[] {
   const existingCompanies = getCompanies();
@@ -140,7 +159,10 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
   
   contacts.forEach((contact) => {
     const companyName = contact.company?.trim();
-    const domain = extractDomainFromEmail(contact.email);
+    // Priority: website domain > email domain
+    const websiteDomain = extractDomainFromWebsite(contact.website || '');
+    const emailDomain = extractDomainFromEmail(contact.email);
+    const domain = websiteDomain || emailDomain;
     
     if (companyName) {
       const normalized = normalizeCompanyName(companyName).toLowerCase();
