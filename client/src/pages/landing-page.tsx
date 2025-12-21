@@ -11,11 +11,11 @@ import {
   Zap,
 } from "lucide-react";
 
-import scanningImg from "@assets/IMG_8483_1766202180372.jpeg";
-import companyIntelImg from "@assets/IMG_8488_1766202180372.jpeg";
-import orgIntelImg from "@assets/IMG_8486_1766202180372.jpeg";
-import timelineImg from "@assets/IMG_8482_1766202180372.jpeg";
-import contactsImg from "@assets/IMG_8485_1766202180372.jpeg";
+import eventsImg from "@assets/Image_(16)_1766300783521.jpg";
+import scanCardImg from "@assets/Image_(13)_1766300783522.jpg";
+import qrCodeImg from "@assets/Image_(11)_1766300783522.jpg";
+import actionsImg from "@assets/Image_(10)_1766300783522.jpg";
+import timelineImg from "@assets/Image_(9)_1766300783523.jpg";
 
 function FeatureCard({
   icon,
@@ -80,21 +80,21 @@ function SalesforceLogo() {
 
 function HeroCollage() {
   return (
-    <div className="relative w-full max-w-4xl mx-auto h-72 sm:h-80 md:h-96">
-      <div className="absolute left-[2%] top-[5%] w-32 sm:w-40 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-6 hover:rotate-0 transition-transform duration-300">
-        <img src={scanningImg} alt="Smart Scanning" className="w-full h-auto" />
+    <div className="relative w-full max-w-4xl mx-auto h-80 sm:h-96 md:h-[26rem]">
+      <div className="absolute left-[3%] top-[2%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+        <img src={scanCardImg} alt="Scan Business Card" className="w-full h-auto" />
       </div>
-      <div className="absolute left-[28%] top-[0%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-2 hover:rotate-0 transition-transform duration-300 z-20">
+      <div className="absolute left-[32%] top-[0%] w-40 sm:w-48 md:w-60 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-1 hover:rotate-0 transition-transform duration-300 z-20">
+        <img src={qrCodeImg} alt="My QR Code" className="w-full h-auto" />
+      </div>
+      <div className="absolute right-[3%] top-[2%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300">
+        <img src={eventsImg} alt="Events Hub" className="w-full h-auto" />
+      </div>
+      <div className="absolute left-[12%] top-[48%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-2 hover:rotate-0 transition-transform duration-300 z-10">
+        <img src={actionsImg} alt="Quick Actions" className="w-full h-auto" />
+      </div>
+      <div className="absolute right-[12%] top-[48%] w-36 sm:w-44 md:w-56 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-2 hover:rotate-0 transition-transform duration-300 z-10">
         <img src={timelineImg} alt="Contact Timeline" className="w-full h-auto" />
-      </div>
-      <div className="absolute right-[2%] top-[5%] w-32 sm:w-40 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-6 hover:rotate-0 transition-transform duration-300">
-        <img src={contactsImg} alt="Contacts List" className="w-full h-auto" />
-      </div>
-      <div className="absolute left-[8%] top-[45%] w-32 sm:w-40 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform rotate-3 hover:rotate-0 transition-transform duration-300 z-10">
-        <img src={companyIntelImg} alt="Company Intel" className="w-full h-auto" />
-      </div>
-      <div className="absolute right-[8%] top-[42%] w-32 sm:w-40 md:w-52 rounded-xl overflow-hidden shadow-lg border bg-card transform -rotate-4 hover:rotate-0 transition-transform duration-300 z-10">
-        <img src={orgIntelImg} alt="Org Intelligence" className="w-full h-auto" />
       </div>
     </div>
   );
