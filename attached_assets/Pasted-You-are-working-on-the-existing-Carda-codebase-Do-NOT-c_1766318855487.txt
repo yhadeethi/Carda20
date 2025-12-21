@@ -1,0 +1,149 @@
+You are working on the existing Carda codebase. Do NOT create new duplicate pages that are not actually used. Fix in-place.
+
+RULE #1: Before changing anything, find the real files used by the UI by searching the repo for these exact strings and list the file paths you will edit:
+- "Scan Business Card"
+- "Event mode"
+- "Network"
+- "Companies"
+- "Back to Companies"
+- "Download vCard"
+- "Generate Company Intel"
+- "Follow Up"
+- "Quick Actions"
+- "Timeline"
+- "Actions"
+
+After you identify the files, proceed with the tasks below.
+
+========================================
+TASK 1 — Company logo must show everywhere (Companies list + Company page header)
+Problem: logos show in Companies grid, but disappear inside the Company page.
+
+Fix:
+1) Create ONE reusable component (or function) used in both places:
+   - CompanyAvatar / CompanyLogo
+   - Props: { name, domain, website, size }
+   - It resolves domain in this order:
+     a) company.domain if present
+     b) parse hostname from company.website if present
+     c) fallback: infer from the most common email domain of contacts under that company
+   - Render logo using Google favicon endpoint:
+     `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
+   - If image fails, fallback to initials badge (same style as before).
+
+2) Company page header:
+   - Replace the generic building icon/placeholder with CompanyAvatar (same as list).
+   - Ensure company.domain is available on company detail route (derive it if missing).
+
+Acceptance:
+- Flow Power and Wärtsilä show logos in Companies grid AND in Company page header consistently.
+- No blank avatar on Company page.
+
+========================================
+TASK 2 — Event mode toggle must truly control the UI (and animate)
+Problem: switch ON shows the bar, but switch OFF doesn’t hide it; only X hides it. That’s wrong.
+
+Fix:
+1) Convert event mode to a single controlled boolean state:
+   - `eventModeEnabled` is the single source of truth.
+   - Switch toggles this true/false.
+   - The event input row visibility must depend ONLY on `eventModeEnabled`.
+
+2) Behaviour:
+   - Switch ON:
+     - shows event bar (animated in)
+     - focuses the event input
+   - Switch OFF:
+     - hides event bar (animated out)
+     - clears event input text
+     - clears selected event id/name if used
+   - X button:
+     - sets `eventModeEnabled = false` (same effect as toggling off)
+     - do not keep separate hidden state
+
+3) Animation (native feel):
+   - Keep the event bar mounted and animate these properties:
+     - max-height: 0 -> ~80px
+     - opacity: 0 -> 1
+     - transform: translateY(-4px) -> translateY(0)
+     - pointer-events: none when closed
+   - Use Framer Motion if already in repo; otherwise pure CSS transitions.
+
+Acceptance:
+- Toggle ON/OFF always shows/hides the bar.
+- X is optional convenience, but OFF switch must remove it.
+- No snapping/jumping.
+
+========================================
+TASK 3 — Fix why “Madeline” contact detail lacks Actions/Timeline and remove duplication
+Problem:
+- Some contacts show a “Details / Actions / Timeline” layout (e.g., Francisco).
+- Some contacts (e.g., Madeline) show ONLY a simpler detail page.
+This means there are TWO contact detail implementations and the scan flow routes to the simpler one.
+Also there’s duplication: Follow Up section + Actions section do the same job.
+
+Goal:
+- ONE modern Contact Detail layout for ALL contacts (including post-scan).
+- Remove duplicated action areas.
+- Keep it simple, clear, modern.
+
+Fix plan:
+1) Identify both contact detail screens/components and the routing conditions:
+   - Ensure ALL navigation paths (tap contact from list, and after scan) go to the SAME Contact Detail route/component.
+   - Remove/stop using the “legacy/simple” detail screen OR make it render the same unified layout.
+
+2) New unified layout structure (this is the target UI):
+   A) Header Card:
+      - Name + title + company
+      - email/phone/address/website (as currently)
+      - Primary actions row: Call / Email / LinkedIn (keep)
+      - Org Map button stays (if company has multiple contacts)
+
+   B) Segmented control (3 tabs):
+      - Details | Actions | Timeline
+      - Details: same core info + vCard button + Company Intel button (no duplicates elsewhere)
+      - Actions: ONE "Quick Actions" card containing:
+          - Generate Follow-Up (if implemented) OR Draft Email
+          - Add Reminder
+          - Add Task
+          - Schedule Meeting (optional if exists)
+          - Download vCard
+          - Generate Company Intel
+        (Do NOT show a separate "Follow Up" section above anymore. Remove it to avoid duplication.)
+      - Timeline: show scans, reminders, tasks, notes/events. If no items, show a clean empty state.
+
+3) Ensure feature parity:
+   - Madeline must show the segmented tabs.
+   - Francisco must still show the segmented tabs.
+   - No duplicated “Follow Up” block AND “Quick Actions” block at the same time.
+   - Keep styling consistent with your existing rounded cards + subtle borders.
+
+Acceptance:
+- Every contact detail page has Details/Actions/Timeline.
+- Follow-up actions exist only once (inside Actions).
+- Scan -> opens the same contact detail layout.
+
+========================================
+TASK 4 — Network tab label should be “Contacts” and “Companies”
+Problem: the segmented control says “Network” and “Companies”. It should be “Contacts” and “Companies”.
+
+Fix:
+- Rename the segment label "Network" -> "Contacts".
+- Ensure internal state keys can stay the same, but visible label must be Contacts.
+- Ensure placeholder text also aligns (e.g., “Search contacts or companies…” depending on segment).
+
+Acceptance:
+- Segmented control shows Contacts | Companies.
+
+========================================
+DELIVERABLES
+After implementing:
+1) List all changed file paths.
+2) Briefly explain what was wrong for each task (1-2 lines) and what you changed.
+3) Sanity-check the app:
+   - Companies grid shows logos.
+   - Company page header shows logo.
+   - Event mode switch ON/OFF controls bar with animation.
+   - Madeline and Francisco both show Details/Actions/Timeline.
+   - No duplicated Follow Up + Actions sections.
+   - Network segment reads Contacts | Companies.

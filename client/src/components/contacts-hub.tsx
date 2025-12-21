@@ -291,7 +291,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
             <TabsList className="w-full grid grid-cols-2 h-12">
               <TabsTrigger value="people" className="gap-2 text-base font-medium" data-testid="tab-people">
                 <User className="w-5 h-5" />
-                Network
+                Contacts
               </TabsTrigger>
               <TabsTrigger value="companies" className="gap-2 text-base font-medium" data-testid="tab-companies">
                 <Building2 className="w-5 h-5" />
@@ -471,6 +471,10 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
                 <CompanyGrid
                   companies={filteredCompanies}
                   getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
+                  getContactEmails={(companyId) => {
+                    const companyContacts = contacts.filter(c => c.companyId === companyId);
+                    return companyContacts.map(c => c.email).filter(e => e && e.trim().length > 0);
+                  }}
                   onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
                   onAddCompany={() => setShowAddCompany(true)}
                   searchQuery={searchQuery}

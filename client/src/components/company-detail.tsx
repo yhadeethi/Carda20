@@ -60,6 +60,7 @@ import {
 } from "@/lib/contactsStorage";
 import { useToast } from "@/hooks/use-toast";
 import { OrgMap } from "@/components/org-map";
+import { CompanyAvatar } from "@/components/companies/CompanyAvatar";
 
 interface CompanyDetailProps {
   companyId: string;
@@ -81,30 +82,19 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
 
 const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
 
-// Company Header with Logo
-function CompanyHeader({ company, contactCount }: { company: Company; contactCount: number }) {
-  const [logoError, setLogoError] = useState(false);
-  const logoUrl = company.domain && !logoError
-    ? `https://logo.clearbit.com/${company.domain}`
-    : null;
-
+// Company Header with Logo using shared CompanyAvatar
+function CompanyHeader({ company, contactCount, contacts }: { company: Company; contactCount: number; contacts: StoredContact[] }) {
+  const contactEmails = contacts.map(c => c.email).filter(Boolean);
+  
   return (
     <div className="flex items-center gap-4 py-2">
-      <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-800 border flex items-center justify-center shrink-0 overflow-hidden">
-        {logoUrl ? (
-          <img
-            src={logoUrl}
-            alt={`${company.name} logo`}
-            className="w-10 h-10 object-contain"
-            referrerPolicy="no-referrer"
-            crossOrigin="anonymous"
-            onError={() => setLogoError(true)}
-            loading="lazy"
-          />
-        ) : (
-          <Building2 className="w-6 h-6 text-primary" />
-        )}
-      </div>
+      <CompanyAvatar 
+        name={company.name} 
+        domain={company.domain} 
+        contactEmails={contactEmails}
+        size="lg"
+        className="rounded-xl"
+      />
       <div className="min-w-0 flex-1">
         <h1 className="text-xl font-semibold truncate" data-testid="company-name">
           {company.name}
@@ -264,7 +254,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       </Button>
 
       {/* Simplified Hero Header with Logo */}
-      <CompanyHeader company={company} contactCount={contacts.length} />
+      <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="w-full grid grid-cols-3">

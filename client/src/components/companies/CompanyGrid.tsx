@@ -10,6 +10,7 @@ import { CompanyTile } from "./CompanyTile";
 interface CompanyGridProps {
   companies: Company[];
   getContactCount: (companyId: string) => number;
+  getContactEmails?: (companyId: string) => string[];
   onSelectCompany: (companyId: string) => void;
   onOpenOrg?: (companyId: string) => void;
   onAddNote?: (companyId: string) => void;
@@ -20,6 +21,7 @@ interface CompanyGridProps {
 export function CompanyGrid({
   companies,
   getContactCount,
+  getContactEmails,
   onSelectCompany,
   onOpenOrg,
   onAddNote,
@@ -68,6 +70,7 @@ export function CompanyGrid({
             key={company.id}
             company={company}
             contactCount={getContactCount(company.id)}
+            contactEmails={getContactEmails?.(company.id) || []}
             onClick={() => onSelectCompany(company.id)}
             onOpenOrg={onOpenOrg ? () => onOpenOrg(company.id) : undefined}
             onAddNote={onAddNote ? () => onAddNote(company.id) : undefined}

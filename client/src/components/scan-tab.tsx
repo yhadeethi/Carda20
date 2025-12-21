@@ -15,7 +15,8 @@ import { ContactActionsTab } from "@/components/contact-actions-tab";
 import { ContactTimelineTab } from "@/components/contact-timeline-tab";
 import { CompanyIntelData } from "@shared/schema";
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
-import { loadContactsV2, ContactV2 } from "@/lib/contacts/storage";
+import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
+import { generateId as generateTimelineId } from "@/lib/contacts/ids";
 import { getContactCountForCompany, findCompanyByName, extractDomainFromEmail, findCompanyByDomain } from "@/lib/companiesStorage";
 import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2, Network, Layers } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
@@ -86,8 +87,8 @@ export function ScanTab({
   const [intelError, setIntelError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
 
-  const [showEventNameDialog, setShowEventNameDialog] = useState(false);
   const [tempEventName, setTempEventName] = useState("");
+  const [isEditingEventName, setIsEditingEventName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
   const [contactDetailTab, setContactDetailTab] = useState<"details" | "actions" | "timeline">("details");
@@ -151,7 +152,66 @@ export function ScanTab({
         linkedinUrl: parsedContact.linkedinUrl || "",
         address: parsedContact.address || "",
       };
-      saveContact(contactData, eventModeEnabled ? currentEventName : null);
+      const savedContact = saveContact(contactData, eventModeEnabled ? currentEventName : null);
+      
+      // Ensure the contact is in V2 storage - merge with existing data if present
+      if (savedContact) {
+        // Check if V2 record already exists
+        const existingV2Contacts = loadContactsV2();
+        const existingV2 = existingV2Contacts.find(c => c.id === savedContact.id);
+        
+        let v2Contact: ContactV2;
+        
+        if (existingV2) {
+          // Update existing record - preserve tasks, reminders, notes, and add update event to timeline
+          v2Contact = {
+            ...existingV2,
+            // Update with latest V1 fields
+            name: savedContact.name,
+            company: savedContact.company,
+            title: savedContact.title,
+            email: savedContact.email,
+            phone: savedContact.phone,
+            website: savedContact.website,
+            linkedinUrl: savedContact.linkedinUrl,
+            address: savedContact.address,
+            eventName: savedContact.eventName,
+            companyId: savedContact.companyId,
+            // Keep existing timeline but add update event
+            timeline: [
+              ...existingV2.timeline,
+              {
+                id: generateTimelineId(),
+                type: 'note_updated' as const,
+                at: new Date().toISOString(),
+                summary: 'Contact updated via scan',
+              }
+            ],
+            lastTouchedAt: new Date().toISOString(),
+          };
+        } else {
+          // Create new V2 record with scan_created event
+          v2Contact = {
+            ...savedContact,
+            tasks: [],
+            reminders: [],
+            timeline: [
+              {
+                id: generateTimelineId(),
+                type: 'scan_created' as const,
+                at: savedContact.createdAt || new Date().toISOString(),
+                summary: 'Contact created via scan',
+              }
+            ],
+            lastTouchedAt: savedContact.createdAt,
+            notes: '',
+          };
+        }
+        
+        upsertContactV2(v2Contact);
+        setContactV2(v2Contact);
+      }
+      
       onContactSaved?.();
     } catch (e) {
       console.error("[ScanTab] Failed to save contact to storage:", e);
@@ -388,12 +448,23 @@ export function ScanTab({
     setIsEditing(false);
   };
 
+  // Determine if input should be visible: event mode on AND (no event name yet OR user clicked Change)
+  const shouldShowInput = eventModeEnabled && (isEditingEventName || !currentEventName);
+  
   const handleEventModeToggle = (enabled: boolean) => {
-    if (enabled && !currentEventName) {
-      setShowEventNameDialog(true);
-      setTempEventName("");
+    if (enabled) {
+      // Turning ON: enable event mode
+      onEventModeChange(true);
+      // If no event name yet, prepare the input
+      if (!currentEventName) {
+        setTempEventName("");
+      }
     } else {
-      onEventModeChange(enabled);
+      // Turning OFF: disable event mode and clear event name
+      onEventModeChange(false);
+      onEventNameChange(null);
+      setTempEventName("");
+      setIsEditingEventName(false);
     }
   };
 
@@ -401,13 +472,25 @@ export function ScanTab({
     if (tempEventName.trim()) {
       onEventNameChange(tempEventName.trim());
       onEventModeChange(true);
-      setShowEventNameDialog(false);
+      setIsEditingEventName(false); // Close edit mode after save
     }
   };
 
   const handleChangeEvent = () => {
+    // Enter edit mode with current event name pre-filled
     setTempEventName(currentEventName || "");
-    setShowEventNameDialog(true);
+    setIsEditingEventName(true);
+  };
+  
+  const handleCancelEventEdit = () => {
+    // Cancel editing
+    setIsEditingEventName(false);
+    setTempEventName("");
+    // If there's already an event name, keep event mode on
+    // If there's no event name, turn off event mode entirely
+    if (!currentEventName) {
+      onEventModeChange(false);
+    }
   };
 
   // Batch scan handlers
@@ -564,14 +647,14 @@ export function ScanTab({
                 )}
               </div>
               
-              {/* Inline event name input - smooth expand/collapse animation */}
+              {/* Inline event name input - shows when event mode is on but no event name, or when editing */}
               <div 
                 className="overflow-hidden transition-all duration-300 ease-out"
                 style={{
-                  maxHeight: showEventNameDialog ? '72px' : '0',
-                  opacity: showEventNameDialog ? 1 : 0,
-                  transform: showEventNameDialog ? 'translateY(0)' : 'translateY(-4px)',
-                  pointerEvents: showEventNameDialog ? 'auto' : 'none',
+                  maxHeight: shouldShowInput ? '72px' : '0',
+                  opacity: shouldShowInput ? 1 : 0,
+                  transform: shouldShowInput ? 'translateY(0)' : 'translateY(-4px)',
+                  pointerEvents: shouldShowInput ? 'auto' : 'none',
                 }}
               >
                 <div className="mt-3 flex gap-2 items-center">
@@ -580,7 +663,7 @@ export function ScanTab({
                     value={tempEventName}
                     onChange={(e) => setTempEventName(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
-                    autoFocus={showEventNameDialog}
+                    autoFocus={shouldShowInput}
                     className="flex-1"
                     data-testid="input-event-name"
                   />
@@ -595,10 +678,7 @@ export function ScanTab({
                   <Button 
                     size="sm" 
                     variant="ghost" 
-                    onClick={() => {
-                      setShowEventNameDialog(false);
-                      onEventModeChange(false);
-                    }}
+                    onClick={handleCancelEventEdit}
                   >
                     <X className="w-4 h-4" />
                   </Button>
@@ -1018,76 +1098,6 @@ export function ScanTab({
                 </div>
               )}
 
-              {/* Follow-Up Quick Actions */}
-              <div className="pt-4 border-t">
-                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  Follow Up
-                </h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-col gap-1 h-auto py-3"
-                    onClick={() => {
-                      // Simple reminder - could integrate with reminder system later
-                      toast({
-                        title: "Reminder set",
-                        description: `Follow up with ${currentContact?.fullName || 'contact'} tomorrow`,
-                      });
-                    }}
-                    data-testid="button-add-reminder"
-                  >
-                    <Calendar className="w-4 h-4" />
-                    <span className="text-xs">Reminder</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-col gap-1 h-auto py-3"
-                    disabled={!currentContact?.email}
-                    asChild={!!currentContact?.email}
-                    data-testid="button-draft-email"
-                  >
-                    {currentContact?.email ? (
-                      <a href={`mailto:${currentContact.email}?subject=Great meeting you${currentContact?.companyName ? ` - ${currentContact.companyName}` : ''}`}>
-                        <Mail className="w-4 h-4" />
-                        <span className="text-xs">Email</span>
-                      </a>
-                    ) : (
-                      <>
-                        <Mail className="w-4 h-4" />
-                        <span className="text-xs">Email</span>
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-col gap-1 h-auto py-3"
-                    disabled={!currentContact?.fullName && !currentContact?.companyName}
-                    asChild={!!(currentContact?.fullName || currentContact?.companyName)}
-                    data-testid="button-linkedin-search"
-                  >
-                    {(currentContact?.fullName || currentContact?.companyName) ? (
-                      <a 
-                        href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent([currentContact?.fullName, currentContact?.companyName].filter(Boolean).join(' '))}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <SiLinkedin className="w-4 h-4 text-[#0A66C2]" />
-                        <span className="text-xs">LinkedIn</span>
-                      </a>
-                    ) : (
-                      <>
-                        <SiLinkedin className="w-4 h-4" />
-                        <span className="text-xs">LinkedIn</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-
               <div className="pt-4 flex flex-col gap-2">
                 <Button
                   onClick={handleDownloadVCard}
@@ -1142,8 +1152,8 @@ export function ScanTab({
             />
           )}
 
-          {/* Actions & Timeline Tabs - only when viewing from hub */}
-          {isViewingFromHub && contactV2 && (
+          {/* Actions & Timeline Tabs - show for all contacts */}
+          {contactV2 && (
             <Card className="glass">
               <CardContent className="p-0">
                 <Tabs value={contactDetailTab} onValueChange={(v) => setContactDetailTab(v as typeof contactDetailTab)}>
