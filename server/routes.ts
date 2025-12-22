@@ -5,6 +5,7 @@ import { z } from "zod";
 import { extractTextFromImage, initializeOCR } from "./ocrService";
 import { parseContact, ParsedContact, splitAuAddress } from "./parseService";
 import { getOrCreateCompanyIntel } from "./intelService";
+import { generateIntelV2 } from "./intelV2Service";
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
@@ -270,6 +271,27 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting company intel:", error);
       res.status(500).send("Failed to get company intel");
+    }
+  });
+
+  app.get("/api/intel-v2", async (req: Request, res: Response) => {
+    try {
+      const { companyName, domain, role } = req.query;
+
+      if (!companyName && !domain) {
+        return res.status(400).json({ error: "companyName or domain is required" });
+      }
+
+      const intel = await generateIntelV2(
+        companyName as string || "",
+        domain as string || null,
+        role as string || undefined
+      );
+
+      res.json(intel);
+    } catch (error) {
+      console.error("Error getting company intel v2:", error);
+      res.status(500).json({ error: "Failed to get company intel" });
     }
   });
 
