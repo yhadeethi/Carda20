@@ -261,7 +261,7 @@ export function CompanyIntelV2Card({
                       ${intel.stock.lastPrice.toFixed(2)}
                     </span>
                   )}
-                  {intel.stock.changePercent !== undefined && (
+                  {intel.stock.changePercent != null && (
                     <span
                       className={`text-[10px] flex items-center ${
                         intel.stock.changePercent >= 0 ? "text-green-500" : "text-red-500"

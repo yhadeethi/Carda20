@@ -12,6 +12,26 @@ interface SourceSnippet {
   textExcerpt: string;
 }
 
+function isValidDomain(domain: string): boolean {
+  if (!domain) return false;
+  
+  const cleanDomain = domain.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
+  
+  if (/^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.)/.test(cleanDomain)) {
+    return false;
+  }
+  
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(cleanDomain)) {
+    return false;
+  }
+  
+  if (!cleanDomain.includes(".") || cleanDomain.length < 4) {
+    return false;
+  }
+  
+  return /^[a-z0-9][a-z0-9.-]+[a-z0-9]$/.test(cleanDomain);
+}
+
 interface WikipediaInfo {
   extract?: string;
   pageUrl?: string;
@@ -57,6 +77,12 @@ async function fetchWikipediaSummary(companyName: string): Promise<WikipediaInfo
 
 async function fetchWebsiteContent(domain: string, paths: string[]): Promise<SourceSnippet[]> {
   const snippets: SourceSnippet[] = [];
+  
+  if (!isValidDomain(domain)) {
+    console.log(`Intel V2: Skipping invalid domain: ${domain}`);
+    return snippets;
+  }
+  
   const baseUrl = domain.startsWith("http") ? domain : `https://${domain}`;
   
   for (const path of paths.slice(0, 3)) {

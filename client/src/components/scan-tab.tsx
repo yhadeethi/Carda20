@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -11,9 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CompanyIntelCard } from "@/components/company-intel-card";
+import { CompanyIntelV2Card } from "@/components/company-intel-v2";
 import { ContactActionsTab } from "@/components/contact-actions-tab";
 import { ContactTimelineTab } from "@/components/contact-timeline-tab";
 import { CompanyIntelData } from "@shared/schema";
+import { useIntelV2 } from "@/hooks/use-intel-v2";
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
 import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
 import { generateId as generateTimelineId } from "@/lib/contacts/ids";
@@ -97,6 +99,29 @@ export function ScanTab({
   // Batch scan state
   const [batchState, setBatchState] = useState<BatchState>("idle");
   const [batchItems, setBatchItems] = useState<QueuedScan[]>([]);
+
+  // Intel V2 hook - manually triggered, not on every keystroke
+  const {
+    intel: intelV2,
+    isLoading: intelV2Loading,
+    error: intelV2Error,
+    fetchIntel: fetchIntelV2,
+    reset: resetIntelV2,
+  } = useIntelV2();
+  
+  const handleFetchIntelV2 = useCallback(() => {
+    if (editedContact) {
+      const domain = editedContact.email?.split("@")[1] || editedContact.website || null;
+      fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null);
+    }
+  }, [editedContact, fetchIntelV2]);
+  
+  const handleRefreshIntelV2 = useCallback(() => {
+    if (editedContact) {
+      const domain = editedContact.email?.split("@")[1] || editedContact.website || null;
+      fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null, true);
+    }
+  }, [editedContact, fetchIntelV2]);
 
   useEffect(() => {
     if (viewingContact) {
@@ -445,6 +470,7 @@ export function ScanTab({
     setIntelError(null);
     setPastedText("");
     clearImage();
+    resetIntelV2();
     setIsEditing(false);
   };
 
@@ -1142,6 +1168,31 @@ export function ScanTab({
             </CardContent>
           </Card>
 
+          {editedContact?.companyName && (
+            <div className="space-y-2">
+              {!intelV2 && !intelV2Loading && !intelV2Error && (
+                <Button
+                  variant="outline"
+                  onClick={handleFetchIntelV2}
+                  className="w-full gap-2"
+                  data-testid="button-get-intel-v2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Get Company Intel (Beta)
+                </Button>
+              )}
+              {(intelV2 || intelV2Loading || intelV2Error) && (
+                <CompanyIntelV2Card
+                  intel={intelV2}
+                  isLoading={intelV2Loading}
+                  error={intelV2Error}
+                  onRefresh={handleRefreshIntelV2}
+                  companyName={editedContact?.companyName}
+                />
+              )}
+            </div>
+          )}
+          
           {(companyIntel || intelError || intelMutation.isPending) && (
             <CompanyIntelCard
               intel={companyIntel}
