@@ -259,6 +259,86 @@ export interface CompanyIntelData {
   talkingPoints?: string[];
 }
 
+// ============================================
+// Intel V2 Types - Source-backed, verified intel
+// ============================================
+
+// Source reference for verified claims
+export interface IntelSource {
+  title: string;
+  url: string;
+}
+
+// Verified bullet with source backing
+export interface VerifiedBullet {
+  text: string;
+  source: IntelSource;
+}
+
+// Signal/news item with date and source
+export interface SignalItem {
+  date: string; // YYYY-MM-DD
+  title: string;
+  url: string;
+  sourceName: string;
+}
+
+// Stock data point for sparkline
+export interface StockDataPoint {
+  date: string;
+  close: number;
+}
+
+// Headcount range buckets
+export type HeadcountRange = "1-10" | "11-50" | "51-200" | "201-500" | "501-1k" | "1k-5k" | "5k-10k" | "10k+";
+
+// Company Intel V2 - facts-first, source-backed
+export interface CompanyIntelV2 {
+  companyName: string;
+  website?: string | null;
+  canonicalEntity?: string | null; // e.g. parent/legal entity name
+  lastRefreshedAt: string;
+  
+  // Mini-card data
+  headcount?: {
+    range: HeadcountRange;
+    source: IntelSource;
+  } | null;
+  
+  stock?: {
+    ticker: string;
+    exchange?: string | null;
+    currency?: string | null;
+    lastPrice?: number | null;
+    changePercent?: number | null;
+    series: StockDataPoint[];
+    source: IntelSource;
+  } | null;
+  
+  hq?: {
+    city?: string | null;
+    country?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    source: IntelSource;
+  } | null;
+  
+  // Verified Intel tab
+  verifiedFacts: VerifiedBullet[];
+  productsAndServices: VerifiedBullet[];
+  latestSignals: SignalItem[];
+  
+  // Coaching tab (inferred, not verified)
+  coaching?: {
+    talkingPoints: string[];
+    questions: string[];
+    watchOuts: string[];
+  };
+  
+  // Metadata
+  error?: string;
+}
+
 // Parsed contact from OCR/text extraction
 export interface ParsedContact {
   fullName?: string;
