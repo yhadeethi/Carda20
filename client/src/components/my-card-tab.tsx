@@ -31,7 +31,8 @@ import {
   Loader2,
   Save,
   Copy,
-  Check
+  Check,
+  RefreshCw
 } from "lucide-react";
 
 type ProfileFormValues = z.infer<typeof updateProfileSchema>;
@@ -449,6 +450,24 @@ export function MyCardTab() {
                   </Button>
                 </form>
               </Form>
+
+              {/* Switch Account Section */}
+              <div className="mt-6 pt-6 border-t">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Want to use a different email address?
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    window.location.href = "/api/logout";
+                  }}
+                  data-testid="button-switch-account"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Switch Account
+                </Button>
+              </div>
             </TabsContent>
 
             <TabsContent value="qr" className="mt-6">
