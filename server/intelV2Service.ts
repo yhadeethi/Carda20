@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { CompanyIntelV2, IntelSource, VerifiedBullet, SignalItem, HeadcountRange } from "@shared/schema";
+import { CompanyIntelV2, IntelSource, VerifiedBullet, SignalItem, HeadcountRange, OfferingsMatrix, CompetitorItem, SentimentData } from "@shared/schema";
 
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -125,6 +125,73 @@ async function fetchWebsiteContent(domain: string, paths: string[]): Promise<Sou
   return snippets;
 }
 
+interface NewsItem {
+  title: string;
+  link: string;
+  pubDate: string;
+  source: string;
+}
+
+async function fetchGoogleNewsRSS(companyName: string): Promise<NewsItem[]> {
+  try {
+    const query = encodeURIComponent(`"${companyName}" company`);
+    const url = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)",
+      },
+    });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) return [];
+    
+    const xml = await response.text();
+    const items: NewsItem[] = [];
+    
+    const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
+    for (const itemMatch of itemMatches) {
+      const match = [itemMatch, itemMatch.replace(/<\/?item>/g, "")];
+      const itemContent = match[1];
+      const titleMatch = itemContent.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>(.*?)<\/title>/);
+      const linkMatch = itemContent.match(/<link>(.*?)<\/link>/);
+      const pubDateMatch = itemContent.match(/<pubDate>(.*?)<\/pubDate>/);
+      const sourceMatch = itemContent.match(/<source[^>]*>(.*?)<\/source>/);
+      
+      if (titleMatch && linkMatch) {
+        const title = (titleMatch[1] || titleMatch[2] || "").trim();
+        const link = linkMatch[1].trim();
+        const pubDate = pubDateMatch?.[1] || "";
+        const source = sourceMatch?.[1] || "Google News";
+        
+        if (title && link && !title.toLowerCase().includes("view full coverage")) {
+          items.push({ title, link, pubDate, source });
+        }
+      }
+      
+      if (items.length >= 10) break;
+    }
+    
+    return items;
+  } catch (error) {
+    console.log("Google News RSS fetch error:", error);
+    return [];
+  }
+}
+
+function parseNewsDate(pubDate: string): string {
+  try {
+    const date = new Date(pubDate);
+    return date.toISOString().split("T")[0];
+  } catch {
+    return new Date().toISOString().split("T")[0];
+  }
+}
+
 async function fetchStockData(ticker: string): Promise<{ series: Array<{ date: string; close: number }>; lastPrice?: number; changePercent?: number } | null> {
   try {
     const url = `https://stooq.com/q/d/l/?s=${ticker.toLowerCase()}.us&d1=${getDateString(-45)}&d2=${getDateString(0)}&i=d`;
@@ -187,7 +254,11 @@ export async function generateIntelV2(
   let ticker: string | undefined;
   let wikipediaUrl: string | undefined;
   
-  const wikiInfo = await fetchWikipediaSummary(companyName);
+  const [wikiInfo, newsItems] = await Promise.all([
+    fetchWikipediaSummary(companyName),
+    fetchGoogleNewsRSS(companyName),
+  ]);
+  
   if (wikiInfo?.extract) {
     snippets.push({
       sourceTitle: "Wikipedia",
@@ -199,7 +270,7 @@ export async function generateIntelV2(
   }
   
   if (domain) {
-    const websiteSnippets = await fetchWebsiteContent(domain, ["/", "/about", "/about-us", "/company"]);
+    const websiteSnippets = await fetchWebsiteContent(domain, ["/", "/about", "/about-us", "/company", "/products", "/services"]);
     snippets.push(...websiteSnippets);
   }
   
@@ -208,21 +279,37 @@ export async function generateIntelV2(
     stockData = await fetchStockData(ticker);
   }
   
-  if (snippets.length === 0) {
+  const latestSignals: SignalItem[] = newsItems.slice(0, 6).map(item => ({
+    date: parseNewsDate(item.pubDate),
+    title: item.title,
+    url: item.link,
+    sourceName: item.source,
+  }));
+  
+  const sentiment = classifyHeadlineSentiment(newsItems.map(n => n.title));
+  
+  if (snippets.length === 0 && newsItems.length === 0) {
     return createEmptyIntel(companyName, domain);
   }
   
-  const llmResult = await callLLMForIntel(companyName, domain, contactRole, snippets);
+  const llmResult = await callLLMForIntel(companyName, domain, contactRole, snippets, newsItems);
   
-  const headcount = parseHeadcount(snippets.map(s => s.textExcerpt).join(" "));
+  const headcount = llmResult.headcount || parseHeadcount(snippets.map(s => s.textExcerpt).join(" "));
+  
+  const linkedinUrl = llmResult.linkedinUrl || `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`;
+  
+  const allSources: IntelSource[] = [
+    ...snippets.map(s => ({ title: s.sourceTitle, url: s.url })),
+    ...newsItems.slice(0, 3).map(n => ({ title: n.source, url: n.link })),
+  ];
   
   const intel: CompanyIntelV2 = {
     companyName,
     website: domain,
     lastRefreshedAt: new Date().toISOString(),
-    headcount: headcount && wikipediaUrl ? {
+    headcount: headcount && (wikipediaUrl || snippets[0]?.url) ? {
       range: headcount,
-      source: { title: "Wikipedia", url: wikipediaUrl },
+      source: { title: "Wikipedia", url: wikipediaUrl || snippets[0]?.url || "" },
     } : null,
     stock: stockData && ticker ? {
       ticker,
@@ -232,43 +319,68 @@ export async function generateIntelV2(
       source: { title: "Stooq", url: `https://stooq.com/q/?s=${ticker.toLowerCase()}.us` },
     } : null,
     hq: llmResult.hq,
+    linkedinUrl,
     verifiedFacts: llmResult.verifiedFacts,
-    productsAndServices: llmResult.productsAndServices,
-    latestSignals: llmResult.latestSignals,
-    coaching: llmResult.coaching,
+    offerings: llmResult.offerings,
+    sources: allSources,
+    latestSignals,
+    sentiment,
+    competitors: llmResult.competitors,
   };
   
   return intel;
+}
+
+function classifyHeadlineSentiment(headlines: string[]): SentimentData {
+  const positiveWords = /growth|profit|surge|soar|gain|boost|success|innovation|partnership|launch|record|expand|upgrade|milestone|award/i;
+  const negativeWords = /loss|decline|drop|fall|layoff|lawsuit|scandal|fail|crisis|cut|concern|warning|delay|recall|downturn/i;
+  
+  let positive = 0, neutral = 0, negative = 0;
+  
+  for (const headline of headlines.slice(0, 10)) {
+    if (positiveWords.test(headline)) positive++;
+    else if (negativeWords.test(headline)) negative++;
+    else neutral++;
+  }
+  
+  return { positive, neutral, negative };
 }
 
 async function callLLMForIntel(
   companyName: string,
   domain: string | null,
   contactRole: string | undefined,
-  snippets: SourceSnippet[]
+  snippets: SourceSnippet[],
+  newsItems: NewsItem[]
 ): Promise<{
   hq: CompanyIntelV2["hq"];
   verifiedFacts: VerifiedBullet[];
-  productsAndServices: VerifiedBullet[];
-  latestSignals: SignalItem[];
-  coaching: CompanyIntelV2["coaching"];
+  offerings: OfferingsMatrix | null;
+  competitors: CompetitorItem[];
+  headcount: HeadcountRange | null;
+  linkedinUrl: string | null;
 }> {
   if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-    return { hq: null, verifiedFacts: [], productsAndServices: [], latestSignals: [], coaching: undefined };
+    return { hq: null, verifiedFacts: [], offerings: null, competitors: [], headcount: null, linkedinUrl: null };
   }
   
   const snippetText = snippets.map((s, i) => 
     `[Source ${i + 1}: ${s.sourceTitle}]\nURL: ${s.url}\n${s.textExcerpt}`
   ).join("\n\n");
   
-  const systemPrompt = `You produce ONLY valid JSON that matches the CompanyIntelV2 format. Use ONLY the provided snippets as evidence. If a claim cannot be supported by a snippet + URL, do not include it. Keep it short.
+  const newsText = newsItems.slice(0, 5).map((n, i) => 
+    `[News ${i + 1}] ${n.title} (${n.source})`
+  ).join("\n");
+  
+  const systemPrompt = `You produce ONLY valid JSON. Extract facts from provided snippets. Every verifiedFact MUST cite a source URL from the snippets. Never fabricate data.
 
 Rules:
-- verifiedFacts: max 8 bullets, each MUST have a source URL from the snippets
-- productsAndServices: max 6 bullets, each MUST have a source URL
-- latestSignals: max 5 items, each with date (YYYY-MM-DD), title, url, sourceName. Only include if within last 18 months.
-- hq: only include if city/country can be verified from snippets
-- coaching: these are INFERRED and do not need sources. Keep them short (max 4 talking points, 4 questions, 3 watch outs)`;
+- verifiedFacts: max 8 bullets, each MUST have sourceUrl from snippets. Focus on: what they do, founded date, HQ, funding, key achievements.
+- offerings: extract products (max 6), services (max 6), and buyers/target customers (max 4) if mentioned
+- competitors: max 6 competitor names with brief description. Mark verified:true only if found in snippets, otherwise verified:false
+- headcount: extract employee count range from snippets. Use buckets: "1-10", "11-50", "51-200", "201-500", "501-1k", "1k-5k", "5k-10k", "10k+"
+- linkedinUrl: only if you find an actual LinkedIn URL in snippets (e.g. linkedin.com/company/...). Otherwise null.
+- hq: city and country if verifiable from snippets`;
 
   const userPrompt = `Company: ${companyName}
 Domain: ${domain || "unknown"}
@@ -277,13 +389,17 @@ Contact role: ${contactRole || "unknown"}
 Snippets:
 ${snippetText}
 
-Return JSON with this structure:
+Recent Headlines:
+${newsText || "None available"}
+
+Return JSON:
 {
   "hq": { "city": "...", "country": "...", "sourceUrl": "..." } or null,
+  "headcount": "bucket string" or null,
+  "linkedinUrl": "..." or null,
   "verifiedFacts": [{ "text": "...", "sourceUrl": "..." }],
-  "productsAndServices": [{ "text": "...", "sourceUrl": "..." }],
-  "latestSignals": [{ "date": "YYYY-MM-DD", "title": "...", "url": "...", "sourceName": "..." }],
-  "coaching": { "talkingPoints": [...], "questions": [...], "watchOuts": [...] }
+  "offerings": { "products": [...], "services": [...], "buyers": [...] } or null,
+  "competitors": [{ "name": "...", "description": "...", "verified": true/false }]
 }`;
 
   try {
@@ -299,7 +415,7 @@ Return JSON with this structure:
     
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      return { hq: null, verifiedFacts: [], productsAndServices: [], latestSignals: [], coaching: undefined };
+      return { hq: null, verifiedFacts: [], offerings: null, competitors: [], headcount: null, linkedinUrl: null };
     }
     
     const parsed = JSON.parse(content);
@@ -307,27 +423,36 @@ Return JSON with this structure:
     const verifiedFacts: VerifiedBullet[] = (parsed.verifiedFacts || [])
       .filter((f: { text?: string; sourceUrl?: string }) => f.text && f.sourceUrl)
       .slice(0, 8)
-      .map((f: { text: string; sourceUrl: string }) => ({
-        text: f.text,
-        source: { title: new URL(f.sourceUrl).hostname, url: f.sourceUrl },
-      }));
+      .map((f: { text: string; sourceUrl: string }) => {
+        try {
+          return {
+            text: f.text,
+            source: { title: new URL(f.sourceUrl).hostname, url: f.sourceUrl },
+          };
+        } catch {
+          return { text: f.text, source: { title: "Source", url: f.sourceUrl } };
+        }
+      });
     
-    const productsAndServices: VerifiedBullet[] = (parsed.productsAndServices || [])
-      .filter((p: { text?: string; sourceUrl?: string }) => p.text && p.sourceUrl)
+    let offerings: OfferingsMatrix | null = null;
+    if (parsed.offerings) {
+      offerings = {
+        products: (parsed.offerings.products || []).slice(0, 6),
+        services: (parsed.offerings.services || []).slice(0, 6),
+        buyers: (parsed.offerings.buyers || []).slice(0, 4),
+      };
+      if (!offerings.products.length && !offerings.services.length) {
+        offerings = null;
+      }
+    }
+    
+    const competitors: CompetitorItem[] = (parsed.competitors || [])
+      .filter((c: { name?: string }) => c.name)
       .slice(0, 6)
-      .map((p: { text: string; sourceUrl: string }) => ({
-        text: p.text,
-        source: { title: new URL(p.sourceUrl).hostname, url: p.sourceUrl },
-      }));
-    
-    const latestSignals: SignalItem[] = (parsed.latestSignals || [])
-      .filter((s: { date?: string; title?: string; url?: string }) => s.date && s.title && s.url)
-      .slice(0, 5)
-      .map((s: { date: string; title: string; url: string; sourceName?: string }) => ({
-        date: s.date,
-        title: s.title,
-        url: s.url,
-        sourceName: s.sourceName || new URL(s.url).hostname,
+      .map((c: { name: string; description?: string; verified?: boolean }) => ({
+        name: c.name,
+        description: c.description,
+        verified: c.verified === true,
       }));
     
     let hq: CompanyIntelV2["hq"] = null;
@@ -336,22 +461,21 @@ Return JSON with this structure:
         city: parsed.hq.city || null,
         country: parsed.hq.country || null,
         source: {
-          title: parsed.hq.sourceUrl ? new URL(parsed.hq.sourceUrl).hostname : "Wikipedia",
+          title: parsed.hq.sourceUrl ? (() => { try { return new URL(parsed.hq.sourceUrl).hostname; } catch { return "Source"; }})() : "Wikipedia",
           url: parsed.hq.sourceUrl || snippets[0]?.url || "",
         },
       };
     }
     
-    const coaching = parsed.coaching ? {
-      talkingPoints: (parsed.coaching.talkingPoints || []).slice(0, 4),
-      questions: (parsed.coaching.questions || []).slice(0, 4),
-      watchOuts: (parsed.coaching.watchOuts || []).slice(0, 3),
-    } : undefined;
+    const validHeadcounts: HeadcountRange[] = ["1-10", "11-50", "51-200", "201-500", "501-1k", "1k-5k", "5k-10k", "10k+"];
+    const headcount: HeadcountRange | null = validHeadcounts.includes(parsed.headcount) ? parsed.headcount : null;
     
-    return { hq, verifiedFacts, productsAndServices, latestSignals, coaching };
+    const linkedinUrl: string | null = parsed.linkedinUrl && parsed.linkedinUrl.includes("linkedin.com") ? parsed.linkedinUrl : null;
+    
+    return { hq, verifiedFacts, offerings, competitors, headcount, linkedinUrl };
   } catch (error) {
     console.error("LLM call error:", error);
-    return { hq: null, verifiedFacts: [], productsAndServices: [], latestSignals: [], coaching: undefined };
+    return { hq: null, verifiedFacts: [], offerings: null, competitors: [], headcount: null, linkedinUrl: null };
   }
 }
 
@@ -363,24 +487,13 @@ function createEmptyIntel(companyName: string, domain: string | null): CompanyIn
     headcount: null,
     stock: null,
     hq: null,
+    linkedinUrl: `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`,
     verifiedFacts: [],
-    productsAndServices: [],
+    offerings: null,
+    sources: [],
     latestSignals: [],
-    coaching: {
-      talkingPoints: [
-        "Research the company before your meeting",
-        "Ask about their current priorities and challenges",
-        "Look for mutual connections or shared interests",
-      ],
-      questions: [
-        "What are your biggest priorities right now?",
-        "What challenges are you trying to solve?",
-        "How do you measure success in your role?",
-      ],
-      watchOuts: [
-        "Limited public information available",
-      ],
-    },
+    sentiment: null,
+    competitors: [],
     error: "Limited public information available for this company",
   };
 }

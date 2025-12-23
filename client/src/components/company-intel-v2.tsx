@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CompanyIntelV2 } from "@shared/schema";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { CompanyIntelV2, VerifiedBullet, SignalItem, CompetitorItem } from "@shared/schema";
 import {
   Building2,
   RefreshCw,
@@ -14,14 +15,20 @@ import {
   Users,
   TrendingUp,
   TrendingDown,
-  MessageSquare,
-  HelpCircle,
-  AlertTriangle,
-  Clock,
+  Linkedin,
+  BarChart3,
+  Package,
+  Briefcase,
+  Target,
+  Newspaper,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
-  Lightbulb,
+  HelpCircle,
+  Link2,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 
 interface StockSparklineProps {
   series: Array<{ date: string; close: number }>;
@@ -30,7 +37,7 @@ interface StockSparklineProps {
   className?: string;
 }
 
-function StockSparkline({ series, width = 80, height = 24, className = "" }: StockSparklineProps) {
+function StockSparkline({ series, width = 60, height = 20, className = "" }: StockSparklineProps) {
   if (!series || series.length < 2) return null;
 
   const prices = series.map((d) => d.close);
@@ -69,25 +76,17 @@ interface HeadcountBarProps {
 
 function HeadcountBar({ range }: HeadcountBarProps) {
   const rangeMap: Record<string, number> = {
-    "1-10": 1,
-    "11-50": 2,
-    "51-200": 3,
-    "201-500": 4,
-    "501-1k": 5,
-    "1k-5k": 6,
-    "5k-10k": 7,
-    "10k+": 8,
+    "1-10": 1, "11-50": 2, "51-200": 3, "201-500": 4,
+    "501-1k": 5, "1k-5k": 6, "5k-10k": 7, "10k+": 8,
   };
-
   const level = rangeMap[range] || 3;
-  const segments = 8;
 
   return (
-    <div className="flex items-center gap-1">
-      {Array.from({ length: segments }).map((_, i) => (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 8 }).map((_, i) => (
         <div
           key={i}
-          className={`h-2 w-2 rounded-sm transition-colors ${
+          className={`h-1.5 w-1.5 rounded-sm transition-colors ${
             i < level ? "bg-primary" : "bg-muted"
           }`}
         />
@@ -124,6 +123,47 @@ function SourceChip({ title, url }: SourceChipProps) {
   );
 }
 
+interface SentimentBarProps {
+  positive: number;
+  neutral: number;
+  negative: number;
+}
+
+function SentimentBar({ positive, neutral, negative }: SentimentBarProps) {
+  const total = positive + neutral + negative;
+  if (total === 0) return null;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex h-2 rounded-full overflow-hidden">
+        {positive > 0 && (
+          <div
+            className="bg-green-500"
+            style={{ width: `${(positive / total) * 100}%` }}
+          />
+        )}
+        {neutral > 0 && (
+          <div
+            className="bg-muted-foreground/30"
+            style={{ width: `${(neutral / total) * 100}%` }}
+          />
+        )}
+        {negative > 0 && (
+          <div
+            className="bg-red-500"
+            style={{ width: `${(negative / total) * 100}%` }}
+          />
+        )}
+      </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground">
+        <span className="text-green-600">+{positive}</span>
+        <span>{neutral} neutral</span>
+        <span className="text-red-600">-{negative}</span>
+      </div>
+    </div>
+  );
+}
+
 interface CompanyIntelV2CardProps {
   intel: CompanyIntelV2 | null;
   isLoading: boolean;
@@ -139,7 +179,8 @@ export function CompanyIntelV2Card({
   onRefresh,
   companyName,
 }: CompanyIntelV2CardProps) {
-  const [activeTab, setActiveTab] = useState<"verified" | "coaching">("verified");
+  const [activeTab, setActiveTab] = useState<"verified" | "signals">("verified");
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -158,10 +199,11 @@ export function CompanyIntelV2Card({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-3">
-            <Skeleton className="h-16 w-20 rounded-lg" />
-            <Skeleton className="h-16 w-20 rounded-lg" />
-            <Skeleton className="h-16 w-20 rounded-lg" />
+          <div className="grid grid-cols-4 gap-2">
+            <Skeleton className="h-16 rounded-lg" />
+            <Skeleton className="h-16 rounded-lg" />
+            <Skeleton className="h-16 rounded-lg" />
+            <Skeleton className="h-16 rounded-lg" />
           </div>
           <div className="space-y-2">
             <Skeleton className="h-4 w-3/4" />
@@ -173,28 +215,19 @@ export function CompanyIntelV2Card({
     );
   }
 
-  if (error) {
+  if (error && !intel) {
     return (
-      <Card className="glass-subtle border-destructive/20">
-        <CardContent className="pt-6">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
-              <AlertCircle className="w-6 h-6 text-destructive" />
-            </div>
+      <Card className="glass-subtle border-destructive/50">
+        <CardContent className="py-6">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <AlertCircle className="w-8 h-8 text-destructive" />
             <div>
-              <p className="font-medium">Unable to gather intel</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {error}
-              </p>
+              <p className="font-medium text-destructive">Intel unavailable</p>
+              <p className="text-xs text-muted-foreground mt-1">{error}</p>
             </div>
-            <Button
-              variant="outline"
-              onClick={onRefresh}
-              className="gap-2"
-              data-testid="button-retry-intel-v2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Try Again
+            <Button variant="outline" size="sm" onClick={onRefresh} className="gap-1.5">
+              <RefreshCw className="w-3 h-3" />
+              Retry
             </Button>
           </div>
         </CardContent>
@@ -202,281 +235,345 @@ export function CompanyIntelV2Card({
     );
   }
 
-  if (!intel) {
-    return null;
-  }
+  if (!intel) return null;
 
-  const formatChangePercent = (pct: number) => {
-    const sign = pct >= 0 ? "+" : "";
-    return `${sign}${pct.toFixed(1)}%`;
-  };
+  const lastUpdated = new Date(intel.lastRefreshedAt).toLocaleDateString();
 
   return (
     <Card className="glass-subtle">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-primary" />
+              <Building2 className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-base" data-testid="text-intel-v2-title">
-                Company Intel
-              </CardTitle>
-              {intel.companyName && (
-                <p className="text-xs text-muted-foreground">{intel.companyName}</p>
-              )}
+              <CardTitle className="text-base">Company Intel</CardTitle>
+              <p className="text-xs text-muted-foreground">{intel.companyName}</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onRefresh}
-            className="h-8 w-8"
-            data-testid="button-refresh-intel-v2"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground">Updated {lastUpdated}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={onRefresh}
+              data-testid="button-refresh-intel"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {intel.error && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              {intel.error}
-            </p>
-          </div>
-        )}
+        {/* Dashboard: 4 Mini-Cards */}
+        <div className="grid grid-cols-4 gap-2">
+          {/* HQ Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0 }}
+            className="p-2 rounded-lg bg-muted/50 text-center"
+          >
+            <MapPin className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+            {intel.hq ? (
+              <>
+                <p className="text-[11px] font-medium truncate">{intel.hq.city || "—"}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{intel.hq.country || ""}</p>
+              </>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">Unknown</p>
+            )}
+          </motion.div>
 
-        <div className="flex flex-wrap gap-2" data-testid="intel-mini-cards">
-          {intel.stock && (
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border" data-testid="stock-card">
-              <div className="flex flex-col">
-                <span className="text-[10px] text-muted-foreground">{intel.stock.ticker}</span>
-                <div className="flex items-center gap-1">
-                  {intel.stock.lastPrice && (
-                    <span className="text-sm font-medium">
-                      ${intel.stock.lastPrice.toFixed(2)}
-                    </span>
-                  )}
+          {/* Headcount Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="p-2 rounded-lg bg-muted/50 text-center"
+          >
+            <Users className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+            {intel.headcount ? (
+              <>
+                <p className="text-[11px] font-medium">{intel.headcount.range}</p>
+                <HeadcountBar range={intel.headcount.range} />
+              </>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">Unknown</p>
+            )}
+          </motion.div>
+
+          {/* LinkedIn Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="p-2 rounded-lg bg-muted/50 text-center"
+          >
+            <Linkedin className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+            {intel.linkedinUrl ? (
+              <a
+                href={intel.linkedinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-medium text-primary hover:underline"
+              >
+                Open
+              </a>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">Not found</p>
+            )}
+          </motion.div>
+
+          {/* Stock Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="p-2 rounded-lg bg-muted/50 text-center"
+          >
+            <BarChart3 className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+            {intel.stock ? (
+              <>
+                <div className="flex items-center justify-center gap-1">
+                  <span className="text-[11px] font-medium">{intel.stock.ticker}</span>
                   {intel.stock.changePercent != null && (
-                    <span
-                      className={`text-[10px] flex items-center ${
-                        intel.stock.changePercent >= 0 ? "text-green-500" : "text-red-500"
-                      }`}
-                    >
-                      {intel.stock.changePercent >= 0 ? (
-                        <TrendingUp className="w-2.5 h-2.5" />
-                      ) : (
-                        <TrendingDown className="w-2.5 h-2.5" />
-                      )}
-                      {formatChangePercent(intel.stock.changePercent)}
-                    </span>
+                    intel.stock.changePercent >= 0 ? (
+                      <TrendingUp className="w-3 h-3 text-green-500" />
+                    ) : (
+                      <TrendingDown className="w-3 h-3 text-red-500" />
+                    )
                   )}
                 </div>
-              </div>
-              <StockSparkline series={intel.stock.series} />
-            </div>
-          )}
-
-          {intel.headcount && (
-            <div className="flex flex-col gap-1 p-2 rounded-lg bg-muted/50 border border-border" data-testid="headcount-card">
-              <div className="flex items-center gap-1">
-                <Users className="w-3 h-3 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground">Employees</span>
-              </div>
-              <span className="text-sm font-medium">{intel.headcount.range}</span>
-              <HeadcountBar range={intel.headcount.range} />
-            </div>
-          )}
-
-          {intel.hq && (intel.hq.city || intel.hq.country) && (
-            <div className="flex flex-col gap-1 p-2 rounded-lg bg-muted/50 border border-border" data-testid="hq-card">
-              <div className="flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground">HQ</span>
-              </div>
-              <span className="text-sm font-medium">
-                {[intel.hq.city, intel.hq.country].filter(Boolean).join(", ")}
-              </span>
-            </div>
-          )}
+                <StockSparkline series={intel.stock.series} width={40} height={14} className="mx-auto" />
+              </>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">Private</p>
+            )}
+          </motion.div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "verified" | "coaching")}>
-          <TabsList className="grid w-full grid-cols-2 h-9">
-            <TabsTrigger value="verified" className="text-xs gap-1" data-testid="tab-verified">
-              <CheckCircle2 className="w-3 h-3" />
-              Verified Intel
-            </TabsTrigger>
-            <TabsTrigger value="coaching" className="text-xs gap-1" data-testid="tab-coaching">
-              <Lightbulb className="w-3 h-3" />
-              Coaching
-            </TabsTrigger>
+        {/* Tabs: Verified / Signals */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+          <TabsList className="w-full grid grid-cols-2">
+            <TabsTrigger value="verified" data-testid="tab-intel-verified">Verified</TabsTrigger>
+            <TabsTrigger value="signals" data-testid="tab-intel-signals">Signals</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="verified" className="mt-4 space-y-4">
+          <TabsContent value="verified" className="mt-3 space-y-4">
+            {/* Key Facts */}
             {intel.verifiedFacts.length > 0 && (
-              <div data-testid="verified-facts">
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Key Facts</span>
-                </div>
-                <div className="space-y-2 pl-6">
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Key Facts
+                </h4>
+                <ul className="space-y-1.5">
                   {intel.verifiedFacts.map((fact, i) => (
-                    <div key={i} className="flex items-start gap-2" data-testid={`fact-${i}`}>
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0 mt-2" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm">{fact.text}</p>
-                        <SourceChip title={fact.source.title} url={fact.source.url} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {intel.productsAndServices.length > 0 && (
-              <div data-testid="products-services">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Products & Services</span>
-                </div>
-                <div className="space-y-2 pl-6">
-                  {intel.productsAndServices.map((item, i) => (
-                    <div key={i} className="flex items-start gap-2" data-testid={`product-${i}`}>
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0 mt-2" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm">{item.text}</p>
-                        <SourceChip title={item.source.title} url={item.source.url} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {intel.latestSignals.length > 0 && (
-              <div data-testid="latest-signals">
-                <div className="flex items-center gap-2 mb-2">
-                  <Clock className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Recent Signals</span>
-                </div>
-                <div className="space-y-2 pl-6">
-                  {intel.latestSignals.map((signal, i) => (
-                    <a
+                    <motion.li
                       key={i}
-                      href={signal.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block p-2 rounded-md border border-border hover-elevate"
-                      data-testid={`signal-${i}`}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                      className="text-sm flex items-start gap-2"
                     >
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
-                        <span>{signal.date}</span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0">
-                          {signal.sourceName}
-                        </Badge>
-                      </div>
-                      <p className="text-sm font-medium line-clamp-2">{signal.title}</p>
-                    </a>
+                      <span className="text-primary mt-1">•</span>
+                      <span className="flex-1">{fact.text}</span>
+                      <SourceChip title={fact.source.title} url={fact.source.url} />
+                    </motion.li>
                   ))}
-                </div>
+                </ul>
               </div>
             )}
 
-            {intel.verifiedFacts.length === 0 &&
-              intel.productsAndServices.length === 0 &&
-              intel.latestSignals.length === 0 && (
-                <div className="text-center py-6 text-muted-foreground">
-                  <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No verified intel available</p>
-                  <p className="text-xs mt-1">Try searching for a larger company</p>
-                </div>
-              )}
+            {/* Offerings Matrix */}
+            {intel.offerings && (intel.offerings.products.length > 0 || intel.offerings.services.length > 0) && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <Package className="w-3 h-3" />
+                  Products & Services
+                </h4>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="grid grid-cols-3 gap-2 text-xs"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Package className="w-3 h-3" />
+                      <span className="font-medium">Products</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {intel.offerings.products.map((p, i) => (
+                        <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">
+                          {p}
+                        </Badge>
+                      ))}
+                      {intel.offerings.products.length === 0 && (
+                        <span className="text-muted-foreground text-[10px]">—</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Briefcase className="w-3 h-3" />
+                      <span className="font-medium">Services</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {intel.offerings.services.map((s, i) => (
+                        <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">
+                          {s}
+                        </Badge>
+                      ))}
+                      {intel.offerings.services.length === 0 && (
+                        <span className="text-muted-foreground text-[10px]">—</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Target className="w-3 h-3" />
+                      <span className="font-medium">Buyers</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {intel.offerings.buyers?.map((b, i) => (
+                        <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0">
+                          {b}
+                        </Badge>
+                      ))}
+                      {(!intel.offerings.buyers || intel.offerings.buyers.length === 0) && (
+                        <span className="text-muted-foreground text-[10px]">—</span>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Sources Drawer */}
+            {intel.sources && intel.sources.length > 0 && (
+              <Collapsible open={sourcesOpen} onOpenChange={setSourcesOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-between text-xs h-7">
+                    <span className="flex items-center gap-1.5">
+                      <Link2 className="w-3 h-3" />
+                      {intel.sources.length} Sources
+                    </span>
+                    {sourcesOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {intel.sources.map((src, i) => (
+                      <SourceChip key={i} title={src.title} url={src.url} />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {/* Empty state */}
+            {intel.verifiedFacts.length === 0 && !intel.offerings && (
+              <div className="text-center py-4 text-muted-foreground text-sm">
+                <HelpCircle className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                No verified facts found
+              </div>
+            )}
           </TabsContent>
 
-          <TabsContent value="coaching" className="mt-4 space-y-4">
-            {intel.coaching?.talkingPoints && intel.coaching.talkingPoints.length > 0 && (
-              <div data-testid="talking-points">
-                <div className="flex items-center gap-2 mb-2">
-                  <MessageSquare className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Talking Points</span>
-                </div>
-                <div className="space-y-2 pl-6">
-                  {intel.coaching.talkingPoints.map((point, i) => (
-                    <div key={i} className="flex items-start gap-2" data-testid={`talking-point-${i}`}>
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0 mt-2" />
-                      <p className="text-sm">{point}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {intel.coaching?.questions && intel.coaching.questions.length > 0 && (
-              <div data-testid="coaching-questions">
-                <div className="flex items-center gap-2 mb-2">
-                  <HelpCircle className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Questions to Ask</span>
-                </div>
-                <div className="space-y-2 pl-6">
-                  {intel.coaching.questions.map((question, i) => (
-                    <div
+          <TabsContent value="signals" className="mt-3 space-y-4">
+            {/* Recent News */}
+            {intel.latestSignals.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <Newspaper className="w-3 h-3" />
+                  Recent News
+                </h4>
+                <ul className="space-y-2">
+                  {intel.latestSignals.map((signal, i) => (
+                    <motion.li
                       key={i}
-                      className="flex items-start gap-2"
-                      data-testid={`coaching-question-${i}`}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
                     >
-                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-xs font-medium text-primary">{i + 1}</span>
-                      </div>
-                      <p className="text-sm italic">"{question}"</p>
-                    </div>
+                      <a
+                        href={signal.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block p-2 rounded-lg bg-muted/30 hover-elevate"
+                        data-testid={`news-item-${i}`}
+                      >
+                        <p className="text-sm font-medium line-clamp-2">{signal.title}</p>
+                        <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                          <span>{signal.date}</span>
+                          <span>•</span>
+                          <span>{signal.sourceName}</span>
+                        </div>
+                      </a>
+                    </motion.li>
                   ))}
-                </div>
+                </ul>
               </div>
             )}
 
-            {intel.coaching?.watchOuts && intel.coaching.watchOuts.length > 0 && (
-              <div data-testid="watch-outs">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-500" />
-                  <span className="text-sm font-medium">Watch Outs</span>
-                </div>
-                <div className="space-y-2 pl-6">
-                  {intel.coaching.watchOuts.map((watchOut, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2 p-2 rounded-md bg-amber-500/5 border border-amber-500/10"
-                      data-testid={`watch-out-${i}`}
-                    >
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm">{watchOut}</p>
-                    </div>
-                  ))}
-                </div>
+            {/* Sentiment */}
+            {intel.sentiment && (intel.sentiment.positive + intel.sentiment.neutral + intel.sentiment.negative > 0) && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Headline Sentiment
+                </h4>
+                <SentimentBar {...intel.sentiment} />
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Based on recent headlines
+                </p>
               </div>
             )}
 
-            {(!intel.coaching ||
-              (intel.coaching.talkingPoints?.length === 0 &&
-                intel.coaching.questions?.length === 0 &&
-                intel.coaching.watchOuts?.length === 0)) && (
-              <div className="text-center py-6 text-muted-foreground">
-                <Lightbulb className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No coaching tips available</p>
+            {/* Competitors */}
+            {intel.competitors && intel.competitors.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Competitors
+                </h4>
+                <ul className="space-y-1.5">
+                  {intel.competitors.map((comp, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <span className="font-medium">{comp.name}</span>
+                      {comp.verified ? (
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0">Verified</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 opacity-60">Inferred</Badge>
+                      )}
+                      {comp.description && (
+                        <span className="text-muted-foreground text-xs ml-auto truncate max-w-[120px]">
+                          {comp.description}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {intel.latestSignals.length === 0 && (!intel.competitors || intel.competitors.length === 0) && (
+              <div className="text-center py-4 text-muted-foreground text-sm">
+                <Newspaper className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                No recent signals found
               </div>
             )}
           </TabsContent>
         </Tabs>
 
-        <div className="text-center pt-2 border-t border-border/50">
-          <p className="text-[10px] text-muted-foreground">
-            Last updated: {new Date(intel.lastRefreshedAt).toLocaleDateString()}
+        {intel.error && (
+          <p className="text-xs text-muted-foreground text-center italic">
+            {intel.error}
           </p>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,12 +16,36 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CreditCard, Moon, Sun, Camera, Users, Calendar, LogOut, User } from "lucide-react";
+import { CreditCard, Moon, Sun, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw } from "lucide-react";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 import { motion, AnimatePresence } from "framer-motion";
 
 type TabMode = "scan" | "contacts" | "events";
 type ViewMode = "scan" | "contacts" | "contact-detail" | "company-detail" | "events";
+
+interface RecentAccount {
+  email: string;
+  lastUsedAt: string;
+}
+
+const RECENT_ACCOUNTS_KEY = "carda_recent_accounts_v1";
+
+function loadRecentAccounts(): RecentAccount[] {
+  try {
+    const stored = localStorage.getItem(RECENT_ACCOUNTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentAccount(email: string): void {
+  try {
+    const accounts = loadRecentAccounts().filter(a => a.email !== email);
+    accounts.unshift({ email, lastUsedAt: new Date().toISOString() });
+    localStorage.setItem(RECENT_ACCOUNTS_KEY, JSON.stringify(accounts.slice(0, 5)));
+  } catch {}
+}
 
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
@@ -39,6 +63,27 @@ export default function HomePage() {
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
   }, []);
+
+  const recentAccounts = useMemo(() => loadRecentAccounts(), []);
+  const otherAccounts = useMemo(() => {
+    const currentEmail = (user as any)?.email;
+    return recentAccounts.filter(a => a.email !== currentEmail);
+  }, [recentAccounts, user]);
+
+  useEffect(() => {
+    const email = (user as any)?.email;
+    if (email) {
+      saveRecentAccount(email);
+    }
+  }, [user]);
+
+  const handleSwitchAccount = () => {
+    window.location.href = "/api/logout";
+  };
+
+  const handleAddAccount = () => {
+    window.location.href = "/api/logout";
+  };
 
   const handleLogoClick = () => {
     setActiveTab("scan");
@@ -142,7 +187,7 @@ export default function HomePage() {
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-56">
               <div className="px-2 py-1.5">
                 <p className="text-sm font-medium" data-testid="text-user-name">
                   {(user as any)?.firstName || (user as any)?.fullName || 'User'}
@@ -154,6 +199,29 @@ export default function HomePage() {
                 )}
               </div>
               <DropdownMenuSeparator />
+              {otherAccounts.length > 0 && (
+                <>
+                  <div className="px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Recent Accounts</p>
+                  </div>
+                  {otherAccounts.slice(0, 3).map((account) => (
+                    <DropdownMenuItem
+                      key={account.email}
+                      onClick={handleSwitchAccount}
+                      className="flex items-center gap-2 cursor-pointer"
+                      data-testid={`button-switch-account-${account.email}`}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span className="truncate text-sm">{account.email}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onClick={handleAddAccount} className="flex items-center gap-2 cursor-pointer" data-testid="button-add-account">
+                <UserPlus className="w-4 h-4" />
+                Add Account
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <a href="/api/logout" className="flex items-center gap-2 cursor-pointer" data-testid="button-logout">
                   <LogOut className="w-4 h-4" />

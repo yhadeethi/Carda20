@@ -1,0 +1,110 @@
+You are working on the Carda app (React + TypeScript). Fix Intel UX + remove duplicates + add account switching UI + upgrade Intel v2 into a premium, chart-driven, source-backed feature.
+
+PROBLEMS TO FIX (DO THESE FIRST)
+1) Account switching is missing:
+   - In the profile dropdown (top-right user menu), add “Switch account” and “Add account”.
+   - Implement an MVP “account switcher” that shows a list of recent accounts (emails) used on this device.
+   - Selecting an account signs out and routes to /login with ?email=... prefilled (or equivalent) so user can quickly log in with that account.
+   - Store recent accounts in localStorage key: carda_recent_accounts_v1 (array of {email,lastUsedAt}).
+   - Update this list on successful login.
+   - UI: Profile dropdown shows current email + below it an “Accounts” section listing recent emails + “Switch account” + “Add account”.
+
+2) Duplicate Company Intel buttons:
+   - Remove the legacy “Generate Company Intel” button and any legacy Intel/SalesBrief renderer.
+   - Keep ONE button only, rename to: “Company Intel”
+   - Remove the “(Beta)” label from the primary CTA; if you want, keep a subtle badge inside the Intel page header only.
+
+INTEL V2 UPGRADE (PREMIUM + VISUAL + REAL SOURCES)
+Goal: Intel must be facts-first and source-backed. No fabricated tech stack. No fluff coaching.
+
+A) NEW INTEL PAGE STRUCTURE
+On the contact page, when user clicks “Company Intel” open/render the Intel panel with:
+Header:
+- Title: Company Intel
+- Subtitle: company name
+- Refresh icon button (already there) -> re-fetches and updates lastUpdated timestamp
+- “Last updated: YYYY-MM-DD”
+
+Top “Intel Dashboard” (4 mini cards, interactive + animated):
+1) HQ card: city/country + optional mini map thumbnail
+2) Headcount card: show range bucket (1-10, 11-50, 51-200, 201-500, 501-1k, 1k-5k, 5k-10k, 10k+), show source chip
+3) LinkedIn card: show LinkedIn company page link button (Open)
+4) Stock card: sparkline chart (30D) + last close + % change; show ticker/exchange; only if ticker exists (company OR parent). If not available, show “Not public / not found”.
+
+Below dashboard add segmented tabs:
+- “Verified” (default)
+- “Signals” (replaces Coaching)
+
+Verified tab sections:
+1) Key Facts (max 8 bullets). Each bullet MUST include a source chip with domain/title.
+2) Products & Services as an “Offerings Matrix” table:
+   - Columns: Products | Services | Buyers (optional if available)
+   - Render as a clean table/grid with chips inside each cell
+   - Add subtle color + icon per column and a small Framer Motion fade-in
+3) Sources drawer (collapsible):
+   - List all sources used (title + domain + external link)
+
+Signals tab sections:
+1) Recent News (max 6 items) pulled from RSS/search sources with date + source link
+2) Sentiment (from headlines):
+   - Simple bar: Positive/Neutral/Negative counts (based on classifying the 10 most recent headlines)
+   - Label clearly: “Estimated from recent headlines”
+3) Competitors:
+   - 3–6 competitor names with short one-liner.
+   - If you can source competitors from retrieved snippets, mark “Verified”. Otherwise mark “Inferred”.
+
+IMPORTANT RULES
+- Any “Verified” item MUST have a source URL from retrieval.
+- Never show “may not be up to date”.
+- Never show “Technology Stack” (remove entirely).
+- If data missing, show “Not found” gracefully.
+
+B) BACKEND / PROVIDERS (MVP, NO PAID APIS)
+Create/extend endpoint: GET /api/intel-v2?companyName=...&domain=...&countryHint=...
+Provider pipeline:
+1) Wikipedia (if exists) using REST summary endpoint:
+   - extract: description, HQ (if present), employees/headcount (if present), parent/public ticker info if present
+2) Company website fetch:
+   - fetch homepage + try common pages: /about, /who-we-are, /solutions, /products, /services, /news, /media, /press
+   - extract text snippets (truncate)
+3) News RSS:
+   - use Google News RSS query for companyName (or domain) and take up to 10 newest items
+4) Stock:
+   - if ticker found (from Wikipedia or snippets), fetch last 30 daily closes from Stooq (or another free endpoint)
+   - return series: [{date, close}]
+If any provider fails, continue with others.
+
+C) LLM SUMMARIZATION (STRICT JSON)
+Take the “snippets pack” and call OpenAI to produce ONLY valid JSON that matches CompanyIntelV2 (define type).
+Hard constraints:
+- VerifiedFacts: <= 8 bullets, each with source {title,url}
+- Offerings Matrix: <= 6 chips per column
+- News: <= 6 items with date + url + sourceName
+- Competitors: <= 6 items, each flagged verified/inferred
+- Headcount: must be a range bucket; if unknown null
+- LinkedIn URL: only if found in snippets; else build a safe fallback link:
+   https://www.linkedin.com/search/results/companies/?keywords={encode(companyName)}
+- Stock: only if ticker present and price series fetched.
+
+D) FRONTEND COMPONENTS
+- StockSparkline: use Recharts LineChart (minimal, clean)
+- HeadcountRangeCard: show bucket + mini bar visualization
+- OfferingsMatrix: grid/table with chips, subtle color, framer-motion fade-up
+- SentimentBar: simple stacked bar from counts
+
+E) CACHING
+- Cache intel response in localStorage: carda_intel_v2_cache_{domainOrCompany} with timestamp
+- TTL 7 days; Refresh bypasses cache
+
+F) CONTACT PAGE SHORTCUTS
+- Remove duplicate intel CTAs; keep one “Company Intel”
+- Add 3 pill shortcuts under the action buttons: Details / Actions / Timeline
+  Clicking scrolls to tabs and selects the tab.
+- Add a floating bottom-right button “Actions” that jumps + selects Actions.
+
+DELIVERABLES
+- Remove legacy Intel button + legacy renderer
+- Add account switcher UI in profile dropdown with recent accounts
+- Implement Intel v2 dashboard (HQ/Headcount/LinkedIn/Stock) + Verified + Signals tabs
+- Add Offerings Matrix + Sentiment + Recent News + Competitors
+- Ensure sources exist for verified facts, and graceful empty states for missing data

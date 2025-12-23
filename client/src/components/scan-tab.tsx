@@ -10,11 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { CompanyIntelCard } from "@/components/company-intel-card";
 import { CompanyIntelV2Card } from "@/components/company-intel-v2";
 import { ContactActionsTab } from "@/components/contact-actions-tab";
 import { ContactTimelineTab } from "@/components/contact-timeline-tab";
-import { CompanyIntelData } from "@shared/schema";
 import { useIntelV2 } from "@/hooks/use-intel-v2";
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
 import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
@@ -85,8 +83,6 @@ export function ScanTab({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContact, setEditedContact] = useState<ParsedContact | null>(null);
   
-  const [companyIntel, setCompanyIntel] = useState<CompanyIntelData | null>(null);
-  const [intelError, setIntelError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
 
   const [tempEventName, setTempEventName] = useState("");
@@ -343,26 +339,6 @@ export function ScanTab({
     },
   });
 
-  const intelMutation = useMutation({
-    mutationFn: async (contact: ParsedContact) => {
-      const res = await apiRequest("POST", "/api/intel", {
-        companyName: contact.companyName,
-        email: contact.email,
-        website: contact.website,
-        contactName: contact.fullName,
-        contactTitle: contact.jobTitle,
-      });
-      return res.json() as Promise<CompanyIntelData>;
-    },
-    onSuccess: (data) => {
-      setCompanyIntel(data);
-      setIntelError(null);
-    },
-    onError: (error: Error) => {
-      setIntelError(error.message);
-      setCompanyIntel(null);
-    },
-  });
 
   const handleScanCard = async () => {
     if (!selectedFile) return;
@@ -449,12 +425,6 @@ export function ScanTab({
     }
   };
 
-  const handleGenerateIntel = () => {
-    if (editedContact) {
-      setIntelError(null);
-      intelMutation.mutate(editedContact);
-    }
-  };
 
   const handleFieldChange = (field: keyof ParsedContact, value: string) => {
     if (editedContact) {
@@ -466,8 +436,6 @@ export function ScanTab({
     setContact(null);
     setEditedContact(null);
     setRawText(null);
-    setCompanyIntel(null);
-    setIntelError(null);
     setPastedText("");
     clearImage();
     resetIntelV2();
@@ -1134,25 +1102,17 @@ export function ScanTab({
                   Download vCard
                 </Button>
                 
-                <Button
-                  onClick={handleGenerateIntel}
-                  variant="outline"
-                  className="w-full"
-                  disabled={!editedContact?.companyName && !editedContact?.email}
-                  data-testid="button-generate-intel"
-                >
-                  {intelMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating Intel...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      Generate Company Intel
-                    </>
-                  )}
-                </Button>
+                {editedContact?.companyName && !intelV2 && !intelV2Loading && !intelV2Error && (
+                  <Button
+                    variant="outline"
+                    onClick={handleFetchIntelV2}
+                    className="w-full gap-2"
+                    data-testid="button-company-intel"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Company Intel
+                  </Button>
+                )}
                 
                 {!isViewingFromHub && (
                   <Button
@@ -1168,37 +1128,12 @@ export function ScanTab({
             </CardContent>
           </Card>
 
-          {editedContact?.companyName && (
-            <div className="space-y-2">
-              {!intelV2 && !intelV2Loading && !intelV2Error && (
-                <Button
-                  variant="outline"
-                  onClick={handleFetchIntelV2}
-                  className="w-full gap-2"
-                  data-testid="button-get-intel-v2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Get Company Intel (Beta)
-                </Button>
-              )}
-              {(intelV2 || intelV2Loading || intelV2Error) && (
-                <CompanyIntelV2Card
-                  intel={intelV2}
-                  isLoading={intelV2Loading}
-                  error={intelV2Error}
-                  onRefresh={handleRefreshIntelV2}
-                  companyName={editedContact?.companyName}
-                />
-              )}
-            </div>
-          )}
-          
-          {(companyIntel || intelError || intelMutation.isPending) && (
-            <CompanyIntelCard
-              intel={companyIntel}
-              isLoading={intelMutation.isPending}
-              error={intelError}
-              onRetry={handleGenerateIntel}
+          {(intelV2 || intelV2Loading || intelV2Error) && (
+            <CompanyIntelV2Card
+              intel={intelV2}
+              isLoading={intelV2Loading}
+              error={intelV2Error}
+              onRefresh={handleRefreshIntelV2}
               companyName={editedContact?.companyName}
             />
           )}
