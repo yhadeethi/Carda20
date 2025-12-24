@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -108,16 +108,32 @@ export function ScanTab({
   const handleFetchIntelV2 = useCallback(() => {
     if (editedContact) {
       const domain = editedContact.email?.split("@")[1] || editedContact.website || null;
-      fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null);
+      fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null, editedContact.address || null);
     }
   }, [editedContact, fetchIntelV2]);
   
   const handleRefreshIntelV2 = useCallback(() => {
     if (editedContact) {
       const domain = editedContact.email?.split("@")[1] || editedContact.website || null;
-      fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null, true);
+      fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null, editedContact.address || null, true);
     }
   }, [editedContact, fetchIntelV2]);
+  
+  const networkContacts = useMemo(() => {
+    if (!editedContact?.companyName) return [];
+    const allContacts = loadContacts();
+    const companyLower = editedContact.companyName.toLowerCase();
+    return allContacts
+      .filter(c => 
+        c.company?.toLowerCase() === companyLower && 
+        c.id !== viewingContact?.id
+      )
+      .map(c => ({
+        id: c.id.toString(),
+        fullName: c.name || null,
+        jobTitle: c.title || null,
+      }));
+  }, [editedContact?.companyName, viewingContact?.id]);
 
   useEffect(() => {
     if (viewingContact) {
@@ -1135,6 +1151,7 @@ export function ScanTab({
               error={intelV2Error}
               onRefresh={handleRefreshIntelV2}
               companyName={editedContact?.companyName}
+              networkContacts={networkContacts}
             />
           )}
 

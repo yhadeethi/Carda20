@@ -283,56 +283,19 @@ export interface SignalItem {
   sourceName: string;
 }
 
-// Stock data point for sparkline
-export interface StockDataPoint {
-  date: string;
-  close: number;
-}
-
 // Headcount range buckets
 export type HeadcountRange = "1-10" | "11-50" | "51-200" | "201-500" | "501-1k" | "1k-5k" | "5k-10k" | "10k+";
 
-// Offerings Matrix - Products, Services, Buyers
-export interface OfferingsMatrix {
-  products: string[];
-  services: string[];
-  buyers?: string[];
-}
-
-// Competitor with verification status
-export interface CompetitorItem {
-  name: string;
-  description?: string;
-  verified: boolean; // true if from retrieved source, false if inferred
-}
-
-// Sentiment from headlines
-export interface SentimentData {
-  positive: number;
-  neutral: number;
-  negative: number;
-}
-
-// Company Intel V2 - facts-first, source-backed
+// Company Intel V2 - simplified, no AI advice
 export interface CompanyIntelV2 {
   companyName: string;
   website?: string | null;
   canonicalEntity?: string | null; // e.g. parent/legal entity name
   lastRefreshedAt: string;
   
-  // Mini-card data (dashboard)
+  // Company details
   headcount?: {
     range: HeadcountRange;
-    source: IntelSource;
-  } | null;
-  
-  stock?: {
-    ticker: string;
-    exchange?: string | null;
-    currency?: string | null;
-    lastPrice?: number | null;
-    changePercent?: number | null;
-    series: StockDataPoint[];
     source: IntelSource;
   } | null;
   
@@ -344,19 +307,23 @@ export interface CompanyIntelV2 {
     source: IntelSource;
   } | null;
   
-  linkedinUrl?: string | null; // Direct link or fallback search link
+  // Social links
+  linkedinUrl?: string | null;
+  twitterUrl?: string | null;
+  facebookUrl?: string | null;
+  instagramUrl?: string | null;
   
-  // Verified tab content
-  verifiedFacts: VerifiedBullet[]; // max 8 bullets
-  offerings?: OfferingsMatrix | null; // Products, Services, Buyers matrix
+  // Local branch (matched from contact's address if different from HQ)
+  localBranch?: {
+    address: string;
+    city?: string | null;
+  } | null;
   
-  // All sources used (for collapsible drawer)
-  sources?: IntelSource[];
-  
-  // Signals tab content
+  // News/signals
   latestSignals: SignalItem[]; // max 6 news items with date + source
-  sentiment?: SentimentData | null; // from headlines classification
-  competitors?: CompetitorItem[]; // max 6, with verified flag
+  
+  // All sources used
+  sources?: IntelSource[];
   
   // Metadata
   error?: string;

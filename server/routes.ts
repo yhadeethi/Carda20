@@ -276,7 +276,7 @@ export async function registerRoutes(
 
   app.get("/api/intel-v2", async (req: Request, res: Response) => {
     try {
-      const { companyName, domain, role } = req.query;
+      const { companyName, domain, role, address } = req.query;
 
       if (!companyName && !domain) {
         return res.status(400).json({ error: "companyName or domain is required" });
@@ -285,7 +285,8 @@ export async function registerRoutes(
       const intel = await generateIntelV2(
         companyName as string || "",
         domain as string || null,
-        role as string || undefined
+        role as string || undefined,
+        address as string || undefined
       );
 
       res.json(intel);

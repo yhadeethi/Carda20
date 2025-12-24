@@ -55,6 +55,7 @@ export function useIntelV2() {
     companyName: string | null,
     domain?: string | null,
     role?: string | null,
+    address?: string | null,
     forceRefresh = false
   ) => {
     if (!companyName && !domain) {
@@ -86,6 +87,7 @@ export function useIntelV2() {
       if (companyName) params.append("companyName", companyName);
       if (domain) params.append("domain", domain);
       if (role) params.append("role", role);
+      if (address) params.append("address", address);
 
       const response = await fetch(`/api/intel-v2?${params.toString()}`);
       

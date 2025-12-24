@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { CompanyIntelV2, IntelSource, VerifiedBullet, SignalItem, HeadcountRange, OfferingsMatrix, CompetitorItem, SentimentData } from "@shared/schema";
+import { CompanyIntelV2, IntelSource, SignalItem, HeadcountRange } from "@shared/schema";
 
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -192,43 +192,6 @@ function parseNewsDate(pubDate: string): string {
   }
 }
 
-async function fetchStockData(ticker: string): Promise<{ series: Array<{ date: string; close: number }>; lastPrice?: number; changePercent?: number } | null> {
-  try {
-    const url = `https://stooq.com/q/d/l/?s=${ticker.toLowerCase()}.us&d1=${getDateString(-45)}&d2=${getDateString(0)}&i=d`;
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    
-    const csv = await response.text();
-    const lines = csv.trim().split("\n").slice(1);
-    
-    const series: Array<{ date: string; close: number }> = [];
-    
-    for (const line of lines.slice(-30)) {
-      const [date, , , , close] = line.split(",");
-      if (date && close && !isNaN(parseFloat(close))) {
-        series.push({ date, close: parseFloat(close) });
-      }
-    }
-    
-    if (series.length < 2) return null;
-    
-    const lastPrice = series[series.length - 1].close;
-    const firstPrice = series[0].close;
-    const changePercent = ((lastPrice - firstPrice) / firstPrice) * 100;
-    
-    return { series, lastPrice, changePercent };
-  } catch (error) {
-    console.error("Stock data fetch error:", error);
-    return null;
-  }
-}
-
-function getDateString(daysOffset: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + daysOffset);
-  return date.toISOString().split("T")[0].replace(/-/g, "");
-}
-
 function parseHeadcount(text: string): HeadcountRange | null {
   const numMatch = text.match(/(\d[\d,]*)\s*(employees|staff|people|workers)/i);
   if (numMatch) {
@@ -248,10 +211,10 @@ function parseHeadcount(text: string): HeadcountRange | null {
 export async function generateIntelV2(
   companyName: string,
   domain: string | null,
-  contactRole?: string
+  contactRole?: string,
+  contactAddress?: string
 ): Promise<CompanyIntelV2> {
   const snippets: SourceSnippet[] = [];
-  let ticker: string | undefined;
   let wikipediaUrl: string | undefined;
   
   const [wikiInfo, newsItems] = await Promise.all([
@@ -265,18 +228,12 @@ export async function generateIntelV2(
       url: wikiInfo.pageUrl || `https://en.wikipedia.org/wiki/${encodeURIComponent(companyName)}`,
       textExcerpt: wikiInfo.extract,
     });
-    ticker = wikiInfo.ticker;
     wikipediaUrl = wikiInfo.pageUrl;
   }
   
   if (domain) {
     const websiteSnippets = await fetchWebsiteContent(domain, ["/", "/about", "/about-us", "/company", "/products", "/services"]);
     snippets.push(...websiteSnippets);
-  }
-  
-  let stockData: { series: Array<{ date: string; close: number }>; lastPrice?: number; changePercent?: number } | null = null;
-  if (ticker) {
-    stockData = await fetchStockData(ticker);
   }
   
   const latestSignals: SignalItem[] = newsItems.slice(0, 6).map(item => ({
@@ -286,13 +243,11 @@ export async function generateIntelV2(
     sourceName: item.source,
   }));
   
-  const sentiment = classifyHeadlineSentiment(newsItems.map(n => n.title));
-  
   if (snippets.length === 0 && newsItems.length === 0) {
     return createEmptyIntel(companyName, domain);
   }
   
-  const llmResult = await callLLMForIntel(companyName, domain, contactRole, snippets, newsItems);
+  const llmResult = await callLLMForIntel(companyName, domain, snippets);
   
   const headcount = llmResult.headcount || parseHeadcount(snippets.map(s => s.textExcerpt).join(" "));
   
@@ -303,6 +258,20 @@ export async function generateIntelV2(
     ...newsItems.slice(0, 3).map(n => ({ title: n.source, url: n.link })),
   ];
   
+  // Build local branch from contact address if it differs from HQ
+  let localBranch: CompanyIntelV2["localBranch"] = null;
+  if (contactAddress && llmResult.hq?.city) {
+    const hqCity = llmResult.hq.city.toLowerCase();
+    if (!contactAddress.toLowerCase().includes(hqCity)) {
+      // Contact address doesn't match HQ, likely a local branch
+      const cityMatch = contactAddress.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?),?\s*(?:[A-Z]{2,3}|[A-Z][a-z]+)/);
+      localBranch = {
+        address: contactAddress,
+        city: cityMatch ? cityMatch[1] : null,
+      };
+    }
+  }
+  
   const intel: CompanyIntelV2 = {
     companyName,
     website: domain,
@@ -311,95 +280,63 @@ export async function generateIntelV2(
       range: headcount,
       source: { title: "Wikipedia", url: wikipediaUrl || snippets[0]?.url || "" },
     } : null,
-    stock: stockData && ticker ? {
-      ticker,
-      series: stockData.series,
-      lastPrice: stockData.lastPrice,
-      changePercent: stockData.changePercent,
-      source: { title: "Stooq", url: `https://stooq.com/q/?s=${ticker.toLowerCase()}.us` },
-    } : null,
     hq: llmResult.hq,
     linkedinUrl,
-    verifiedFacts: llmResult.verifiedFacts,
-    offerings: llmResult.offerings,
-    sources: allSources,
+    twitterUrl: llmResult.twitterUrl,
+    facebookUrl: llmResult.facebookUrl,
+    instagramUrl: llmResult.instagramUrl,
+    localBranch,
     latestSignals,
-    sentiment,
-    competitors: llmResult.competitors,
+    sources: allSources,
   };
   
   return intel;
 }
 
-function classifyHeadlineSentiment(headlines: string[]): SentimentData {
-  const positiveWords = /growth|profit|surge|soar|gain|boost|success|innovation|partnership|launch|record|expand|upgrade|milestone|award/i;
-  const negativeWords = /loss|decline|drop|fall|layoff|lawsuit|scandal|fail|crisis|cut|concern|warning|delay|recall|downturn/i;
-  
-  let positive = 0, neutral = 0, negative = 0;
-  
-  for (const headline of headlines.slice(0, 10)) {
-    if (positiveWords.test(headline)) positive++;
-    else if (negativeWords.test(headline)) negative++;
-    else neutral++;
-  }
-  
-  return { positive, neutral, negative };
-}
-
 async function callLLMForIntel(
   companyName: string,
   domain: string | null,
-  contactRole: string | undefined,
-  snippets: SourceSnippet[],
-  newsItems: NewsItem[]
+  snippets: SourceSnippet[]
 ): Promise<{
   hq: CompanyIntelV2["hq"];
-  verifiedFacts: VerifiedBullet[];
-  offerings: OfferingsMatrix | null;
-  competitors: CompetitorItem[];
   headcount: HeadcountRange | null;
+  industry: string | null;
   linkedinUrl: string | null;
+  twitterUrl: string | null;
+  facebookUrl: string | null;
+  instagramUrl: string | null;
 }> {
   if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-    return { hq: null, verifiedFacts: [], offerings: null, competitors: [], headcount: null, linkedinUrl: null };
+    return { hq: null, headcount: null, industry: null, linkedinUrl: null, twitterUrl: null, facebookUrl: null, instagramUrl: null };
   }
   
   const snippetText = snippets.map((s, i) => 
     `[Source ${i + 1}: ${s.sourceTitle}]\nURL: ${s.url}\n${s.textExcerpt}`
   ).join("\n\n");
   
-  const newsText = newsItems.slice(0, 5).map((n, i) => 
-    `[News ${i + 1}] ${n.title} (${n.source})`
-  ).join("\n");
-  
-  const systemPrompt = `You produce ONLY valid JSON. Extract facts from provided snippets. Every verifiedFact MUST cite a source URL from the snippets. Never fabricate data.
+  const systemPrompt = `You produce ONLY valid JSON. Extract company details from provided snippets. Never fabricate data.
 
-Rules:
-- verifiedFacts: max 8 bullets, each MUST have sourceUrl from snippets. Focus on: what they do, founded date, HQ, funding, key achievements.
-- offerings: extract products (max 6), services (max 6), and buyers/target customers (max 4) if mentioned
-- competitors: max 6 competitor names with brief description. Mark verified:true only if found in snippets, otherwise verified:false
-- headcount: extract employee count range from snippets. Use buckets: "1-10", "11-50", "51-200", "201-500", "501-1k", "1k-5k", "5k-10k", "10k+"
-- linkedinUrl: only if you find an actual LinkedIn URL in snippets (e.g. linkedin.com/company/...). Otherwise null.
-- hq: city and country if verifiable from snippets`;
+Extract:
+- hq: headquarters city and country
+- headcount: employee count as bucket: "1-10", "11-50", "51-200", "201-500", "501-1k", "1k-5k", "5k-10k", "10k+"
+- socialUrls: LinkedIn, Twitter, Facebook, Instagram URLs if found in snippets
+- industry: brief industry description (max 10 words)`;
 
   const userPrompt = `Company: ${companyName}
 Domain: ${domain || "unknown"}
-Contact role: ${contactRole || "unknown"}
 
 Snippets:
 ${snippetText}
 
-Recent Headlines:
-${newsText || "None available"}
-
 Return JSON:
 {
-  "hq": { "city": "...", "country": "...", "sourceUrl": "..." } or null,
-  "headcount": "bucket string" or null,
-  "linkedinUrl": "..." or null,
-  "verifiedFacts": [{ "text": "...", "sourceUrl": "..." }],
-  "offerings": { "products": [...], "services": [...], "buyers": [...] } or null,
-  "competitors": [{ "name": "...", "description": "...", "verified": true/false }]
+  "hq": { "city": "...", "country": "...", "sourceUrl": "..." },
+  "headcount": "bucket string",
+  "industry": "brief description",
+  "linkedinUrl": "url or null",
+  "twitterUrl": "url or null",
+  "facebookUrl": "url or null",
+  "instagramUrl": "url or null"
 }`;
 
   try {
@@ -415,45 +352,10 @@ Return JSON:
     
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      return { hq: null, verifiedFacts: [], offerings: null, competitors: [], headcount: null, linkedinUrl: null };
+      return { hq: null, headcount: null, industry: null, linkedinUrl: null, twitterUrl: null, facebookUrl: null, instagramUrl: null };
     }
     
     const parsed = JSON.parse(content);
-    
-    const verifiedFacts: VerifiedBullet[] = (parsed.verifiedFacts || [])
-      .filter((f: { text?: string; sourceUrl?: string }) => f.text && f.sourceUrl)
-      .slice(0, 8)
-      .map((f: { text: string; sourceUrl: string }) => {
-        try {
-          return {
-            text: f.text,
-            source: { title: new URL(f.sourceUrl).hostname, url: f.sourceUrl },
-          };
-        } catch {
-          return { text: f.text, source: { title: "Source", url: f.sourceUrl } };
-        }
-      });
-    
-    let offerings: OfferingsMatrix | null = null;
-    if (parsed.offerings) {
-      offerings = {
-        products: (parsed.offerings.products || []).slice(0, 6),
-        services: (parsed.offerings.services || []).slice(0, 6),
-        buyers: (parsed.offerings.buyers || []).slice(0, 4),
-      };
-      if (!offerings.products.length && !offerings.services.length) {
-        offerings = null;
-      }
-    }
-    
-    const competitors: CompetitorItem[] = (parsed.competitors || [])
-      .filter((c: { name?: string }) => c.name)
-      .slice(0, 6)
-      .map((c: { name: string; description?: string; verified?: boolean }) => ({
-        name: c.name,
-        description: c.description,
-        verified: c.verified === true,
-      }));
     
     let hq: CompanyIntelV2["hq"] = null;
     if (parsed.hq?.city || parsed.hq?.country) {
@@ -469,13 +371,17 @@ Return JSON:
     
     const validHeadcounts: HeadcountRange[] = ["1-10", "11-50", "51-200", "201-500", "501-1k", "1k-5k", "5k-10k", "10k+"];
     const headcount: HeadcountRange | null = validHeadcounts.includes(parsed.headcount) ? parsed.headcount : null;
+    const industry: string | null = parsed.industry || null;
     
-    const linkedinUrl: string | null = parsed.linkedinUrl && parsed.linkedinUrl.includes("linkedin.com") ? parsed.linkedinUrl : null;
+    const linkedinUrl: string | null = parsed.linkedinUrl && typeof parsed.linkedinUrl === "string" && parsed.linkedinUrl.includes("linkedin.com") ? parsed.linkedinUrl : null;
+    const twitterUrl: string | null = parsed.twitterUrl && typeof parsed.twitterUrl === "string" && (parsed.twitterUrl.includes("twitter.com") || parsed.twitterUrl.includes("x.com")) ? parsed.twitterUrl : null;
+    const facebookUrl: string | null = parsed.facebookUrl && typeof parsed.facebookUrl === "string" && parsed.facebookUrl.includes("facebook.com") ? parsed.facebookUrl : null;
+    const instagramUrl: string | null = parsed.instagramUrl && typeof parsed.instagramUrl === "string" && parsed.instagramUrl.includes("instagram.com") ? parsed.instagramUrl : null;
     
-    return { hq, verifiedFacts, offerings, competitors, headcount, linkedinUrl };
+    return { hq, headcount, industry, linkedinUrl, twitterUrl, facebookUrl, instagramUrl };
   } catch (error) {
     console.error("LLM call error:", error);
-    return { hq: null, verifiedFacts: [], offerings: null, competitors: [], headcount: null, linkedinUrl: null };
+    return { hq: null, headcount: null, industry: null, linkedinUrl: null, twitterUrl: null, facebookUrl: null, instagramUrl: null };
   }
 }
 
@@ -485,15 +391,14 @@ function createEmptyIntel(companyName: string, domain: string | null): CompanyIn
     website: domain,
     lastRefreshedAt: new Date().toISOString(),
     headcount: null,
-    stock: null,
     hq: null,
     linkedinUrl: `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`,
-    verifiedFacts: [],
-    offerings: null,
-    sources: [],
+    twitterUrl: null,
+    facebookUrl: null,
+    instagramUrl: null,
+    localBranch: null,
     latestSignals: [],
-    sentiment: null,
-    competitors: [],
+    sources: [],
     error: "Limited public information available for this company",
   };
 }
