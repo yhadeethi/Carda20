@@ -379,14 +379,20 @@ export async function generateIntelV2(
   contactRole?: string,
   contactAddress?: string
 ): Promise<CompanyIntelV2> {
+  console.log(`[IntelV2] Starting for company: "${companyName}", domain: "${domain}"`);
+  
   const snippets: SourceSnippet[] = [];
   let wikipediaUrl: string | undefined;
   let wikiTicker: string | undefined;
   
+  console.log(`[IntelV2] Fetching Wikipedia and Google News in parallel...`);
   const [wikiInfo, newsItems] = await Promise.all([
     fetchWikipediaSummary(companyName),
     fetchGoogleNewsRSS(companyName),
   ]);
+  
+  console.log(`[IntelV2] Wikipedia result: ${wikiInfo ? "found" : "not found"}`);
+  console.log(`[IntelV2] News items fetched: ${newsItems.length}`);
   
   if (wikiInfo?.extract) {
     snippets.push({
@@ -399,7 +405,9 @@ export async function generateIntelV2(
   }
   
   if (domain) {
+    console.log(`[IntelV2] Fetching website content for domain: ${domain}`);
     const websiteSnippets = await fetchWebsiteContent(domain, ["/", "/about", "/about-us", "/company", "/products", "/services"]);
+    console.log(`[IntelV2] Website snippets fetched: ${websiteSnippets.length}`);
     snippets.push(...websiteSnippets);
   }
   
@@ -410,12 +418,16 @@ export async function generateIntelV2(
     url: item.link,
     sourceName: item.source,
   }));
+  console.log(`[IntelV2] Signals (news) created: ${latestSignals.length}`);
   
   if (snippets.length === 0 && newsItems.length === 0) {
+    console.log(`[IntelV2] No data found, returning empty intel`);
     return createEmptyIntel(companyName, domain);
   }
   
+  console.log(`[IntelV2] Calling LLM for intel extraction...`);
   const llmResult = await callLLMForIntel(companyName, domain, snippets);
+  console.log(`[IntelV2] LLM result - headcount: ${llmResult.headcount}, industry: ${llmResult.industry}, founded: ${llmResult.founded}, CEO: ${llmResult.founderOrCeo}`);
   
   let headcount = llmResult.headcount || parseHeadcount(snippets.map(s => s.textExcerpt).join(" "));
   let industry = llmResult.industry;
@@ -428,40 +440,45 @@ export async function generateIntelV2(
   
   // Smart fallback: Only call Apollo if key fields are missing and we have a domain
   let apolloData: ApolloEnrichmentData | null = null;
+  console.log(`[IntelV2] Checking Apollo fallback - domain: ${domain}, APOLLO_API_KEY set: ${!!process.env.APOLLO_API_KEY}`);
   if (domain && needsApolloEnrichment(llmResult, headcount)) {
+    console.log(`[IntelV2] Apollo fallback triggered - calling Apollo API...`);
     apolloData = await fetchApolloEnrichment(domain);
-    
-    if (apolloData) {
-      // Fill in missing fields from Apollo
-      if (!headcount && apolloData.employeeCountRange) {
-        headcount = apolloData.employeeCountRange as HeadcountRange;
-        console.log(`Intel: Apollo provided headcount: ${headcount}`);
-      }
-      if (!industry && apolloData.industry) {
-        industry = apolloData.industry;
-        console.log(`Intel: Apollo provided industry: ${industry}`);
-      }
-      if (!founded && apolloData.foundedYear) {
-        founded = apolloData.foundedYear.toString();
-        console.log(`Intel: Apollo provided founded: ${founded}`);
-      }
-      // Apollo doesn't provide CEO directly, but we can get other useful data
-      if (!linkedinUrl && apolloData.linkedinUrl) {
-        linkedinUrl = apolloData.linkedinUrl;
-      }
-      if (!twitterUrl && apolloData.twitterUrl) {
-        twitterUrl = apolloData.twitterUrl;
-      }
-      if (!facebookUrl && apolloData.facebookUrl) {
-        facebookUrl = apolloData.facebookUrl;
-      }
-      if (!hq && (apolloData.city || apolloData.country)) {
-        hq = {
-          city: apolloData.city,
-          country: apolloData.country,
-          source: { title: "Apollo.io", url: `https://app.apollo.io/#/companies?organization_id=${domain}` },
-        };
-      }
+    console.log(`[IntelV2] Apollo result: ${apolloData ? "data received" : "no data"}`);
+  } else {
+    console.log(`[IntelV2] Apollo fallback NOT triggered - ${!domain ? "no domain" : "enough fields from LLM"}`);
+  }
+  
+  if (apolloData) {
+    // Fill in missing fields from Apollo
+    if (!headcount && apolloData.employeeCountRange) {
+      headcount = apolloData.employeeCountRange as HeadcountRange;
+      console.log(`Intel: Apollo provided headcount: ${headcount}`);
+    }
+    if (!industry && apolloData.industry) {
+      industry = apolloData.industry;
+      console.log(`Intel: Apollo provided industry: ${industry}`);
+    }
+    if (!founded && apolloData.foundedYear) {
+      founded = apolloData.foundedYear.toString();
+      console.log(`Intel: Apollo provided founded: ${founded}`);
+    }
+    // Apollo doesn't provide CEO directly, but we can get other useful data
+    if (!linkedinUrl && apolloData.linkedinUrl) {
+      linkedinUrl = apolloData.linkedinUrl;
+    }
+    if (!twitterUrl && apolloData.twitterUrl) {
+      twitterUrl = apolloData.twitterUrl;
+    }
+    if (!facebookUrl && apolloData.facebookUrl) {
+      facebookUrl = apolloData.facebookUrl;
+    }
+    if (!hq && (apolloData.city || apolloData.country)) {
+      hq = {
+        city: apolloData.city,
+        country: apolloData.country,
+        source: { title: "Apollo.io", url: `https://app.apollo.io/#/companies?organization_id=${domain}` },
+      };
     }
   }
   
