@@ -17,17 +17,23 @@ function getCacheKey(companyName: string, domain?: string | null): string {
 function getFromCache(cacheKey: string): CompanyIntelV2 | null {
   try {
     const cached = localStorage.getItem(cacheKey);
-    if (!cached) return null;
+    if (!cached) {
+      console.log(`[IntelV2 Client] Cache miss for key: ${cacheKey}`);
+      return null;
+    }
     
     const parsed: CachedIntel = JSON.parse(cached);
     const ageMs = Date.now() - parsed.cachedAt;
     const maxAgeMs = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
     
     if (ageMs > maxAgeMs) {
+      console.log(`[IntelV2 Client] Cache expired for key: ${cacheKey} (age: ${Math.round(ageMs / 1000 / 60)} minutes)`);
       localStorage.removeItem(cacheKey);
       return null;
     }
     
+    const ageMinutes = Math.round(ageMs / 1000 / 60);
+    console.log(`[IntelV2 Client] Cache HIT for key: ${cacheKey} (age: ${ageMinutes} minutes, news items: ${parsed.intel.latestSignals?.length || 0})`);
     return parsed.intel;
   } catch {
     return null;
@@ -41,6 +47,7 @@ function saveToCache(cacheKey: string, intel: CompanyIntelV2): void {
       cachedAt: Date.now(),
     };
     localStorage.setItem(cacheKey, JSON.stringify(cached));
+    console.log(`[IntelV2 Client] Saved to cache: ${cacheKey} (news items: ${intel.latestSignals?.length || 0})`);
   } catch {
   }
 }
@@ -89,6 +96,7 @@ export function useIntelV2() {
       if (role) params.append("role", role);
       if (address) params.append("address", address);
 
+      console.log(`[IntelV2 Client] Fetching fresh data from API for: ${companyName || domain}`);
       const response = await fetch(`/api/intel-v2?${params.toString()}`);
       
       if (!response.ok) {
