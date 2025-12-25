@@ -318,11 +318,24 @@ export async function registerRoutes(
         return res.status(404).json({ error: "No enrichment data found for this company" });
       }
 
-      // Merge Apollo data with existing intel
+      console.log(`[Boost] Apollo data received:`, JSON.stringify({
+        name: apolloData.name,
+        industry: apolloData.industry,
+        employeeCountRange: apolloData.employeeCountRange,
+        revenue: apolloData.annualRevenueFormatted,
+        funding: apolloData.totalFundingFormatted,
+        phone: apolloData.primaryPhone,
+      }));
+      console.log(`[Boost] Existing intel has ${existingIntel.latestSignals?.length || 0} news items`);
+
+      // Merge Apollo data with existing intel - EXPLICITLY preserve latestSignals
       const boostedIntel: CompanyIntelV2 = {
         ...existingIntel,
         isBoosted: true,
         boostedAt: new Date().toISOString(),
+        
+        // CRITICAL: Explicitly preserve news/signals
+        latestSignals: existingIntel.latestSignals || [],
         
         // Update headcount if Apollo has it and existing doesn't
         headcount: existingIntel.headcount || (apolloData.employeeCountRange ? {
@@ -363,6 +376,8 @@ export async function registerRoutes(
           { title: "Apollo.io", url: "https://app.apollo.io" }
         ],
       };
+      
+      console.log(`[Boost] Boosted intel has ${boostedIntel.latestSignals?.length || 0} news items`);
 
       console.log(`[Boost] Successfully boosted intel for ${domain}`);
       res.json(boostedIntel);

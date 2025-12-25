@@ -346,7 +346,7 @@ export function CompanyIntelV2Card({
       </motion.div>
 
       {/* SECTION 3: Recent News */}
-      {intel.latestSignals.length > 0 && (
+      {intel.latestSignals && intel.latestSignals.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -559,7 +559,7 @@ export function CompanyIntelV2Card({
       )}
 
       {/* Empty State */}
-      {intel.latestSignals.length === 0 && !intel.hq && !intel.headcount && !intel.summary && (
+      {(!intel.latestSignals || intel.latestSignals.length === 0) && !intel.hq && !intel.headcount && !intel.summary && (
         <Card className="glass-subtle">
           <CardContent className="py-6">
             <div className="text-center text-muted-foreground text-sm">

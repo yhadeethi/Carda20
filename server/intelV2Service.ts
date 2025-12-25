@@ -141,23 +141,32 @@ async function fetchGoogleNewsRSS(companyName: string): Promise<NewsItem[]> {
     const query = encodeURIComponent(companyName);
     const url = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
     
+    console.log(`[News] Fetching Google News for: "${companyName}"`);
+    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
     clearTimeout(timeoutId);
     
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.log(`[News] Google News response not OK: ${response.status}`);
+      return [];
+    }
     
     const xml = await response.text();
+    console.log(`[News] RSS response length: ${xml.length} chars`);
+    
     const items: NewsItem[] = [];
     
     const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
+    console.log(`[News] Found ${itemMatches.length} raw items in RSS`);
+    
     for (const itemMatch of itemMatches) {
       const match = [itemMatch, itemMatch.replace(/<\/?item>/g, "")];
       const itemContent = match[1];
@@ -180,9 +189,10 @@ async function fetchGoogleNewsRSS(companyName: string): Promise<NewsItem[]> {
       if (items.length >= 10) break;
     }
     
+    console.log(`[News] Parsed ${items.length} valid news items for "${companyName}"`);
     return items;
   } catch (error) {
-    console.log("Google News RSS fetch error:", error);
+    console.log(`[News] Google News RSS fetch error for "${companyName}":`, error);
     return [];
   }
 }

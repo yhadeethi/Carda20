@@ -73,11 +73,19 @@ export function useIntelV2() {
 
     const cacheKey = getCacheKey(companyName || "", domain);
     
-    if (!forceRefresh && lastFetchKey.current === cacheKey && intel) {
-      return;
-    }
-    
-    if (!forceRefresh) {
+    if (forceRefresh) {
+      // Clear stale cache on force refresh and reset lastFetchKey
+      try {
+        localStorage.removeItem(cacheKey);
+        console.log(`[IntelV2 Client] Force refresh - cleared cache for: ${cacheKey}`);
+      } catch {}
+      lastFetchKey.current = null; // Reset to ensure we fetch fresh
+    } else {
+      // Skip if already fetched this exact key
+      if (lastFetchKey.current === cacheKey && intel) {
+        return;
+      }
+      
       const cached = getFromCache(cacheKey);
       if (cached) {
         setIntel(cached);
