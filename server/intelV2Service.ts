@@ -134,7 +134,8 @@ interface NewsItem {
 
 async function fetchGoogleNewsRSS(companyName: string): Promise<NewsItem[]> {
   try {
-    const query = encodeURIComponent(`"${companyName}" company`);
+    // Use simple query without quotes for better results
+    const query = encodeURIComponent(companyName);
     const url = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
     
     const controller = new AbortController();
