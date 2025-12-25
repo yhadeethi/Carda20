@@ -1,5 +1,8 @@
 import OpenAI from "openai";
-import { CompanyIntelV2, IntelSource, SignalItem, HeadcountRange, StockData, CompetitorInfo } from "@shared/schema";
+import { CompanyIntelV2, IntelSource, SignalItem, HeadcountRange, StockData, CompetitorInfo, ApolloEnrichmentData } from "@shared/schema";
+import { db } from "./db";
+import { apolloCache } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
 
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -230,6 +233,130 @@ async function fetchYahooFinanceStock(ticker: string): Promise<StockData | null>
   }
 }
 
+// Apollo.io Organization Enrichment API
+async function fetchApolloEnrichment(domain: string): Promise<ApolloEnrichmentData | null> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) {
+    console.log("Apollo: No API key configured");
+    return null;
+  }
+  
+  try {
+    // Check cache first (30-day expiry)
+    const cached = await db.select()
+      .from(apolloCache)
+      .where(eq(apolloCache.domain, domain))
+      .limit(1);
+    
+    if (cached.length > 0 && cached[0].cachedAt) {
+      const cacheAge = Date.now() - new Date(cached[0].cachedAt).getTime();
+      const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+      if (cacheAge < thirtyDays && cached[0].apolloData) {
+        console.log(`Apollo: Cache hit for ${domain}`);
+        return cached[0].apolloData;
+      }
+    }
+    
+    console.log(`Apollo: Fetching enrichment for ${domain}`);
+    const response = await fetch("https://api.apollo.io/api/v1/organizations/enrich", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": apiKey,
+      },
+      body: JSON.stringify({ domain }),
+    });
+    
+    if (!response.ok) {
+      console.log(`Apollo: API error ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    const org = data.organization;
+    
+    if (!org) {
+      console.log(`Apollo: No organization found for ${domain}`);
+      return null;
+    }
+    
+    const enrichmentData: ApolloEnrichmentData = {
+      name: org.name || null,
+      websiteUrl: org.website_url || null,
+      linkedinUrl: org.linkedin_url || null,
+      twitterUrl: org.twitter_url || null,
+      facebookUrl: org.facebook_url || null,
+      industry: org.industry || null,
+      employeeCount: org.estimated_num_employees || null,
+      employeeCountRange: null,
+      foundedYear: org.founded_year || null,
+      city: org.city || null,
+      state: org.state || null,
+      country: org.country || null,
+      description: org.short_description || org.seo_description || null,
+      logoUrl: org.logo_url || null,
+      ceoName: null, // Apollo doesn't directly provide this
+      annualRevenue: org.annual_revenue || null,
+      annualRevenueFormatted: org.annual_revenue_printed || null,
+      totalFunding: org.total_funding || null,
+      totalFundingFormatted: org.total_funding_printed || null,
+      latestFundingRoundType: org.latest_funding_round_type || null,
+      latestFundingAmount: org.latest_funding_amount || null,
+      technologies: org.technologies || null,
+    };
+    
+    // Convert employee count to range
+    if (enrichmentData.employeeCount) {
+      const count = enrichmentData.employeeCount;
+      if (count <= 10) enrichmentData.employeeCountRange = "1-10";
+      else if (count <= 50) enrichmentData.employeeCountRange = "11-50";
+      else if (count <= 200) enrichmentData.employeeCountRange = "51-200";
+      else if (count <= 500) enrichmentData.employeeCountRange = "201-500";
+      else if (count <= 1000) enrichmentData.employeeCountRange = "501-1k";
+      else if (count <= 5000) enrichmentData.employeeCountRange = "1k-5k";
+      else if (count <= 10000) enrichmentData.employeeCountRange = "5k-10k";
+      else enrichmentData.employeeCountRange = "10k+";
+    }
+    
+    // Cache the result
+    await db.insert(apolloCache)
+      .values({
+        domain,
+        apolloData: enrichmentData,
+        cachedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: apolloCache.domain,
+        set: {
+          apolloData: enrichmentData,
+          cachedAt: new Date(),
+        },
+      });
+    
+    console.log(`Apollo: Successfully enriched ${domain}`);
+    return enrichmentData;
+  } catch (error) {
+    console.error("Apollo enrichment error:", error);
+    return null;
+  }
+}
+
+// Check if key intel fields are missing (triggers Apollo fallback)
+function needsApolloEnrichment(llmResult: LLMIntelResult, headcount: HeadcountRange | null): boolean {
+  const missingFields = [];
+  if (!headcount && !llmResult.headcount) missingFields.push("headcount");
+  if (!llmResult.industry) missingFields.push("industry");
+  if (!llmResult.founded) missingFields.push("founded");
+  if (!llmResult.founderOrCeo) missingFields.push("CEO");
+  
+  // Need at least 2 missing fields to justify an API call
+  const needsEnrichment = missingFields.length >= 2;
+  if (needsEnrichment) {
+    console.log(`Intel: Missing fields [${missingFields.join(", ")}] - will try Apollo fallback`);
+  }
+  return needsEnrichment;
+}
+
 function parseHeadcount(text: string): HeadcountRange | null {
   const numMatch = text.match(/(\d[\d,]*)\s*(employees|staff|people|workers)/i);
   if (numMatch) {
@@ -290,7 +417,53 @@ export async function generateIntelV2(
   
   const llmResult = await callLLMForIntel(companyName, domain, snippets);
   
-  const headcount = llmResult.headcount || parseHeadcount(snippets.map(s => s.textExcerpt).join(" "));
+  let headcount = llmResult.headcount || parseHeadcount(snippets.map(s => s.textExcerpt).join(" "));
+  let industry = llmResult.industry;
+  let founded = llmResult.founded;
+  let founderOrCeo = llmResult.founderOrCeo;
+  let hq = llmResult.hq;
+  let linkedinUrl = llmResult.linkedinUrl;
+  let twitterUrl = llmResult.twitterUrl;
+  let facebookUrl = llmResult.facebookUrl;
+  
+  // Smart fallback: Only call Apollo if key fields are missing and we have a domain
+  let apolloData: ApolloEnrichmentData | null = null;
+  if (domain && needsApolloEnrichment(llmResult, headcount)) {
+    apolloData = await fetchApolloEnrichment(domain);
+    
+    if (apolloData) {
+      // Fill in missing fields from Apollo
+      if (!headcount && apolloData.employeeCountRange) {
+        headcount = apolloData.employeeCountRange as HeadcountRange;
+        console.log(`Intel: Apollo provided headcount: ${headcount}`);
+      }
+      if (!industry && apolloData.industry) {
+        industry = apolloData.industry;
+        console.log(`Intel: Apollo provided industry: ${industry}`);
+      }
+      if (!founded && apolloData.foundedYear) {
+        founded = apolloData.foundedYear.toString();
+        console.log(`Intel: Apollo provided founded: ${founded}`);
+      }
+      // Apollo doesn't provide CEO directly, but we can get other useful data
+      if (!linkedinUrl && apolloData.linkedinUrl) {
+        linkedinUrl = apolloData.linkedinUrl;
+      }
+      if (!twitterUrl && apolloData.twitterUrl) {
+        twitterUrl = apolloData.twitterUrl;
+      }
+      if (!facebookUrl && apolloData.facebookUrl) {
+        facebookUrl = apolloData.facebookUrl;
+      }
+      if (!hq && (apolloData.city || apolloData.country)) {
+        hq = {
+          city: apolloData.city,
+          country: apolloData.country,
+          source: { title: "Apollo.io", url: `https://app.apollo.io/#/companies?organization_id=${domain}` },
+        };
+      }
+    }
+  }
   
   // Use ticker from LLM or Wikipedia extraction
   const ticker = llmResult.ticker || wikiTicker;
@@ -301,12 +474,18 @@ export async function generateIntelV2(
     stockData = await fetchYahooFinanceStock(ticker);
   }
   
-  const linkedinUrl = llmResult.linkedinUrl || `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`;
+  // Default LinkedIn URL if none found
+  const finalLinkedinUrl = linkedinUrl || `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`;
   
   const allSources: IntelSource[] = [
     ...snippets.map(s => ({ title: s.sourceTitle, url: s.url })),
     ...newsItems.slice(0, 3).map(n => ({ title: n.source, url: n.link })),
   ];
+  
+  // Add Apollo as source if we used it
+  if (apolloData) {
+    allSources.push({ title: "Apollo.io", url: `https://app.apollo.io` });
+  }
   
   const intel: CompanyIntelV2 = {
     companyName,
@@ -314,23 +493,23 @@ export async function generateIntelV2(
     lastRefreshedAt: new Date().toISOString(),
     
     // Section 1: Company Profile
-    summary: llmResult.summary,
-    industry: llmResult.industry,
-    founded: llmResult.founded,
-    founderOrCeo: llmResult.founderOrCeo,
+    summary: llmResult.summary || apolloData?.description || null,
+    industry,
+    founded,
+    founderOrCeo,
     
     // Social links
-    linkedinUrl,
-    twitterUrl: llmResult.twitterUrl,
-    facebookUrl: llmResult.facebookUrl,
+    linkedinUrl: finalLinkedinUrl,
+    twitterUrl,
+    facebookUrl,
     instagramUrl: llmResult.instagramUrl,
     
     // Section 2: Quick Visual Cards
-    headcount: headcount && (wikipediaUrl || snippets[0]?.url) ? {
+    headcount: headcount ? {
       range: headcount,
-      source: { title: "Wikipedia", url: wikipediaUrl || snippets[0]?.url || "" },
+      source: apolloData ? { title: "Apollo.io", url: "https://app.apollo.io" } : { title: "Wikipedia", url: wikipediaUrl || snippets[0]?.url || "" },
     } : null,
-    hq: llmResult.hq,
+    hq,
     stock: stockData,
     
     // Section 3: Recent News

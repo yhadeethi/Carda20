@@ -76,6 +76,40 @@ export const companyIntel = pgTable("company_intel", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Apollo cache table - stores enrichment data from Apollo.io (30-day cache)
+export const apolloCache = pgTable("apollo_cache", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  domain: text("domain").notNull().unique(),
+  apolloData: jsonb("apollo_data").$type<ApolloEnrichmentData>(),
+  cachedAt: timestamp("cached_at").defaultNow(),
+});
+
+// Apollo enrichment data structure
+export interface ApolloEnrichmentData {
+  name?: string | null;
+  websiteUrl?: string | null;
+  linkedinUrl?: string | null;
+  twitterUrl?: string | null;
+  facebookUrl?: string | null;
+  industry?: string | null;
+  employeeCount?: number | null;
+  employeeCountRange?: string | null;
+  foundedYear?: number | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  ceoName?: string | null;
+  annualRevenue?: number | null;
+  annualRevenueFormatted?: string | null;
+  totalFunding?: number | null;
+  totalFundingFormatted?: string | null;
+  latestFundingRoundType?: string | null;
+  latestFundingAmount?: number | null;
+  technologies?: string[] | null;
+}
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   contacts: many(contacts),
