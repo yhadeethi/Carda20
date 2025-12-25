@@ -286,14 +286,35 @@ export interface SignalItem {
 // Headcount range buckets
 export type HeadcountRange = "1-10" | "11-50" | "51-200" | "201-500" | "501-1k" | "1k-5k" | "5k-10k" | "10k+";
 
-// Company Intel V2 - simplified, no AI advice
+// Stock data for company
+export interface StockData {
+  ticker: string;
+  exchange?: string | null;
+  price?: number | null;
+  changePercent?: number | null;
+  currency?: string | null;
+}
+
+// Company Intel V2 - verified facts + visual cards
 export interface CompanyIntelV2 {
   companyName: string;
   website?: string | null;
-  canonicalEntity?: string | null; // e.g. parent/legal entity name
+  canonicalEntity?: string | null;
   lastRefreshedAt: string;
   
-  // Company details
+  // Section 1: Company Profile
+  summary?: string | null; // Short company description
+  industry?: string | null;
+  founded?: string | null;
+  founderOrCeo?: string | null;
+  
+  // Social links (displayed under profile)
+  linkedinUrl?: string | null;
+  twitterUrl?: string | null;
+  facebookUrl?: string | null;
+  instagramUrl?: string | null;
+  
+  // Section 2: Visual Quick Cards
   headcount?: {
     range: HeadcountRange;
     source: IntelSource;
@@ -302,25 +323,16 @@ export interface CompanyIntelV2 {
   hq?: {
     city?: string | null;
     country?: string | null;
-    lat?: number | null;
-    lng?: number | null;
     source: IntelSource;
   } | null;
   
-  // Social links
-  linkedinUrl?: string | null;
-  twitterUrl?: string | null;
-  facebookUrl?: string | null;
-  instagramUrl?: string | null;
+  stock?: StockData | null;
   
-  // Local branch (matched from contact's address if different from HQ)
-  localBranch?: {
-    address: string;
-    city?: string | null;
-  } | null;
+  // Section 3: Recent News (3-4 items)
+  latestSignals: SignalItem[];
   
-  // News/signals
-  latestSignals: SignalItem[]; // max 6 news items with date + source
+  // Section 4: Competitors
+  competitors?: CompetitorInfo[];
   
   // All sources used
   sources?: IntelSource[];

@@ -118,22 +118,6 @@ export function ScanTab({
       fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null, editedContact.address || null, true);
     }
   }, [editedContact, fetchIntelV2]);
-  
-  const networkContacts = useMemo(() => {
-    if (!editedContact?.companyName) return [];
-    const allContacts = loadContacts();
-    const companyLower = editedContact.companyName.toLowerCase();
-    return allContacts
-      .filter(c => 
-        c.company?.toLowerCase() === companyLower && 
-        c.id !== viewingContact?.id
-      )
-      .map(c => ({
-        id: c.id.toString(),
-        fullName: c.name || null,
-        jobTitle: c.title || null,
-      }));
-  }, [editedContact?.companyName, viewingContact?.id]);
 
   useEffect(() => {
     if (viewingContact) {
@@ -1151,7 +1135,6 @@ export function ScanTab({
               error={intelV2Error}
               onRefresh={handleRefreshIntelV2}
               companyName={editedContact?.companyName}
-              networkContacts={networkContacts}
             />
           )}
 
