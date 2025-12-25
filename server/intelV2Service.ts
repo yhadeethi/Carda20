@@ -233,8 +233,8 @@ async function fetchYahooFinanceStock(ticker: string): Promise<StockData | null>
   }
 }
 
-// Apollo.io Organization Enrichment API
-async function fetchApolloEnrichment(domain: string): Promise<ApolloEnrichmentData | null> {
+// Apollo.io Organization Enrichment API (exported for boost endpoint)
+export async function fetchApolloEnrichment(domain: string): Promise<ApolloEnrichmentData | null> {
   const apiKey = process.env.APOLLO_API_KEY;
   if (!apiKey) {
     console.log("Apollo: No API key configured");
@@ -295,7 +295,7 @@ async function fetchApolloEnrichment(domain: string): Promise<ApolloEnrichmentDa
       country: org.country || null,
       description: org.short_description || org.seo_description || null,
       logoUrl: org.logo_url || null,
-      ceoName: null, // Apollo doesn't directly provide this
+      ceoName: null,
       annualRevenue: org.annual_revenue || null,
       annualRevenueFormatted: org.annual_revenue_printed || null,
       totalFunding: org.total_funding || null,
@@ -303,6 +303,8 @@ async function fetchApolloEnrichment(domain: string): Promise<ApolloEnrichmentDa
       latestFundingRoundType: org.latest_funding_round_type || null,
       latestFundingAmount: org.latest_funding_amount || null,
       technologies: org.technologies || null,
+      primaryPhone: org.primary_phone?.number || org.phone || null,
+      investors: org.investors || null,
     };
     
     // Convert employee count to range
@@ -438,49 +440,8 @@ export async function generateIntelV2(
   let twitterUrl = llmResult.twitterUrl;
   let facebookUrl = llmResult.facebookUrl;
   
-  // Smart fallback: Only call Apollo if key fields are missing and we have a domain
-  let apolloData: ApolloEnrichmentData | null = null;
-  console.log(`[IntelV2] Checking Apollo fallback - domain: ${domain}, APOLLO_API_KEY set: ${!!process.env.APOLLO_API_KEY}`);
-  if (domain && needsApolloEnrichment(llmResult, headcount)) {
-    console.log(`[IntelV2] Apollo fallback triggered - calling Apollo API...`);
-    apolloData = await fetchApolloEnrichment(domain);
-    console.log(`[IntelV2] Apollo result: ${apolloData ? "data received" : "no data"}`);
-  } else {
-    console.log(`[IntelV2] Apollo fallback NOT triggered - ${!domain ? "no domain" : "enough fields from LLM"}`);
-  }
-  
-  if (apolloData) {
-    // Fill in missing fields from Apollo
-    if (!headcount && apolloData.employeeCountRange) {
-      headcount = apolloData.employeeCountRange as HeadcountRange;
-      console.log(`Intel: Apollo provided headcount: ${headcount}`);
-    }
-    if (!industry && apolloData.industry) {
-      industry = apolloData.industry;
-      console.log(`Intel: Apollo provided industry: ${industry}`);
-    }
-    if (!founded && apolloData.foundedYear) {
-      founded = apolloData.foundedYear.toString();
-      console.log(`Intel: Apollo provided founded: ${founded}`);
-    }
-    // Apollo doesn't provide CEO directly, but we can get other useful data
-    if (!linkedinUrl && apolloData.linkedinUrl) {
-      linkedinUrl = apolloData.linkedinUrl;
-    }
-    if (!twitterUrl && apolloData.twitterUrl) {
-      twitterUrl = apolloData.twitterUrl;
-    }
-    if (!facebookUrl && apolloData.facebookUrl) {
-      facebookUrl = apolloData.facebookUrl;
-    }
-    if (!hq && (apolloData.city || apolloData.country)) {
-      hq = {
-        city: apolloData.city,
-        country: apolloData.country,
-        source: { title: "Apollo.io", url: `https://app.apollo.io/#/companies?organization_id=${domain}` },
-      };
-    }
-  }
+  // Apollo enrichment is now user-triggered via the "Boost" button
+  // No automatic Apollo fallback - users control when to use credits
   
   // Use ticker from LLM or Wikipedia extraction
   const ticker = llmResult.ticker || wikiTicker;
@@ -499,18 +460,13 @@ export async function generateIntelV2(
     ...newsItems.slice(0, 3).map(n => ({ title: n.source, url: n.link })),
   ];
   
-  // Add Apollo as source if we used it
-  if (apolloData) {
-    allSources.push({ title: "Apollo.io", url: `https://app.apollo.io` });
-  }
-  
   const intel: CompanyIntelV2 = {
     companyName,
     website: domain,
     lastRefreshedAt: new Date().toISOString(),
     
     // Section 1: Company Profile
-    summary: llmResult.summary || apolloData?.description || null,
+    summary: llmResult.summary || null,
     industry,
     founded,
     founderOrCeo,
@@ -524,7 +480,7 @@ export async function generateIntelV2(
     // Section 2: Quick Visual Cards
     headcount: headcount ? {
       range: headcount,
-      source: apolloData ? { title: "Apollo.io", url: "https://app.apollo.io" } : { title: "Wikipedia", url: wikipediaUrl || snippets[0]?.url || "" },
+      source: { title: "Wikipedia", url: wikipediaUrl || snippets[0]?.url || "" },
     } : null,
     hq,
     stock: stockData,
@@ -534,6 +490,9 @@ export async function generateIntelV2(
     
     // Section 4: Competitors
     competitors: llmResult.competitors,
+    
+    // Apollo Boost data (not boosted yet)
+    isBoosted: false,
     
     sources: allSources,
   };

@@ -1,7 +1,18 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CompanyIntelV2 } from "@shared/schema";
 import {
   Building2,
@@ -19,6 +30,11 @@ import {
   Calendar,
   User,
   Target,
+  Zap,
+  DollarSign,
+  Phone,
+  Landmark,
+  Loader2,
 } from "lucide-react";
 import { SiLinkedin, SiX, SiFacebook, SiInstagram } from "react-icons/si";
 import { motion } from "framer-motion";
@@ -26,18 +42,35 @@ import { motion } from "framer-motion";
 interface CompanyIntelV2CardProps {
   intel: CompanyIntelV2 | null;
   isLoading: boolean;
+  isBoosting?: boolean;
   error: string | null;
   onRefresh: () => void;
+  onBoost?: (domain: string) => Promise<boolean>;
   companyName?: string | null;
 }
 
 export function CompanyIntelV2Card({
   intel,
   isLoading,
+  isBoosting = false,
   error,
   onRefresh,
+  onBoost,
   companyName,
 }: CompanyIntelV2CardProps) {
+  const [showBoostConfirm, setShowBoostConfirm] = useState(false);
+
+  const handleBoostClick = () => {
+    setShowBoostConfirm(true);
+  };
+
+  const handleBoostConfirm = async () => {
+    setShowBoostConfirm(false);
+    if (intel?.website && onBoost) {
+      await onBoost(intel.website);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -397,6 +430,134 @@ export function CompanyIntelV2Card({
         </motion.div>
       )}
 
+      {/* SECTION 5: Apollo Boosted Data (only show if boosted) */}
+      {intel.isBoosted && (intel.revenue || intel.funding || intel.primaryPhone) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card className="glass-subtle border-primary/20">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] px-1.5 py-0 gap-1">
+                  <Zap className="w-3 h-3" />
+                  Boosted Intel
+                </Badge>
+                {intel.boostedAt && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {new Date(intel.boostedAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {/* Revenue */}
+                {intel.revenue && (
+                  <div className="flex items-start gap-2">
+                    <DollarSign className="w-4 h-4 text-green-500 mt-0.5" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Annual Revenue</p>
+                      <p className="text-sm font-medium">{intel.revenue}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Funding */}
+                {intel.funding && (intel.funding.totalRaised || intel.funding.latestRound) && (
+                  <div className="flex items-start gap-2">
+                    <Landmark className="w-4 h-4 text-blue-500 mt-0.5" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Funding</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {intel.funding.totalRaised && (
+                          <span className="text-sm font-medium">{intel.funding.totalRaised}</span>
+                        )}
+                        {intel.funding.latestRound && (
+                          <Badge variant="outline" className="text-[10px] py-0">
+                            {intel.funding.latestRound}
+                          </Badge>
+                        )}
+                      </div>
+                      {intel.funding.investors && intel.funding.investors.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {intel.funding.investors.slice(0, 3).join(", ")}
+                          {intel.funding.investors.length > 3 && ` +${intel.funding.investors.length - 3} more`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Phone */}
+                {intel.primaryPhone && (
+                  <div className="flex items-start gap-2">
+                    <Phone className="w-4 h-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Primary Phone</p>
+                      <a 
+                        href={`tel:${intel.primaryPhone}`}
+                        className="text-sm font-medium text-primary hover:underline"
+                        data-testid="link-phone"
+                      >
+                        {intel.primaryPhone}
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* SECTION 6: Boost Intel Button (only show if not boosted and has website) */}
+      {!intel.isBoosted && intel.website && onBoost && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card className="glass-subtle border-dashed">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                    <Zap className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Boost Intel</p>
+                    <p className="text-xs text-muted-foreground">
+                      Get revenue, funding, and phone data
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBoostClick}
+                  disabled={isBoosting}
+                  className="gap-1.5"
+                  data-testid="button-boost-intel"
+                >
+                  {isBoosting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Boosting...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5" />
+                      Boost
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Empty State */}
       {intel.latestSignals.length === 0 && !intel.hq && !intel.headcount && !intel.summary && (
         <Card className="glass-subtle">
@@ -409,6 +570,37 @@ export function CompanyIntelV2Card({
           </CardContent>
         </Card>
       )}
+
+      {/* Boost Confirmation Dialog */}
+      <AlertDialog open={showBoostConfirm} onOpenChange={setShowBoostConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-500" />
+              Boost Company Intel?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will use <strong>1 Apollo credit</strong> to fetch additional company data including:
+              <ul className="mt-2 space-y-1 text-sm">
+                <li>• Annual revenue estimates</li>
+                <li>• Funding history and investors</li>
+                <li>• Primary contact phone number</li>
+                <li>• Additional company details</li>
+              </ul>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Free tier includes 100 credits per month.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBoostConfirm} className="gap-1.5">
+              <Zap className="w-4 h-4" />
+              Use 1 Credit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

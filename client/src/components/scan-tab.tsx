@@ -100,8 +100,10 @@ export function ScanTab({
   const {
     intel: intelV2,
     isLoading: intelV2Loading,
+    isBoosting: intelV2Boosting,
     error: intelV2Error,
     fetchIntel: fetchIntelV2,
+    boostIntel: boostIntelV2,
     reset: resetIntelV2,
   } = useIntelV2();
   
@@ -1132,8 +1134,10 @@ export function ScanTab({
             <CompanyIntelV2Card
               intel={intelV2}
               isLoading={intelV2Loading}
+              isBoosting={intelV2Boosting}
               error={intelV2Error}
               onRefresh={handleRefreshIntelV2}
+              onBoost={boostIntelV2}
               companyName={editedContact?.companyName}
             />
           )}

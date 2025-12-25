@@ -5,7 +5,8 @@ import { z } from "zod";
 import { extractTextFromImage, initializeOCR } from "./ocrService";
 import { parseContact, ParsedContact, splitAuAddress } from "./parseService";
 import { getOrCreateCompanyIntel } from "./intelService";
-import { generateIntelV2 } from "./intelV2Service";
+import { generateIntelV2, fetchApolloEnrichment } from "./intelV2Service";
+import { CompanyIntelV2, HeadcountRange } from "@shared/schema";
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
@@ -293,6 +294,81 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting company intel v2:", error);
       res.status(500).json({ error: "Failed to get company intel" });
+    }
+  });
+
+  // Apollo Boost endpoint - user-triggered enrichment (uses API credits)
+  app.post("/api/intel-v2/boost", async (req: Request, res: Response) => {
+    try {
+      const { domain, existingIntel } = req.body;
+
+      if (!domain) {
+        return res.status(400).json({ error: "Domain is required for boost" });
+      }
+
+      // Check if Apollo API key is configured
+      if (!process.env.APOLLO_API_KEY) {
+        return res.status(400).json({ error: "Apollo API key not configured" });
+      }
+
+      console.log(`[Boost] Fetching Apollo enrichment for domain: ${domain}`);
+      const apolloData = await fetchApolloEnrichment(domain);
+
+      if (!apolloData) {
+        return res.status(404).json({ error: "No enrichment data found for this company" });
+      }
+
+      // Merge Apollo data with existing intel
+      const boostedIntel: CompanyIntelV2 = {
+        ...existingIntel,
+        isBoosted: true,
+        boostedAt: new Date().toISOString(),
+        
+        // Update headcount if Apollo has it and existing doesn't
+        headcount: existingIntel.headcount || (apolloData.employeeCountRange ? {
+          range: apolloData.employeeCountRange as HeadcountRange,
+          source: { title: "Apollo.io", url: "https://app.apollo.io" }
+        } : null),
+        
+        // Update HQ if Apollo has it and existing doesn't
+        hq: existingIntel.hq || ((apolloData.city || apolloData.country) ? {
+          city: apolloData.city,
+          country: apolloData.country,
+          source: { title: "Apollo.io", url: "https://app.apollo.io" }
+        } : null),
+        
+        // Update industry if Apollo has it and existing doesn't
+        industry: existingIntel.industry || apolloData.industry || null,
+        
+        // Update founded if Apollo has it and existing doesn't
+        founded: existingIntel.founded || (apolloData.foundedYear?.toString() || null),
+        
+        // Update social links if missing
+        linkedinUrl: existingIntel.linkedinUrl || apolloData.linkedinUrl || null,
+        twitterUrl: existingIntel.twitterUrl || apolloData.twitterUrl || null,
+        facebookUrl: existingIntel.facebookUrl || apolloData.facebookUrl || null,
+        
+        // Add boost-only fields (revenue, funding, phone)
+        revenue: apolloData.annualRevenueFormatted || null,
+        funding: (apolloData.totalFunding || apolloData.latestFundingRoundType || apolloData.investors) ? {
+          totalRaised: apolloData.totalFundingFormatted || null,
+          latestRound: apolloData.latestFundingRoundType || null,
+          investors: apolloData.investors || [],
+        } : null,
+        primaryPhone: apolloData.primaryPhone || null,
+        
+        // Add Apollo to sources
+        sources: [
+          ...(existingIntel.sources || []),
+          { title: "Apollo.io", url: "https://app.apollo.io" }
+        ],
+      };
+
+      console.log(`[Boost] Successfully boosted intel for ${domain}`);
+      res.json(boostedIntel);
+    } catch (error) {
+      console.error("Error boosting company intel:", error);
+      res.status(500).json({ error: "Failed to boost company intel" });
     }
   });
 

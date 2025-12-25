@@ -108,6 +108,8 @@ export interface ApolloEnrichmentData {
   latestFundingRoundType?: string | null;
   latestFundingAmount?: number | null;
   technologies?: string[] | null;
+  primaryPhone?: string | null;
+  investors?: string[] | null;
 }
 
 // Relations
@@ -370,6 +372,17 @@ export interface CompanyIntelV2 {
   
   // All sources used
   sources?: IntelSource[];
+  
+  // Apollo Boost data (user-triggered enrichment)
+  isBoosted?: boolean;
+  boostedAt?: string | null;
+  revenue?: string | null; // Formatted revenue (e.g. "$10M - $50M")
+  funding?: {
+    totalRaised?: string | null; // Formatted total (e.g. "$25M")
+    latestRound?: string | null; // e.g. "Series B"
+    investors?: string[];
+  } | null;
+  primaryPhone?: string | null;
   
   // Metadata
   error?: string;

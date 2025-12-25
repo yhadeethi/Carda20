@@ -55,6 +55,7 @@ function saveToCache(cacheKey: string, intel: CompanyIntelV2): void {
 export function useIntelV2() {
   const [intel, setIntel] = useState<CompanyIntelV2 | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isBoosting, setIsBoosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastFetchKey = useRef<string | null>(null);
 
@@ -113,18 +114,60 @@ export function useIntelV2() {
     }
   }, [intel]);
 
+  const boostIntel = useCallback(async (domain: string) => {
+    if (!intel || !domain) {
+      setError("Intel and domain required for boost");
+      return false;
+    }
+
+    setIsBoosting(true);
+    setError(null);
+
+    try {
+      console.log(`[IntelV2 Client] Boosting intel for domain: ${domain}`);
+      const response = await fetch("/api/intel-v2/boost", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain, existingIntel: intel }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to boost intel");
+      }
+
+      const boostedData: CompanyIntelV2 = await response.json();
+      
+      // Update cache with boosted data
+      const cacheKey = getCacheKey(intel.companyName, domain);
+      saveToCache(cacheKey, boostedData);
+      
+      setIntel(boostedData);
+      console.log(`[IntelV2 Client] Boost successful for ${domain}`);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to boost intel");
+      return false;
+    } finally {
+      setIsBoosting(false);
+    }
+  }, [intel]);
+
   const reset = useCallback(() => {
     setIntel(null);
     setError(null);
     setIsLoading(false);
+    setIsBoosting(false);
     lastFetchKey.current = null;
   }, []);
 
   return {
     intel,
     isLoading,
+    isBoosting,
     error,
     fetchIntel,
+    boostIntel,
     reset,
   };
 }
