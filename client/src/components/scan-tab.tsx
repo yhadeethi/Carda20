@@ -25,8 +25,10 @@ import { BatchScanMode } from "@/components/batch-scan-mode";
 import { BatchReview } from "@/components/batch-review";
 import { QueuedScan, getAllQueueItems, clearBatchSession } from "@/lib/batchScanStorage";
 import { processBatchQueue } from "@/lib/batchProcessor";
-import { addTimelineEvent } from "@/lib/contacts/storage";
+import { addTimelineEvent, addReminder } from "@/lib/contacts/storage";
 import { useQuery } from "@tanstack/react-query";
+import { addDays, format } from "date-fns";
+import { Bell } from "lucide-react";
 
 type ScanMode = "scan" | "paste";
 type BatchState = "idle" | "capturing" | "processing" | "reviewing";
@@ -64,9 +66,10 @@ interface ScanTabProps {
 interface HubSpotSyncButtonProps {
   contact: ParsedContact;
   contactId?: string;
+  onSynced?: () => void;
 }
 
-function HubSpotSyncButton({ contact, contactId }: HubSpotSyncButtonProps) {
+function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonProps) {
   const { toast } = useToast();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'synced' | 'error'>('idle');
@@ -91,19 +94,18 @@ function HubSpotSyncButton({ contact, contactId }: HubSpotSyncButtonProps) {
       const firstname = nameParts[0] || '';
       const lastname = nameParts.slice(1).join(' ') || '';
 
-      const result = await apiRequest('/api/hubspot/sync', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: contact.email,
-          firstname,
-          lastname,
-          phone: contact.phone,
-          company: contact.companyName,
-          jobtitle: contact.jobTitle,
-          website: contact.website,
-          address: contact.address,
-        }),
+      const response = await apiRequest('POST', '/api/hubspot/sync', {
+        email: contact.email,
+        firstname,
+        lastname,
+        phone: contact.phone,
+        company: contact.companyName,
+        jobtitle: contact.jobTitle,
+        website: contact.website,
+        address: contact.address,
       });
+      
+      const result = await response.json();
 
       if (result.success) {
         setSyncStatus('synced');
@@ -119,6 +121,7 @@ function HubSpotSyncButton({ contact, contactId }: HubSpotSyncButtonProps) {
             `Synced to HubSpot (${result.action})`,
             { hubspotId: result.hubspotId }
           );
+          onSynced?.();
         }
       } else {
         setSyncStatus('error');
@@ -163,6 +166,60 @@ function HubSpotSyncButton({ contact, contactId }: HubSpotSyncButtonProps) {
   );
 }
 
+interface QuickReminderChipsProps {
+  contactId: string;
+  onUpdate: () => void;
+}
+
+function QuickReminderChips({ contactId, onUpdate }: QuickReminderChipsProps) {
+  const { toast } = useToast();
+  const [addedChip, setAddedChip] = useState<string | null>(null);
+
+  const reminderOptions = [
+    { label: "Tomorrow", days: 1 },
+    { label: "3 days", days: 3 },
+    { label: "1 week", days: 7 },
+  ];
+
+  const handleQuickReminder = (days: number, label: string) => {
+    const dueDate = addDays(new Date(), days);
+    addReminder(contactId, `Follow up`, dueDate.toISOString());
+    setAddedChip(label);
+    onUpdate();
+    toast({
+      title: "Reminder set",
+      description: `Follow up reminder for ${format(dueDate, 'MMM d')}`,
+    });
+    setTimeout(() => setAddedChip(null), 2000);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs text-muted-foreground flex items-center gap-1">
+        <Bell className="w-3 h-3" />
+        Quick Reminder
+      </div>
+      <div className="flex gap-2">
+        {reminderOptions.map((opt) => (
+          <Button
+            key={opt.label}
+            variant={addedChip === opt.label ? "default" : "outline"}
+            size="sm"
+            onClick={() => handleQuickReminder(opt.days, opt.label)}
+            className="flex-1 gap-1"
+            data-testid={`button-reminder-${opt.days}d`}
+          >
+            {addedChip === opt.label ? (
+              <Check className="w-3 h-3" />
+            ) : null}
+            {opt.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ScanTab({
   viewingContact,
   onBackToContacts,
@@ -193,7 +250,6 @@ export function ScanTab({
   const [isEditingEventName, setIsEditingEventName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
-  const [contactDetailTab, setContactDetailTab] = useState<"details" | "actions" | "timeline">("details");
   const [v2RefreshKey, setV2RefreshKey] = useState(0);
   
   // Batch scan state
@@ -337,6 +393,12 @@ export function ScanTab({
         
         upsertContactV2(v2Contact);
         setContactV2(v2Contact);
+        
+        // Auto-fetch Company Intel if company name exists and intel not already loaded
+        if (parsedContact.companyName && !intelV2 && !intelV2Loading) {
+          const domain = parsedContact.email?.split("@")[1] || parsedContact.website || null;
+          fetchIntelV2(parsedContact.companyName, domain, parsedContact.jobTitle || null, parsedContact.address || null);
+        }
       }
       
       onContactSaved?.();
@@ -1212,6 +1274,7 @@ export function ScanTab({
                     <HubSpotSyncButton 
                       contact={editedContact} 
                       contactId={contactV2?.id}
+                      onSynced={() => setV2RefreshKey(k => k + 1)}
                     />
                   )}
                 </div>
@@ -1254,53 +1317,74 @@ export function ScanTab({
             />
           )}
 
-          {/* Actions & Timeline Tabs - show for all contacts */}
+          {/* Unified Contact Detail - Single Scrollable View */}
           {contactV2 && (
-            <Card className="glass">
-              <CardContent className="p-0">
-                <Tabs value={contactDetailTab} onValueChange={(v) => setContactDetailTab(v as typeof contactDetailTab)}>
-                  <TabsList className="w-full grid grid-cols-3 rounded-t-lg rounded-b-none">
-                    <TabsTrigger value="details" data-testid="tab-contact-details">Details</TabsTrigger>
-                    <TabsTrigger value="actions" data-testid="tab-contact-actions">Actions</TabsTrigger>
-                    <TabsTrigger value="timeline" data-testid="tab-contact-timeline">Timeline</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="details" className="p-4 space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 rounded-lg bg-muted/50 text-center">
-                        <div className="text-2xl font-bold">
-                          {contactV2.tasks?.filter(t => !t.done).length || 0}
-                        </div>
-                        <div className="text-xs text-muted-foreground">Pending Tasks</div>
+            <div className="space-y-4">
+              {/* Quick Stats & Reminder Chips */}
+              <Card className="glass">
+                <CardContent className="p-4 space-y-4">
+                  {/* Stats Row */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-2 rounded-lg bg-muted/50 text-center">
+                      <div className="text-xl font-bold">
+                        {contactV2.tasks?.filter(t => !t.done).length || 0}
                       </div>
-                      <div className="p-3 rounded-lg bg-muted/50 text-center">
-                        <div className="text-2xl font-bold">
-                          {contactV2.reminders?.filter(r => !r.done).length || 0}
-                        </div>
-                        <div className="text-xs text-muted-foreground">Active Reminders</div>
+                      <div className="text-xs text-muted-foreground">Tasks</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-muted/50 text-center">
+                      <div className="text-xl font-bold">
+                        {contactV2.reminders?.filter(r => !r.done).length || 0}
                       </div>
+                      <div className="text-xs text-muted-foreground">Reminders</div>
                     </div>
-                    <div className="text-xs text-muted-foreground text-center">
-                      Timeline: {contactV2.timeline?.length || 0} events
+                    <div className="p-2 rounded-lg bg-muted/50 text-center">
+                      <div className="text-xl font-bold">
+                        {contactV2.timeline?.length || 0}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Events</div>
                     </div>
-                  </TabsContent>
+                  </div>
                   
-                  <TabsContent value="actions" className="p-0">
-                    <ContactActionsTab 
-                      contact={contactV2} 
-                      onUpdate={() => setV2RefreshKey(k => k + 1)} 
-                    />
-                  </TabsContent>
-                  
-                  <TabsContent value="timeline" className="p-0">
-                    <ContactTimelineTab 
-                      contact={contactV2} 
-                      onUpdate={() => setV2RefreshKey(k => k + 1)} 
-                    />
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
+                  {/* Quick Reminder Chips */}
+                  <QuickReminderChips 
+                    contactId={contactV2.id} 
+                    onUpdate={() => setV2RefreshKey(k => k + 1)} 
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Actions Section */}
+              <Card className="glass">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Actions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ContactActionsTab 
+                    contact={contactV2} 
+                    onUpdate={() => setV2RefreshKey(k => k + 1)} 
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Timeline Section */}
+              <Card className="glass">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    Timeline
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ContactTimelineTab 
+                    contact={contactV2} 
+                    onUpdate={() => setV2RefreshKey(k => k + 1)} 
+                  />
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
       )}
