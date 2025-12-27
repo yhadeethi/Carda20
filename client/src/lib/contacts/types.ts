@@ -28,6 +28,7 @@ export interface ContactReminder {
 export type TimelineEventType =
   | "scan_created"
   | "note_added"
+  | "note_updated"
   | "followup_generated"
   | "reminder_set"
   | "reminder_done"
@@ -36,7 +37,8 @@ export type TimelineEventType =
   | "meeting_scheduled"
   | "event_attended"
   | "contact_merged"
-  | "contact_updated";
+  | "contact_updated"
+  | "hubspot_synced";
 
 // Timeline event
 export interface TimelineEvent {

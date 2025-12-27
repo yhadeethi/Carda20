@@ -18,13 +18,15 @@ import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage"
 import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
 import { generateId as generateTimelineId } from "@/lib/contacts/ids";
 import { getContactCountForCompany, findCompanyByName, extractDomainFromEmail, findCompanyByDomain } from "@/lib/companiesStorage";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2, Network, Layers } from "lucide-react";
-import { SiLinkedin } from "react-icons/si";
+import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2, Network, Layers, CloudUpload, Check } from "lucide-react";
+import { SiLinkedin, SiHubspot } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 import { BatchScanMode } from "@/components/batch-scan-mode";
 import { BatchReview } from "@/components/batch-review";
 import { QueuedScan, getAllQueueItems, clearBatchSession } from "@/lib/batchScanStorage";
 import { processBatchQueue } from "@/lib/batchProcessor";
+import { addTimelineEvent } from "@/lib/contacts/storage";
+import { useQuery } from "@tanstack/react-query";
 
 type ScanMode = "scan" | "paste";
 type BatchState = "idle" | "capturing" | "processing" | "reviewing";
@@ -57,6 +59,108 @@ interface ScanTabProps {
   onEventNameChange: (name: string | null) => void;
   onContactSaved?: () => void;
   onViewInOrgMap?: (companyId: string) => void;
+}
+
+interface HubSpotSyncButtonProps {
+  contact: ParsedContact;
+  contactId?: string;
+}
+
+function HubSpotSyncButton({ contact, contactId }: HubSpotSyncButtonProps) {
+  const { toast } = useToast();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'synced' | 'error'>('idle');
+
+  const { data: hubspotStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ['/api/hubspot/status'],
+  });
+
+  const handleSync = async () => {
+    if (!contact.email) {
+      toast({
+        title: "Email required",
+        description: "Contact must have an email to sync with HubSpot",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const nameParts = (contact.fullName || '').split(' ');
+      const firstname = nameParts[0] || '';
+      const lastname = nameParts.slice(1).join(' ') || '';
+
+      const result = await apiRequest('/api/hubspot/sync', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: contact.email,
+          firstname,
+          lastname,
+          phone: contact.phone,
+          company: contact.companyName,
+          jobtitle: contact.jobTitle,
+          website: contact.website,
+          address: contact.address,
+        }),
+      });
+
+      if (result.success) {
+        setSyncStatus('synced');
+        toast({
+          title: result.action === 'created' ? "Added to HubSpot" : "Updated in HubSpot",
+          description: `Contact ${result.action} successfully`,
+        });
+        
+        if (contactId) {
+          addTimelineEvent(
+            contactId,
+            'hubspot_synced',
+            `Synced to HubSpot (${result.action})`,
+            { hubspotId: result.hubspotId }
+          );
+        }
+      } else {
+        setSyncStatus('error');
+        toast({
+          title: "Sync failed",
+          description: result.error || "Failed to sync with HubSpot",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      setSyncStatus('error');
+      toast({
+        title: "Sync failed",
+        description: error.message || "Failed to sync with HubSpot",
+        variant: "destructive",
+      });
+    }
+    setIsSyncing(false);
+  };
+
+  if (!hubspotStatus?.connected) {
+    return null;
+  }
+
+  return (
+    <Button
+      variant={syncStatus === 'synced' ? "default" : "outline"}
+      onClick={handleSync}
+      disabled={isSyncing}
+      className="gap-1.5"
+      data-testid="button-hubspot-sync"
+    >
+      {isSyncing ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : syncStatus === 'synced' ? (
+        <Check className="w-4 h-4" />
+      ) : (
+        <SiHubspot className="w-4 h-4 text-[#FF7A59]" />
+      )}
+      {syncStatus === 'synced' ? 'Synced' : 'HubSpot'}
+    </Button>
+  );
 }
 
 export function ScanTab({
@@ -1095,14 +1199,22 @@ export function ScanTab({
               )}
 
               <div className="pt-4 flex flex-col gap-2">
-                <Button
-                  onClick={handleDownloadVCard}
-                  className="w-full"
-                  data-testid="button-download-vcard"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download vCard
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleDownloadVCard}
+                    className="flex-1"
+                    data-testid="button-download-vcard"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download vCard
+                  </Button>
+                  {editedContact?.email && (
+                    <HubSpotSyncButton 
+                      contact={editedContact} 
+                      contactId={contactV2?.id}
+                    />
+                  )}
+                </div>
                 
                 {editedContact?.companyName && !intelV2 && !intelV2Loading && !intelV2Error && (
                   <Button

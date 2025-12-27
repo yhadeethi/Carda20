@@ -10,6 +10,7 @@ import { CompanyIntelV2, HeadcountRange } from "@shared/schema";
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
+import { isHubSpotConnected, syncContactToHubSpot } from "./hubspotService";
 
 const contactInputSchema = z.object({
   fullName: z.string().nullable().optional(),
@@ -384,6 +385,43 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error boosting company intel:", error);
       res.status(500).json({ error: "Failed to boost company intel" });
+    }
+  });
+
+  app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const connected = await isHubSpotConnected();
+      res.json({ connected });
+    } catch (error) {
+      console.error("Error checking HubSpot status:", error);
+      res.json({ connected: false });
+    }
+  });
+
+  app.post("/api/hubspot/sync", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { email, firstname, lastname, phone, company, jobtitle, website, city, address } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ success: false, error: "Email is required" });
+      }
+
+      const result = await syncContactToHubSpot({
+        email,
+        firstname,
+        lastname,
+        phone,
+        company,
+        jobtitle,
+        website,
+        city,
+        address,
+      });
+
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error syncing to HubSpot:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to sync with HubSpot" });
     }
   });
 
