@@ -317,7 +317,14 @@ export default function HomePage() {
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <EventsHub />
+              <EventsHub 
+                onScanAtEvent={(eventName) => {
+                  setCurrentEventName(eventName);
+                  setEventModeEnabled(true);
+                  setActiveTab("scan");
+                  setViewMode("scan");
+                }}
+              />
             </motion.div>
           )}
         </AnimatePresence>

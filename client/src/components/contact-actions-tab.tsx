@@ -527,7 +527,7 @@ export function ContactActionsTab({ contact, onUpdate }: ContactActionsTabProps)
                       <Label className="text-xs text-muted-foreground">Message</Label>
                       <p className="text-sm whitespace-pre-wrap">{generatedFollowUp.body}</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -537,6 +537,37 @@ export function ContactActionsTab({ contact, onUpdate }: ContactActionsTabProps)
                         <Copy className="w-4 h-4 mr-2" />
                         Copy
                       </Button>
+                      {contact.email && followUpMode !== 'linkedin_message' && (
+                        <Button
+                          size="sm"
+                          asChild
+                          data-testid="button-send-email"
+                        >
+                          <a 
+                            href={`mailto:${contact.email}?subject=${encodeURIComponent(generatedFollowUp.subject || '')}&body=${encodeURIComponent(generatedFollowUp.body)}`}
+                          >
+                            <Mail className="w-4 h-4 mr-2" />
+                            Send via Email
+                          </a>
+                        </Button>
+                      )}
+                      {followUpMode === 'linkedin_message' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          asChild
+                          data-testid="button-open-linkedin"
+                        >
+                          <a 
+                            href={contact.linkedinUrl || `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(`${contact.name} ${contact.company || ''}`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <SiLinkedin className="w-4 h-4 mr-2" />
+                            Open LinkedIn
+                          </a>
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

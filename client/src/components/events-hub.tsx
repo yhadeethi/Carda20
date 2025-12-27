@@ -33,6 +33,10 @@ import {
   StickyNote,
   Sparkles,
   Shield,
+  Bell,
+  BellOff,
+  Camera,
+  Users,
 } from "lucide-react";
 import {
   EventItem,
@@ -46,9 +50,11 @@ import {
   setEventPinned,
   setEventAttending,
   setEventNote,
+  setEventReminder,
   EventUserPrefs,
   getAllEventPrefs,
 } from "@/lib/eventsStorage";
+import { loadContacts } from "@/lib/contactsStorage";
 
 const industryIcons: Record<EventIndustryId, typeof Sun> = {
   renewable: Sun,
@@ -60,11 +66,24 @@ interface EventCardProps {
   event: EventItem;
   prefs: EventUserPrefs;
   onPrefsChange: () => void;
+  contactCount: number;
+  onScanHere?: (eventName: string) => void;
 }
 
-function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
+function EventCard({ event, prefs, onPrefsChange, contactCount, onScanHere }: EventCardProps) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState(prefs.note);
+
+  const handleToggleReminder = () => {
+    setEventReminder(event.id, !prefs.reminderSet);
+    onPrefsChange();
+  };
+
+  const handleScanHere = () => {
+    if (onScanHere) {
+      onScanHere(event.name);
+    }
+  };
 
   useEffect(() => {
     if (noteOpen) {
@@ -227,6 +246,17 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <Button
+            size="sm"
+            variant={prefs.reminderSet ? "default" : "outline"}
+            onClick={handleToggleReminder}
+            className="h-8 text-xs gap-1"
+            data-testid={`event-reminder-${event.id}`}
+          >
+            {prefs.reminderSet ? <BellOff className="w-3 h-3" /> : <Bell className="w-3 h-3" />}
+            {prefs.reminderSet ? 'Reminder On' : 'Remind Me'}
+          </Button>
+
           <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
             <DialogTrigger asChild>
               <Button
@@ -267,7 +297,7 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 text-xs gap-1 ml-auto"
+              className="h-8 text-xs gap-1"
               asChild
               data-testid={`event-website-${event.id}`}
             >
@@ -278,6 +308,33 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
             </Button>
           )}
         </div>
+
+        {prefs.attending === 'yes' && onScanHere && (
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <Button
+              size="sm"
+              onClick={handleScanHere}
+              className="flex-1 h-9 gap-2"
+              data-testid={`event-scan-here-${event.id}`}
+            >
+              <Camera className="w-4 h-4" />
+              Scan at this Event
+            </Button>
+            {contactCount > 0 && (
+              <Badge variant="secondary" className="h-9 px-3 text-sm gap-1.5" data-testid={`event-contact-count-${event.id}`}>
+                <Users className="w-3.5 h-3.5" />
+                {contactCount} contact{contactCount !== 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {contactCount > 0 && prefs.attending !== 'yes' && (
+          <div className="flex items-center gap-1.5 pt-2 text-xs text-muted-foreground" data-testid={`event-contact-count-${event.id}`}>
+            <Users className="w-3 h-3" />
+            You met {contactCount} contact{contactCount !== 1 ? 's' : ''} at this event
+          </div>
+        )}
 
         {event.source === 'curated' && (
           <p className="text-[10px] text-muted-foreground/70 mt-2" data-testid={`event-reliability-${event.id}`}>
@@ -294,13 +351,22 @@ function EventCard({ event, prefs, onPrefsChange }: EventCardProps) {
   );
 }
 
-export function EventsHub() {
+interface EventsHubProps {
+  onScanAtEvent?: (eventName: string) => void;
+}
+
+export function EventsHub({ onScanAtEvent }: EventsHubProps) {
   const [selectedIndustry, setSelectedIndustry] = useState<EventIndustryId>('renewable');
   const [allPrefs, setAllPrefs] = useState(() => getAllEventPrefs());
+  const [contacts] = useState(() => loadContacts());
 
   const refreshPrefs = useCallback(() => {
     setAllPrefs(getAllEventPrefs());
   }, []);
+
+  const getContactCountForEvent = useCallback((eventName: string) => {
+    return contacts.filter(c => c.eventName === eventName).length;
+  }, [contacts]);
 
   const getSortedEventsForIndustry = useCallback((industryId: EventIndustryId) => {
     const events = sortEventsByDate(getEventsByIndustry(industryId));
@@ -355,8 +421,10 @@ export function EventsHub() {
                   <EventCard
                     key={event.id}
                     event={event}
-                    prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '' }}
+                    prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '', reminderSet: false, reminderDismissed: false }}
                     onPrefsChange={refreshPrefs}
+                    contactCount={getContactCountForEvent(event.name)}
+                    onScanHere={onScanAtEvent}
                   />
                 ))
               )}
