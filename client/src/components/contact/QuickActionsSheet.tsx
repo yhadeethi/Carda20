@@ -24,18 +24,23 @@ interface QuickActionsSheetProps {
   actions: QuickAction[];
 }
 
-export function QuickActionsSheet({ open, onOpenChange, actions }: QuickActionsSheetProps) {
+export function QuickActionsSheet({
+  open,
+  onOpenChange,
+  actions,
+}: QuickActionsSheetProps) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="bg-background/60 backdrop-blur-2xl border border-white/10 rounded-t-2xl">
         <DrawerHeader className="flex items-center justify-between">
           <DrawerTitle>Quick Actions</DrawerTitle>
           <DrawerClose asChild>
-            <Button size="icon" variant="ghost">
+            <Button size="icon" variant="ghost" type="button">
               <X className="w-4 h-4" />
             </Button>
           </DrawerClose>
         </DrawerHeader>
+
         <div className="px-4 pb-8">
           <div
             className="grid grid-cols-2 md:grid-cols-3 gap-3"
@@ -44,9 +49,19 @@ export function QuickActionsSheet({ open, onOpenChange, actions }: QuickActionsS
             {actions.map((action) => (
               <button
                 key={action.id}
+                type="button"
                 onClick={() => {
-                  action.onClick();
+                  // Close this sheet first (Radix drawers can conflict if you open another drawer immediately)
                   onOpenChange(false);
+
+                  // Run the action after the drawer starts closing so follow-up/intel/meeting drawers actually open
+                  setTimeout(() => {
+                    try {
+                      action.onClick();
+                    } catch (err) {
+                      console.error("[QuickActionsSheet] action failed:", action.id, err);
+                    }
+                  }, 80);
                 }}
                 className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-muted/30 hover-elevate active-elevate-2 transition-all min-h-[100px]"
                 data-testid={`action-tile-${action.id}`}
@@ -54,7 +69,11 @@ export function QuickActionsSheet({ open, onOpenChange, actions }: QuickActionsS
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                   {action.icon}
                 </div>
-                <span className="text-sm font-medium text-center">{action.label}</span>
+
+                <span className="text-sm font-medium text-center">
+                  {action.label}
+                </span>
+
                 {action.status && (
                   <Badge
                     variant="secondary"
