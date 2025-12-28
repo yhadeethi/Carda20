@@ -53,6 +53,8 @@ export default function HomePage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
+
+  const showBottomNav = viewMode !== "contact-detail";
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [companyDetailTab, setCompanyDetailTab] = useState<'contacts' | 'orgmap' | 'notes'>('orgmap');
@@ -340,6 +342,7 @@ export default function HomePage() {
       </main>
 
       {/* Bottom Navigation Bar - iOS Photos style morph on scroll */}
+      {showBottomNav && (
       <nav 
         className={`fixed inset-x-0 bottom-0 z-30 flex justify-center transition-all duration-300 ease-out ${
           isHidden ? "translate-y-full opacity-0" : "translate-y-0 opacity-100"
@@ -387,6 +390,7 @@ export default function HomePage() {
           })}
         </div>
       </nav>
+      )}
     </div>
   );
 }

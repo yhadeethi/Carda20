@@ -1,4 +1,4 @@
-import { Phone, Mail, Globe, ChevronRight, ExternalLink, MoreHorizontal } from "lucide-react";
+import { Phone, Mail, Globe, ChevronRight, ExternalLink, MoreHorizontal, MapPin } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ export interface Contact {
   email?: string;
   website?: string;
   linkedinUrl?: string;
+  address?: string;
   lastTouchedAt?: string | Date;
   scannedAt?: string | Date;
   syncedToHubspot?: boolean;
@@ -76,8 +77,12 @@ function getLinkedInSearchUrl(contact: Contact): string {
   return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(searchTerms)}`;
 }
 
+function getMapsUrl(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
 interface ActionRowProps {
-  icon: typeof Phone;
+  icon: React.ComponentType<{ className?: string }>;
   iconClassName?: string;
   label: string;
   value: string;
@@ -142,6 +147,19 @@ export function ContactHeroCard({
     });
   }
 
+  if (contact.address) {
+    rows.push({
+      icon: MapPin,
+      iconClassName: "text-orange-500",
+      label: "Address",
+      value: contact.address,
+      onClick: () => {
+        window.open(getMapsUrl(contact.address!), "_blank", "noopener,noreferrer");
+      },
+      external: true,
+    });
+  }
+
   if (contact.linkedinUrl) {
     rows.push({
       icon: SiLinkedin,
@@ -175,8 +193,8 @@ export function ContactHeroCard({
     });
   }
 
-  const visibleRows = rows.slice(0, 4);
-  const hasMore = rows.length > 4;
+  const visibleRows = rows.slice(0, 5);
+  const hasMore = rows.length > 5;
 
   return (
     <div
@@ -192,11 +210,11 @@ export function ContactHeroCard({
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold truncate" data-testid="text-hero-name">
+            <h2 className="text-xl font-semibold leading-tight" data-testid="text-hero-name">
               {displayName}
             </h2>
             {roleCompany && (
-              <p className="text-sm text-muted-foreground truncate" data-testid="text-hero-role">
+              <p className="text-sm text-muted-foreground leading-snug" data-testid="text-hero-role">
                 {roleCompany}
               </p>
             )}
