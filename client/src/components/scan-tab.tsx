@@ -23,6 +23,7 @@ import { SiLinkedin, SiHubspot } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 import { BatchScanMode } from "@/components/batch-scan-mode";
 import { BatchReview } from "@/components/batch-review";
+import { ContactDetailView } from "@/components/contact";
 import { QueuedScan, getAllQueueItems, clearBatchSession } from "@/lib/batchScanStorage";
 import { processBatchQueue } from "@/lib/batchProcessor";
 import { addTimelineEvent, addReminder } from "@/lib/contacts/storage";
@@ -60,6 +61,7 @@ interface ScanTabProps {
   onEventModeChange: (enabled: boolean) => void;
   onEventNameChange: (name: string | null) => void;
   onContactSaved?: () => void;
+  onContactUpdated?: (contactId: string) => void;
   onViewInOrgMap?: (companyId: string) => void;
 }
 
@@ -229,6 +231,7 @@ export function ScanTab({
   onEventModeChange,
   onEventNameChange,
   onContactSaved,
+  onContactUpdated,
   onViewInOrgMap,
 }: ScanTabProps) {
   const { toast } = useToast();
@@ -975,28 +978,31 @@ export function ScanTab({
         </Card>
       )}
 
-      {(contact || isViewingFromHub) && (
+      {/* iOS-style Contact Detail View when viewing from hub */}
+      {isViewingFromHub && viewingContact && onBackToContacts && (
+        <ContactDetailView
+          contact={viewingContact}
+          contactV2={contactV2}
+          onBack={onBackToContacts}
+          onDelete={onDeleteContact}
+          onUpdate={() => setV2RefreshKey(k => k + 1)}
+          onContactUpdated={onContactUpdated}
+          onDownloadVCard={handleDownloadVCard}
+          onViewInOrgMap={onViewInOrgMap}
+          companyId={companyIdForContact}
+        />
+      )}
+
+      {/* Original scan result UI for newly scanned contacts */}
+      {contact && !isViewingFromHub && (
         <div className="space-y-4">
           <Card className="glass">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                {isViewingFromHub && onBackToContacts ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onBackToContacts}
-                    className="gap-1 -ml-2"
-                    data-testid="button-back-to-contacts"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to Contacts
-                  </Button>
-                ) : (
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                    Contact Extracted
-                  </CardTitle>
-                )}
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  Contact Extracted
+                </CardTitle>
                 <div className="flex items-center gap-1">
                   <Button
                     size="sm"
@@ -1006,17 +1012,6 @@ export function ScanTab({
                   >
                     {isEditing ? "Done" : "Edit"}
                   </Button>
-                  {isViewingFromHub && viewingContact && onDeleteContact && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="text-muted-foreground hover:text-destructive"
-                      data-testid="button-delete-contact-detail"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1291,16 +1286,14 @@ export function ScanTab({
                   </Button>
                 )}
                 
-                {!isViewingFromHub && (
-                  <Button
-                    onClick={resetFlow}
-                    variant="ghost"
-                    className="w-full"
-                    data-testid="button-new-scan"
-                  >
-                    Scan Another Card
-                  </Button>
-                )}
+                <Button
+                  onClick={resetFlow}
+                  variant="ghost"
+                  className="w-full"
+                  data-testid="button-new-scan"
+                >
+                  Scan Another Card
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -1315,76 +1308,6 @@ export function ScanTab({
               onBoost={boostIntelV2}
               companyName={editedContact?.companyName}
             />
-          )}
-
-          {/* Unified Contact Detail - Single Scrollable View */}
-          {contactV2 && (
-            <div className="space-y-4">
-              {/* Quick Stats & Reminder Chips */}
-              <Card className="glass">
-                <CardContent className="p-4 space-y-4">
-                  {/* Stats Row */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="p-2 rounded-lg bg-muted/50 text-center">
-                      <div className="text-xl font-bold">
-                        {contactV2.tasks?.filter(t => !t.done).length || 0}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Tasks</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-muted/50 text-center">
-                      <div className="text-xl font-bold">
-                        {contactV2.reminders?.filter(r => !r.done).length || 0}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Reminders</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-muted/50 text-center">
-                      <div className="text-xl font-bold">
-                        {contactV2.timeline?.length || 0}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Events</div>
-                    </div>
-                  </div>
-                  
-                  {/* Quick Reminder Chips */}
-                  <QuickReminderChips 
-                    contactId={contactV2.id} 
-                    onUpdate={() => setV2RefreshKey(k => k + 1)} 
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Actions Section */}
-              <Card className="glass">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ContactActionsTab 
-                    contact={contactV2} 
-                    onUpdate={() => setV2RefreshKey(k => k + 1)} 
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Timeline Section */}
-              <Card className="glass">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Timeline
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ContactTimelineTab 
-                    contact={contactV2} 
-                    onUpdate={() => setV2RefreshKey(k => k + 1)} 
-                  />
-                </CardContent>
-              </Card>
-            </div>
           )}
         </div>
       )}

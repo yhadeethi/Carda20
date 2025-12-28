@@ -143,6 +143,14 @@ export default function HomePage() {
     setActiveTab("contacts");
   }, [refreshContacts]);
 
+  const handleContactUpdated = useCallback((contactId: string) => {
+    const freshContact = loadContacts().find(c => c.id === contactId);
+    if (freshContact) {
+      setSelectedContact(freshContact);
+    }
+    refreshContacts();
+  }, [refreshContacts]);
+
   const tabs = [
     { id: "scan" as TabMode, label: "Scan", icon: Camera },
     { id: "contacts" as TabMode, label: "Network", icon: Users },
@@ -289,6 +297,7 @@ export default function HomePage() {
                 onEventModeChange={setEventModeEnabled}
                 onEventNameChange={setCurrentEventName}
                 onContactSaved={refreshContacts}
+                onContactUpdated={handleContactUpdated}
                 onViewInOrgMap={(companyId) => handleSelectCompany(companyId, 'orgmap')}
               />
             </motion.div>

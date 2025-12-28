@@ -5,3 +5,4 @@ export { QuickActionsSheet } from "./QuickActionsSheet";
 export type { QuickAction } from "./QuickActionsSheet";
 export { TimelineFeed } from "./TimelineFeed";
 export type { TimelineItem, TimelineEventType } from "./TimelineFeed";
+export { ContactDetailView } from "./ContactDetailView";
