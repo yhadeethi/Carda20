@@ -30,6 +30,7 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Org Intelligence v3**: Auto-generates companies from contact data, enables organizational mapping with departments, roles, and manager assignments, and provides an interactive Org Map.
 -   **Smart Follow-Up**: AI-powered generation of personalized follow-up messages (email, LinkedIn) with tone and length selection, integrated with task and reminder management.
 -   **Contact Timeline**: Comprehensive history of interactions with each contact, supporting various event types and filtering.
+-   **ContactDetailView (iOS-style)**: Dedicated contact detail page with digital business card hero, sticky bottom bar with quick actions, timeline feed, and inline editing. Uses a callback pattern where `onContactUpdated(contactId)` fires only after confirmed persistence to localStorage.
 -   **Duplicate Detection & Merge**: Fuzzy matching and scoring for contact deduplication, with a side-by-side merge UI and undo support.
 -   **Calendar Integration**: Generates ICS files for meeting invites with customizable dates, times, and durations.
 -   **Batch Scanning (Event Mode)**: Multi-photo capture mode that queues business cards for background processing. Users can snap multiple cards quickly, then process all at once with a review/approve workflow before saving.
