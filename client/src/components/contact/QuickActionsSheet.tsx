@@ -24,64 +24,73 @@ interface QuickActionsSheetProps {
   actions: QuickAction[];
 }
 
-export function QuickActionsSheet({
-  open,
-  onOpenChange,
-  actions,
-}: QuickActionsSheetProps) {
+export function QuickActionsSheet({ open, onOpenChange, actions }: QuickActionsSheetProps) {
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="bg-background/60 backdrop-blur-2xl border border-white/10 rounded-t-2xl">
-        <DrawerHeader className="flex items-center justify-between">
+    <Drawer open={open} onOpenChange={onOpenChange} repositionInputs>
+      <DrawerContent className="rounded-t-3xl" data-testid="quick-actions-sheet">
+        <DrawerHeader className="flex items-center justify-between text-left">
           <DrawerTitle>Quick Actions</DrawerTitle>
           <DrawerClose asChild>
-            <Button size="icon" variant="ghost" type="button">
+            <Button size="icon" variant="ghost" type="button" className="rounded-full">
               <X className="w-4 h-4" />
             </Button>
           </DrawerClose>
         </DrawerHeader>
 
-        <div className="px-4 pb-8">
-          <div
-            className="grid grid-cols-2 md:grid-cols-3 gap-3"
-            data-testid="quick-actions-grid"
-          >
+        <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+24px)]">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3" data-testid="quick-actions-grid">
             {actions.map((action) => (
               <button
                 key={action.id}
                 type="button"
                 onClick={() => {
-                  // Close this sheet first (Radix drawers can conflict if you open another drawer immediately)
                   onOpenChange(false);
-
-                  // Run the action after the drawer starts closing so follow-up/intel/meeting drawers actually open
                   setTimeout(() => {
                     try {
                       action.onClick();
                     } catch (err) {
                       console.error("[QuickActionsSheet] action failed:", action.id, err);
                     }
-                  }, 80);
+                  }, 120);
                 }}
-                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-muted/30 hover-elevate active-elevate-2 transition-all min-h-[100px]"
+                className={[
+                  "group relative overflow-hidden",
+                  "flex flex-col items-center justify-center gap-2.5",
+                  "p-4 rounded-2xl min-h-[104px]",
+                  "border border-white/10",
+                  "bg-white/8 dark:bg-white/5",
+                  "backdrop-blur-2xl shadow-sm",
+                  "transition-all active:scale-[0.985]",
+                  "hover:bg-white/12 dark:hover:bg-white/8",
+                ].join(" ")}
                 data-testid={`action-tile-${action.id}`}
               >
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <div
+                  className={[
+                    "w-11 h-11 rounded-2xl",
+                    "border border-white/12",
+                    "bg-white/10 dark:bg-white/6",
+                    "backdrop-blur-xl",
+                    "flex items-center justify-center",
+                    "text-foreground/90",
+                    "transition-all group-hover:scale-[1.03]",
+                  ].join(" ")}
+                >
                   {action.icon}
                 </div>
 
-                <span className="text-sm font-medium text-center">
+                <span className="text-sm font-semibold text-center leading-tight">
                   {action.label}
                 </span>
 
                 {action.status && (
                   <Badge
                     variant="secondary"
-                    className={`text-xs ${
+                    className={
                       action.status.includes("Synced")
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                        : "bg-muted text-muted-foreground"
-                    }`}
+                        ? "bg-foreground/10 text-foreground text-xs"
+                        : "bg-foreground/5 text-muted-foreground text-xs"
+                    }
                   >
                     {action.status}
                   </Badge>

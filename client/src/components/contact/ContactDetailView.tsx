@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
@@ -94,12 +94,19 @@ interface ContactDetailViewProps {
 
 function toDatetimeLocalValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
 }
 
 function buildFollowUpCopyText(res: FollowUpResponse): string {
   const subject = res.subject ? `Subject: ${res.subject}\n\n` : "";
   return `${subject}${res.body}`.trim();
+}
+
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 export function ContactDetailView({
@@ -110,9 +117,9 @@ export function ContactDetailView({
   onUpdate,
   onContactUpdated,
   onDownloadVCard,
-  companyId,
 }: ContactDetailViewProps) {
   const { toast } = useToast();
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -145,7 +152,9 @@ export function ContactDetailView({
   // Meeting drawer state
   const quickSlots = useMemo(() => getQuickTimeSlots(), []);
   const [showMeeting, setShowMeeting] = useState(false);
-  const [meetingStart, setMeetingStart] = useState<Date>(() => quickSlots[0]?.getTime() || new Date());
+  const [meetingStart, setMeetingStart] = useState<Date>(
+    () => quickSlots[0]?.getTime?.() ?? new Date()
+  );
   const [meetingDuration, setMeetingDuration] = useState<number>(30);
 
   // Intel drawer state
@@ -211,6 +220,18 @@ export function ContactDetailView({
     return a.length ? a : null;
   }, [editedFields.address, contact.address]);
 
+  const scrollFieldIntoView = useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    // iOS keyboard + fixed drawers: force visibility
+    requestAnimationFrame(() => {
+      try {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      } catch {
+        // ignore
+      }
+    });
+  }, []);
+
   const handleSaveEdits = async () => {
     setIsSavingEdits(true);
     try {
@@ -251,9 +272,7 @@ export function ContactDetailView({
   };
 
   const handleOpenLinkedIn = () => {
-    if (contact.linkedinUrl) {
-      window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
-    }
+    if (contact.linkedinUrl) window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleAddNote = async (text: string) => {
@@ -322,6 +341,63 @@ export function ContactDetailView({
     setIsSyncingHubspot(false);
   };
 
+  const openFollowUpTarget = async (res: FollowUpResponse) => {
+    const text = buildFollowUpCopyText(res);
+    const mode = String(followUpMode);
+
+    // Best-effort detection without relying on exact enum names
+    const wantsEmail = mode.includes("email");
+    const wantsSms = mode.includes("sms") || mode.includes("text");
+    const wantsLinkedin = mode.includes("linkedin");
+
+    if (wantsEmail) {
+      const to = contact.email || "";
+      const subject = res.subject || "Follow-up";
+      const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
+        subject
+      )}&body=${encodeURIComponent(res.body)}`;
+
+      window.location.href = mailto;
+      toast({ title: "Opening email draft…" });
+      setShowFollowUp(false);
+      return;
+    }
+
+    if (wantsSms) {
+      if (!contact.phone) {
+        await navigator.clipboard.writeText(text);
+        toast({
+          title: "Copied",
+          description: "No phone number found. I copied the message so you can paste it.",
+        });
+        return;
+      }
+      const joiner = isIOS() ? "&" : "?";
+      const sms = `sms:${encodeURIComponent(contact.phone)}${joiner}body=${encodeURIComponent(
+        res.body
+      )}`;
+      window.location.href = sms;
+      toast({ title: "Opening message draft…" });
+      setShowFollowUp(false);
+      return;
+    }
+
+    if (wantsLinkedin) {
+      // LinkedIn doesn’t reliably support prefilled body via URL. Open profile + copy text.
+      if (contact.linkedinUrl) window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Copied",
+        description: "Opened LinkedIn (if available) and copied the draft to paste.",
+      });
+      return;
+    }
+
+    // fallback: copy
+    await navigator.clipboard.writeText(text);
+    toast({ title: "Copied", description: "Draft copied to clipboard." });
+  };
+
   const handleGenerateFollowUp = async () => {
     if (!followUpGoal.trim()) {
       toast({
@@ -334,6 +410,7 @@ export function ContactDetailView({
 
     setIsGeneratingFollowUp(true);
     setFollowUpResult(null);
+
     try {
       const res = await generateFollowUp(
         {
@@ -352,10 +429,22 @@ export function ContactDetailView({
       );
 
       setFollowUpResult(res);
-      addTimelineEvent(contact.id, "followup_generated", `Follow-up generated (${FOLLOWUP_MODE_LABELS[followUpMode]})`, {
-        bodyPreview: res.body.slice(0, 160),
-      });
+
+      addTimelineEvent(
+        contact.id,
+        "followup_generated",
+        `Follow-up generated (${FOLLOWUP_MODE_LABELS[followUpMode]})`,
+        { bodyPreview: res.body.slice(0, 160) }
+      );
       onUpdate();
+
+      // Auto-open the target composer (email/SMS/LinkedIn) as requested
+      // (If it fails, user still sees the text + can Copy)
+      try {
+        await openFollowUpTarget(res);
+      } catch (autoErr) {
+        console.warn("[ContactDetailView] Auto-open followup target failed:", autoErr);
+      }
     } catch (e) {
       console.error("[ContactDetailView] Follow-up generation failed:", e);
       toast({ title: "Failed to generate follow-up", variant: "destructive" });
@@ -401,7 +490,7 @@ export function ContactDetailView({
     setShowMeeting(false);
   };
 
-  const openIntel = async (forceRefresh = false) => {
+  const openIntel = async (forceRefresh?: boolean) => {
     if (!companyNameForIntel && !domainForIntel) {
       toast({
         title: "Company required",
@@ -412,7 +501,16 @@ export function ContactDetailView({
     }
 
     setShowIntel(true);
-    await intelV2.fetchIntel(companyNameForIntel, domainForIntel, roleForIntel, addressForIntel, forceRefresh);
+
+    // If intel is missing news due to caching or partial fetch, force refresh on open.
+    const shouldForce = forceRefresh ?? !intelV2.intel;
+    await intelV2.fetchIntel(
+      companyNameForIntel,
+      domainForIntel,
+      roleForIntel,
+      addressForIntel,
+      shouldForce
+    );
   };
 
   const quickActions: QuickAction[] = useMemo(() => {
@@ -433,7 +531,11 @@ export function ContactDetailView({
         onClick: () => {
           const dueDate = new Date();
           dueDate.setDate(dueDate.getDate() + 3);
-          addReminder(contact.id, `Follow up with ${contact.name || "this contact"}`, dueDate.toISOString());
+          addReminder(
+            contact.id,
+            `Follow up with ${contact.name || "this contact"}`,
+            dueDate.toISOString()
+          );
           onUpdate();
           toast({ title: "Reminder set for 3 days" });
         },
@@ -442,17 +544,13 @@ export function ContactDetailView({
         id: "meeting",
         label: "Schedule Meeting",
         icon: <Calendar className="w-5 h-5" />,
-        onClick: () => {
-          setShowMeeting(true);
-        },
+        onClick: () => setShowMeeting(true),
       },
       {
         id: "intel",
         label: "Company Brief",
         icon: <Briefcase className="w-5 h-5" />,
-        onClick: () => {
-          void openIntel(false);
-        },
+        onClick: () => void openIntel(undefined),
       },
     ];
 
@@ -473,26 +571,16 @@ export function ContactDetailView({
       icon: <StickyNote className="w-5 h-5" />,
       onClick: () => {
         setTimeout(() => {
-          const el = document.querySelector('[data-testid="input-add-note"]') as HTMLTextAreaElement | null;
+          const el = document.querySelector(
+            '[data-testid="input-add-note"]'
+          ) as HTMLTextAreaElement | null;
           el?.focus();
-        }, 60);
+        }, 80);
       },
     });
 
     return actions;
-  }, [
-    contact.id,
-    contact.name,
-    contactV2,
-    hubspotStatus,
-    toast,
-    companyNameForIntel,
-    domainForIntel,
-    roleForIntel,
-    addressForIntel,
-    intelV2,
-    onUpdate,
-  ]);
+  }, [contact.id, contact.name, contactV2, hubspotStatus, toast, onUpdate]);
 
   return (
     <div className="flex flex-col min-h-full pb-24" data-testid="contact-detail-view">
@@ -620,7 +708,6 @@ export function ContactDetailView({
         </div>
       ) : (
         <>
-          {/* Hero Card */}
           <ContactHeroCard
             contact={heroContact}
             onCall={handleCall}
@@ -629,9 +716,12 @@ export function ContactDetailView({
             onOpenLinkedIn={handleOpenLinkedIn}
           />
 
-          {/* Timeline Feed */}
           <div className="mt-6">
-            <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} />
+            <TimelineFeed
+              items={timelineItems}
+              onAddNote={handleAddNote}
+              isAddingNote={isAddingNote}
+            />
           </div>
         </>
       )}
@@ -664,65 +754,30 @@ export function ContactDetailView({
       <QuickActionsSheet open={showQuickActions} onOpenChange={setShowQuickActions} actions={quickActions} />
 
       {/* Follow-up Drawer */}
-        <Drawer open={showFollowUp} handleOnly onOpenChange={setShowFollowUp}>
-          <DrawerContent className="bg-background/60 backdrop-blur-2xl border border-white/10 rounded-t-2xl h-[85vh] max-h-[85vh] overflow-hidden flex flex-col">
-            <DrawerHeader>
-              <DrawerTitle>Follow-up Generator</DrawerTitle>
-            </DrawerHeader>
+      <Drawer open={showFollowUp} onOpenChange={setShowFollowUp} repositionInputs>
+        <DrawerContent
+          className="rounded-t-3xl max-h-[85dvh] overflow-hidden flex flex-col"
+          data-testid="drawer-followup"
+        >
+          <DrawerHeader className="flex items-center justify-between text-left">
+            <DrawerTitle>Follow-up Generator</DrawerTitle>
+            <DrawerClose asChild>
+              <Button size="icon" variant="ghost" className="rounded-full">
+                <X className="w-4 h-4" />
+              </Button>
+            </DrawerClose>
+          </DrawerHeader>
 
-            {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Mode</Label>
-                  <Select
-                    value={followUpMode}
-                    onValueChange={(v) => setFollowUpMode(v as FollowUpMode)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(FOLLOWUP_MODE_LABELS).map(([k, label]) => (
-                        <SelectItem key={k} value={k}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Tone</Label>
-                  <Select
-                    value={followUpTone}
-                    onValueChange={(v) => setFollowUpTone(v as FollowUpTone)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Tone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(FOLLOWUP_TONE_LABELS).map(([k, label]) => (
-                        <SelectItem key={k} value={k}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
+          <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Length</Label>
-                <Select
-                  value={followUpLength}
-                  onValueChange={(v) => setFollowUpLength(v as FollowUpLength)}
-                >
+                <Label className="text-xs text-muted-foreground">Mode</Label>
+                <Select value={followUpMode} onValueChange={(v) => setFollowUpMode(v as FollowUpMode)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Length" />
+                    <SelectValue placeholder="Mode" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(FOLLOWUP_LENGTH_LABELS).map(([k, label]) => (
+                    {Object.entries(FOLLOWUP_MODE_LABELS).map(([k, label]) => (
                       <SelectItem key={k} value={k}>
                         {label}
                       </SelectItem>
@@ -732,72 +787,104 @@ export function ContactDetailView({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Goal</Label>
-                <Textarea
-                  value={followUpGoal}
-                  onChange={(e) => setFollowUpGoal(e.target.value)}
-                  placeholder="e.g., book a 20-min call next week to discuss their BESS requirements"
-                  className="min-h-[80px] resize-none"
-                />
+                <Label className="text-xs text-muted-foreground">Tone</Label>
+                <Select value={followUpTone} onValueChange={(v) => setFollowUpTone(v as FollowUpTone)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(FOLLOWUP_TONE_LABELS).map(([k, label]) => (
+                      <SelectItem key={k} value={k}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Context (optional)</Label>
-                <Textarea
-                  value={followUpContext}
-                  onChange={(e) => setFollowUpContext(e.target.value)}
-                  placeholder="e.g., met at All-Energy Melbourne, discussed 2-hour BESS"
-                  className="min-h-[64px] resize-none"
-                />
-              </div>
-
-              {followUpResult && (
-                <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
-                  {followUpResult.subject && (
-                    <div className="text-sm">
-                      <span className="text-xs text-muted-foreground">Subject</span>
-                      <div className="font-medium">{followUpResult.subject}</div>
-                    </div>
-                  )}
-                  <div className="text-sm whitespace-pre-wrap">{followUpResult.body}</div>
-                </div>
-              )}
             </div>
 
-            <DrawerFooter className="gap-2">
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1 gap-2"
-                  onClick={handleGenerateFollowUp}
-                  disabled={isGeneratingFollowUp}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  {isGeneratingFollowUp ? "Generating..." : "Generate"}
-                </Button>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Length</Label>
+              <Select value={followUpLength} onValueChange={(v) => setFollowUpLength(v as FollowUpLength)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Length" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FOLLOWUP_LENGTH_LABELS).map(([k, label]) => (
+                    <SelectItem key={k} value={k}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleCopyFollowUp}
-                  disabled={!followUpResult}
-                >
-                  Copy
-                </Button>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Goal</Label>
+              <Textarea
+                value={followUpGoal}
+                onChange={(e) => setFollowUpGoal(e.target.value)}
+                onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                placeholder="e.g., book a 20-min call next week to discuss their BESS requirements"
+                className="min-h-[84px] resize-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Context (optional)</Label>
+              <Textarea
+                value={followUpContext}
+                onChange={(e) => setFollowUpContext(e.target.value)}
+                onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                placeholder="e.g., met at All-Energy Melbourne, discussed 2-hour BESS"
+                className="min-h-[72px] resize-none"
+              />
+            </div>
+
+            {followUpResult && (
+              <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
+                {followUpResult.subject && (
+                  <div className="text-sm">
+                    <span className="text-xs text-muted-foreground">Subject</span>
+                    <div className="font-medium">{followUpResult.subject}</div>
+                  </div>
+                )}
+                <div className="text-sm whitespace-pre-wrap">{followUpResult.body}</div>
               </div>
+            )}
+          </div>
 
-              <DrawerClose asChild>
-                <Button variant="ghost">Close</Button>
-              </DrawerClose>
-            </DrawerFooter>
-          </DrawerContent>
+          <DrawerFooter className="gap-2 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+            <div className="flex gap-2">
+              <Button className="flex-1 gap-2" onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp}>
+                <Sparkles className="w-4 h-4" />
+                {isGeneratingFollowUp ? "Generating..." : "Generate"}
+              </Button>
+
+              <Button variant="outline" className="flex-1" onClick={handleCopyFollowUp} disabled={!followUpResult}>
+                Copy
+              </Button>
+            </div>
+
+            <DrawerClose asChild>
+              <Button variant="ghost">Close</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
       </Drawer>
 
       {/* Meeting Drawer */}
-      <Drawer open={showMeeting} onOpenChange={setShowMeeting}>
-        <DrawerContent className="bg-background/60 backdrop-blur-2xl border border-white/10 rounded-t-2xl">
-          <DrawerHeader>
+      <Drawer open={showMeeting} onOpenChange={setShowMeeting} repositionInputs>
+        <DrawerContent className="rounded-t-3xl" data-testid="drawer-meeting">
+          <DrawerHeader className="flex items-center justify-between text-left">
             <DrawerTitle>Meeting Invite</DrawerTitle>
+            <DrawerClose asChild>
+              <Button size="icon" variant="ghost" className="rounded-full">
+                <X className="w-4 h-4" />
+              </Button>
+            </DrawerClose>
           </DrawerHeader>
+
           <div className="px-4 pb-4 space-y-4">
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Quick slots</Label>
@@ -805,7 +892,11 @@ export function ContactDetailView({
                 {quickSlots.map((s) => (
                   <Button
                     key={s.label}
-                    variant={toDatetimeLocalValue(meetingStart) === toDatetimeLocalValue(s.getTime()) ? "default" : "outline"}
+                    variant={
+                      toDatetimeLocalValue(meetingStart) === toDatetimeLocalValue(s.getTime())
+                        ? "default"
+                        : "outline"
+                    }
                     size="sm"
                     onClick={() => setMeetingStart(s.getTime())}
                     className="shrink-0"
@@ -850,7 +941,8 @@ export function ContactDetailView({
               <div className="mt-2">{meetingStart.toLocaleString()}</div>
             </div>
           </div>
-          <DrawerFooter className="gap-2">
+
+          <DrawerFooter className="gap-2 pb-[calc(env(safe-area-inset-bottom)+16px)]">
             <Button className="w-full" onClick={handleCreateMeetingInvite}>
               Download .ics invite
             </Button>
@@ -862,38 +954,45 @@ export function ContactDetailView({
       </Drawer>
 
       {/* Intel Drawer */}
-        <Drawer
-          open={showIntel}
-          handleOnly
-          onOpenChange={(v) => {
-            setShowIntel(v);
-            if (!v) intelV2.reset();
-          }}
+      <Drawer
+        open={showIntel}
+        onOpenChange={(v) => {
+          setShowIntel(v);
+          if (!v) intelV2.reset();
+        }}
+        repositionInputs
+      >
+        <DrawerContent
+          className="rounded-t-3xl max-h-[85dvh] overflow-hidden flex flex-col"
+          data-testid="drawer-intel"
         >
-          <DrawerContent className="bg-background/60 backdrop-blur-2xl border border-white/10 rounded-t-2xl h-[85vh] max-h-[85vh] overflow-hidden flex flex-col">
-            <DrawerHeader>
-              <DrawerTitle>Company Intel</DrawerTitle>
-            </DrawerHeader>
+          <DrawerHeader className="flex items-center justify-between text-left">
+            <DrawerTitle>Company Intel</DrawerTitle>
+            <DrawerClose asChild>
+              <Button size="icon" variant="ghost" className="rounded-full">
+                <X className="w-4 h-4" />
+              </Button>
+            </DrawerClose>
+          </DrawerHeader>
 
-            {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto px-4 pb-6">
-              <CompanyIntelV2Card
-                intel={intelV2.intel}
-                isLoading={intelV2.isLoading}
-                isBoosting={intelV2.isBoosting}
-                error={intelV2.error}
-                onRefresh={() => void openIntel(true)}
-                onBoost={(domain) => intelV2.boostIntel(domain)}
-                companyName={companyNameForIntel || undefined}
-              />
-            </div>
+          <div className="flex-1 overflow-y-auto px-4 pb-6">
+            <CompanyIntelV2Card
+              intel={intelV2.intel}
+              isLoading={intelV2.isLoading}
+              isBoosting={intelV2.isBoosting}
+              error={intelV2.error}
+              onRefresh={() => void openIntel(true)}
+              onBoost={(domain) => intelV2.boostIntel(domain)}
+              companyName={companyNameForIntel || undefined}
+            />
+          </div>
 
-            <DrawerFooter>
-              <DrawerClose asChild>
-                <Button variant="ghost">Close</Button>
-              </DrawerClose>
-            </DrawerFooter>
-          </DrawerContent>
+          <DrawerFooter className="pb-[calc(env(safe-area-inset-bottom)+16px)]">
+            <DrawerClose asChild>
+              <Button variant="ghost">Close</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
       </Drawer>
 
       {/* Bottom Bar */}

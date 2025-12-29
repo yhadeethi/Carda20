@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,6 +49,22 @@ interface CompanyIntelV2CardProps {
   companyName?: string | null;
 }
 
+function toWebsiteUrl(website: string): string {
+  const w = website.trim();
+  if (!w) return "#";
+  if (w.startsWith("http://") || w.startsWith("https://")) return w;
+  return `https://${w}`;
+}
+
+function compactDate(d: string | Date | null | undefined): string {
+  if (!d) return "";
+  try {
+    return new Date(d).toLocaleDateString();
+  } catch {
+    return "";
+  }
+}
+
 export function CompanyIntelV2Card({
   intel,
   isLoading,
@@ -60,9 +76,102 @@ export function CompanyIntelV2Card({
 }: CompanyIntelV2CardProps) {
   const [showBoostConfirm, setShowBoostConfirm] = useState(false);
 
-  const handleBoostClick = () => {
-    setShowBoostConfirm(true);
-  };
+  const hasSocialLinks = !!(
+    intel?.linkedinUrl ||
+    intel?.twitterUrl ||
+    intel?.facebookUrl ||
+    intel?.instagramUrl
+  );
+
+  const lastUpdated = useMemo(() => {
+    if (!intel?.lastRefreshedAt) return "";
+    return compactDate(intel.lastRefreshedAt as any);
+  }, [intel?.lastRefreshedAt]);
+
+  const stats = useMemo(() => {
+    if (!intel) return [];
+
+    const items: Array<{
+      key: string;
+      label: string;
+      value: string;
+      sub?: string;
+      icon: JSX.Element;
+    }> = [];
+
+    if (intel.stock && intel.stock.price !== null && intel.stock.price !== undefined) {
+      const currencyPrefix = intel.stock.currency === "USD" ? "$" : (intel.stock.currency || "");
+      const v = `${currencyPrefix}${intel.stock.price.toFixed(2)}`;
+      const change =
+        intel.stock.changePercent !== null && intel.stock.changePercent !== undefined
+          ? `${intel.stock.changePercent >= 0 ? "+" : ""}${intel.stock.changePercent.toFixed(2)}%`
+          : "";
+      const up =
+        intel.stock.changePercent !== null &&
+        intel.stock.changePercent !== undefined &&
+        intel.stock.changePercent >= 0;
+
+      items.push({
+        key: "stock",
+        label: "Stock",
+        value: v,
+        sub: change ? `${intel.stock.ticker}${intel.stock.exchange ? ` • ${intel.stock.exchange}` : ""}` : `${intel.stock.ticker}`,
+        icon: up ? (
+          <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+        ) : (
+          <TrendingDown className="w-3.5 h-3.5 text-red-500" />
+        ),
+      });
+    }
+
+    if (intel.headcount?.range) {
+      items.push({
+        key: "headcount",
+        label: "Headcount",
+        value: intel.headcount.range,
+        sub: "employees",
+        icon: <Users className="w-3.5 h-3.5" />,
+      });
+    }
+
+    if (intel.industry) {
+      items.push({
+        key: "industry",
+        label: "Industry",
+        value: intel.industry,
+        icon: <Briefcase className="w-3.5 h-3.5" />,
+      });
+    }
+
+    if (intel.hq?.city) {
+      items.push({
+        key: "hq",
+        label: "HQ",
+        value: `${intel.hq.city}${intel.hq.country ? `, ${intel.hq.country}` : ""}`,
+        icon: <MapPin className="w-3.5 h-3.5" />,
+      });
+    }
+
+    if (intel.founderOrCeo) {
+      items.push({
+        key: "ceo",
+        label: "CEO",
+        value: intel.founderOrCeo,
+        icon: <User className="w-3.5 h-3.5" />,
+      });
+    }
+
+    if (intel.founded) {
+      items.push({
+        key: "founded",
+        label: "Founded",
+        value: String(intel.founded),
+        icon: <Calendar className="w-3.5 h-3.5" />,
+      });
+    }
+
+    return items;
+  }, [intel]);
 
   const handleBoostConfirm = async () => {
     setShowBoostConfirm(false);
@@ -73,27 +182,27 @@ export function CompanyIntelV2Card({
 
   if (isLoading) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-2">
         <Card className="glass-subtle">
-          <CardContent className="py-4">
+          <CardContent className="p-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center intel-loading">
-                <Sparkles className="w-5 h-5 text-primary" />
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center intel-loading">
+                <Sparkles className="w-4.5 h-4.5 text-primary" />
               </div>
               <div className="flex-1">
-                <div className="font-medium">Gathering Intel...</div>
+                <div className="font-medium">Gathering Intel…</div>
                 <p className="text-xs text-muted-foreground">
                   {companyName ? `Researching ${companyName}` : "Researching company"}
                 </p>
               </div>
             </div>
-            <div className="mt-4 space-y-3">
-              <Skeleton className="h-16 rounded-lg" />
+            <div className="mt-3 space-y-2">
+              <Skeleton className="h-14 rounded-xl" />
               <div className="grid grid-cols-2 gap-2">
-                <Skeleton className="h-20 rounded-lg" />
-                <Skeleton className="h-20 rounded-lg" />
+                <Skeleton className="h-16 rounded-xl" />
+                <Skeleton className="h-16 rounded-xl" />
               </div>
-              <Skeleton className="h-24 rounded-lg" />
+              <Skeleton className="h-20 rounded-xl" />
             </div>
           </CardContent>
         </Card>
@@ -104,8 +213,8 @@ export function CompanyIntelV2Card({
   if (error && !intel) {
     return (
       <Card className="glass-subtle border-destructive/50">
-        <CardContent className="py-6">
-          <div className="flex flex-col items-center gap-3 text-center">
+        <CardContent className="p-4">
+          <div className="flex flex-col items-center gap-2 text-center">
             <AlertCircle className="w-8 h-8 text-destructive" />
             <div>
               <p className="font-medium text-destructive">Intel unavailable</p>
@@ -123,46 +232,46 @@ export function CompanyIntelV2Card({
 
   if (!intel) return null;
 
-  const lastUpdated = new Date(intel.lastRefreshedAt).toLocaleDateString();
-  const hasSocialLinks = intel.linkedinUrl || intel.twitterUrl || intel.facebookUrl || intel.instagramUrl;
-
   return (
-    <div className="space-y-3">
-      {/* SECTION 1: Company Profile */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+    <div className="space-y-2">
+      {/* SECTION 1: Company Profile (denser + iOS-ish) */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="glass-subtle overflow-hidden">
-          <CardContent className="py-4 space-y-3">
-            {/* Header with company name and refresh */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-primary" />
+          <CardContent className="p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Building2 className="w-4.5 h-4.5 text-primary" />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-base">{intel.companyName}</h3>
+
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-base leading-tight truncate">
+                    {intel.companyName}
+                  </h3>
+
                   {intel.website && (
                     <a
-                      href={`https://${intel.website}`}
+                      href={toWebsiteUrl(intel.website)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                      className="mt-0.5 text-xs text-primary/90 hover:text-primary hover:underline inline-flex items-center gap-1 truncate"
                       data-testid="link-website"
                     >
                       <Globe className="w-3 h-3" />
-                      {intel.website}
+                      <span className="truncate">{intel.website}</span>
                     </a>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-muted-foreground">{lastUpdated}</span>
+
+              <div className="flex items-center gap-1 shrink-0">
+                {lastUpdated && (
+                  <span className="text-[10px] text-muted-foreground">{lastUpdated}</span>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-8 w-8 rounded-xl"
                   onClick={onRefresh}
                   data-testid="button-refresh-intel"
                 >
@@ -171,23 +280,22 @@ export function CompanyIntelV2Card({
               </div>
             </div>
 
-            {/* Company Summary */}
             {intel.summary && (
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                 {intel.summary}
               </p>
             )}
 
-            {/* Social Media Icons */}
             {hasSocialLinks && (
-              <div className="flex items-center gap-2 pt-1">
+              <div className="mt-2 flex items-center gap-2">
                 {intel.linkedinUrl && (
                   <a
                     href={intel.linkedinUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-9 h-9 rounded-lg bg-[#0A66C2]/10 hover:bg-[#0A66C2]/20 flex items-center justify-center transition-colors"
+                    className="w-9 h-9 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-white/10 flex items-center justify-center transition-colors"
                     data-testid="link-linkedin"
+                    aria-label="LinkedIn"
                   >
                     <SiLinkedin className="w-4 h-4 text-[#0A66C2]" />
                   </a>
@@ -197,8 +305,9 @@ export function CompanyIntelV2Card({
                     href={intel.twitterUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-9 h-9 rounded-lg bg-foreground/5 hover:bg-foreground/10 flex items-center justify-center transition-colors"
+                    className="w-9 h-9 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-white/10 flex items-center justify-center transition-colors"
                     data-testid="link-twitter"
+                    aria-label="X"
                   >
                     <SiX className="w-4 h-4" />
                   </a>
@@ -208,8 +317,9 @@ export function CompanyIntelV2Card({
                     href={intel.facebookUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-9 h-9 rounded-lg bg-[#1877F2]/10 hover:bg-[#1877F2]/20 flex items-center justify-center transition-colors"
+                    className="w-9 h-9 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-white/10 flex items-center justify-center transition-colors"
                     data-testid="link-facebook"
+                    aria-label="Facebook"
                   >
                     <SiFacebook className="w-4 h-4 text-[#1877F2]" />
                   </a>
@@ -219,8 +329,9 @@ export function CompanyIntelV2Card({
                     href={intel.instagramUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-9 h-9 rounded-lg bg-[#E4405F]/10 hover:bg-[#E4405F]/20 flex items-center justify-center transition-colors"
+                    className="w-9 h-9 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-white/10 flex items-center justify-center transition-colors"
                     data-testid="link-instagram"
+                    aria-label="Instagram"
                   >
                     <SiInstagram className="w-4 h-4 text-[#E4405F]" />
                   </a>
@@ -231,278 +342,231 @@ export function CompanyIntelV2Card({
         </Card>
       </motion.div>
 
-      {/* SECTION 2: Quick Visual Cards */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="grid grid-cols-2 gap-2"
-      >
-        {/* Stock Price Card - only show if we have a valid price */}
-        {intel.stock && intel.stock.price !== null && intel.stock.price !== undefined && (
-          <Card className="glass-subtle">
-            <CardContent className="py-3 px-3">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-1.5">
-                {intel.stock.changePercent !== null && intel.stock.changePercent !== undefined && intel.stock.changePercent >= 0 ? (
-                  <TrendingUp className="w-3.5 h-3.5 text-green-500" />
-                ) : intel.stock.changePercent !== null && intel.stock.changePercent !== undefined ? (
-                  <TrendingDown className="w-3.5 h-3.5 text-red-500" />
-                ) : (
-                  <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
-                )}
-                <span className="text-[10px] uppercase tracking-wide font-medium">Stock</span>
-              </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-lg font-bold">
-                  {intel.stock.currency === "USD" ? "$" : (intel.stock.currency || "")}{intel.stock.price.toFixed(2)}
-                </span>
-                {intel.stock.changePercent !== null && intel.stock.changePercent !== undefined && (
-                  <Badge 
-                    variant="secondary" 
-                    className={`text-[10px] px-1.5 py-0 ${
-                      intel.stock.changePercent >= 0 
-                        ? "bg-green-500/10 text-green-600 dark:text-green-400" 
-                        : "bg-red-500/10 text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {intel.stock.changePercent >= 0 ? "+" : ""}{intel.stock.changePercent.toFixed(2)}%
-                  </Badge>
-                )}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {intel.stock.ticker} {intel.stock.exchange && `• ${intel.stock.exchange}`}
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Headcount Card */}
-        {intel.headcount && (
-          <Card className="glass-subtle">
-            <CardContent className="py-3 px-3">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-1.5">
-                <Users className="w-3.5 h-3.5" />
-                <span className="text-[10px] uppercase tracking-wide font-medium">Headcount</span>
-              </div>
-              <p className="text-lg font-bold">{intel.headcount.range}</p>
-              <p className="text-[10px] text-muted-foreground">employees</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Industry Card */}
-        {intel.industry && (
-          <Card className="glass-subtle">
-            <CardContent className="py-3 px-3">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-1.5">
-                <Briefcase className="w-3.5 h-3.5" />
-                <span className="text-[10px] uppercase tracking-wide font-medium">Industry</span>
-              </div>
-              <p className="text-sm font-medium leading-tight">{intel.industry}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* HQ Location Card */}
-        {intel.hq && (
-          <Card className="glass-subtle">
-            <CardContent className="py-3 px-3">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-1.5">
-                <MapPin className="w-3.5 h-3.5" />
-                <span className="text-[10px] uppercase tracking-wide font-medium">HQ</span>
-              </div>
-              <p className="text-sm font-medium">
-                {intel.hq.city}{intel.hq.country ? `, ${intel.hq.country}` : ""}
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Founder/CEO Card */}
-        {intel.founderOrCeo && (
-          <Card className="glass-subtle">
-            <CardContent className="py-3 px-3">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-1.5">
-                <User className="w-3.5 h-3.5" />
-                <span className="text-[10px] uppercase tracking-wide font-medium">CEO</span>
-              </div>
-              <p className="text-sm font-medium truncate">{intel.founderOrCeo}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Founded Card */}
-        {intel.founded && (
-          <Card className="glass-subtle">
-            <CardContent className="py-3 px-3">
-              <div className="flex items-center gap-1.5 text-muted-foreground mb-1.5">
-                <Calendar className="w-3.5 h-3.5" />
-                <span className="text-[10px] uppercase tracking-wide font-medium">Founded</span>
-              </div>
-              <p className="text-lg font-bold">{intel.founded}</p>
-            </CardContent>
-          </Card>
-        )}
-      </motion.div>
-
-      {/* SECTION 3: Recent News */}
-      {intel.latestSignals && intel.latestSignals.length > 0 && (
+      {/* SECTION 2: Quick Stats (auto, compact) */}
+      {stats.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
+          transition={{ delay: 0.05 }}
+          className="grid grid-cols-2 gap-2"
         >
-          <Card className="glass-subtle">
-            <CardContent className="py-4">
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                <Newspaper className="w-3.5 h-3.5" />
-                Recent News
-              </h4>
-              <ul className="space-y-2">
-                {intel.latestSignals.slice(0, 4).map((signal, i) => (
-                  <motion.li
-                    key={i}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 + i * 0.03 }}
-                  >
-                    <a
-                      href={signal.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group flex items-start gap-2.5 p-2.5 rounded-lg hover-elevate bg-muted/30"
-                      data-testid={`news-item-${i}`}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 mt-0.5 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm line-clamp-2 group-hover:text-primary transition-colors">
-                          {signal.title}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                          <span>{signal.date}</span>
-                          <span>•</span>
-                          <span className="truncate">{signal.sourceName}</span>
-                        </div>
-                      </div>
-                    </a>
-                  </motion.li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {stats.slice(0, 6).map((s) => (
+            <Card key={s.key} className="glass-subtle">
+              <CardContent className="p-2.5">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  {s.icon}
+                  <span className="text-[10px] uppercase tracking-wide font-medium">{s.label}</span>
+                </div>
+
+                <div className="mt-1">
+                  <div className="text-sm font-semibold leading-tight line-clamp-2">
+                    {s.value}
+                  </div>
+                  {s.sub && <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{s.sub}</div>}
+                </div>
+
+                {/* optional stock badge */}
+                {s.key === "stock" &&
+                  intel.stock &&
+                  intel.stock.changePercent !== null &&
+                  intel.stock.changePercent !== undefined && (
+                    <div className="mt-1">
+                      <Badge
+                        variant="secondary"
+                        className={`text-[10px] px-1.5 py-0 ${
+                          intel.stock.changePercent >= 0
+                            ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                            : "bg-red-500/10 text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {intel.stock.changePercent >= 0 ? "+" : ""}
+                        {intel.stock.changePercent.toFixed(2)}%
+                      </Badge>
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+          ))}
         </motion.div>
       )}
 
-      {/* SECTION 4: Key Competitors */}
+      {/* SECTION 3: Recent News (tight list) */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Card className="glass-subtle">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Newspaper className="w-3.5 h-3.5" />
+                Recent News
+              </h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 rounded-xl text-xs"
+                onClick={onRefresh}
+              >
+                <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                Refresh
+              </Button>
+            </div>
+
+            {intel.latestSignals && intel.latestSignals.length > 0 ? (
+              <div className="divide-y divide-white/10">
+                {intel.latestSignals.slice(0, 4).map((signal, i) => (
+                  <a
+                    key={i}
+                    href={signal.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-2 py-2 group"
+                    data-testid={`news-item-${i}`}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mt-0.5 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+                    <div className="min-w-0">
+                      <p className="text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                        {signal.title}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span>{signal.date}</span>
+                        <span>•</span>
+                        <span className="truncate">{signal.sourceName}</span>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground bg-muted/25 border border-white/10 rounded-xl p-3">
+                No recent news found (or the feed didn’t return results).
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* SECTION 4: Competitors (chips + expandable detail) */}
       {intel.competitors && intel.competitors.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
         >
           <Card className="glass-subtle">
-            <CardContent className="py-4">
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
+            <CardContent className="p-3">
+              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-2">
                 <Target className="w-3.5 h-3.5" />
-                Key Competitors
+                Competitors
               </h4>
-              <div className="space-y-2">
-                {intel.competitors.map((competitor, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.15 + i * 0.03 }}
-                    className="p-2.5 rounded-lg bg-muted/30"
-                    data-testid={`competitor-${i}`}
-                  >
-                    <p className="text-sm font-medium">{competitor.name}</p>
-                    {competitor.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                        {competitor.description}
-                      </p>
-                    )}
-                  </motion.div>
-                ))}
+
+              <div className="flex flex-wrap gap-2">
+                {intel.competitors.slice(0, 8).map((c, i) => {
+                  const hasDesc = !!c.description?.trim();
+                  return (
+                    <div key={i} className="max-w-full">
+                      {hasDesc ? (
+                        <details className="group">
+                          <summary className="cursor-pointer list-none">
+                            <span className="inline-flex items-center rounded-xl border border-white/10 bg-muted/25 px-3 py-1 text-sm font-medium">
+                              {c.name}
+                            </span>
+                          </summary>
+                          <div className="mt-1 max-w-[420px] rounded-xl border border-white/10 bg-muted/20 p-2 text-xs text-muted-foreground">
+                            {c.description}
+                          </div>
+                        </details>
+                      ) : (
+                        <span className="inline-flex items-center rounded-xl border border-white/10 bg-muted/25 px-3 py-1 text-sm font-medium">
+                          {c.name}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
-      {/* SECTION 5: Apollo Boosted Data (only show if boosted) */}
+      {/* SECTION 5: Boosted Data (compact grid) */}
       {intel.isBoosted && (intel.revenue || intel.funding || intel.primaryPhone) && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
           <Card className="glass-subtle border-primary/20">
-            <CardContent className="py-4">
-              <div className="flex items-center gap-1.5 mb-3">
-                <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] px-1.5 py-0 gap-1">
-                  <Zap className="w-3 h-3" />
-                  Boosted Intel
-                </Badge>
-                {intel.boostedAt && (
-                  <span className="text-[10px] text-muted-foreground">
-                    {new Date(intel.boostedAt).toLocaleDateString()}
-                  </span>
-                )}
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className="bg-primary/10 text-primary text-[10px] px-2 py-0 gap-1 rounded-xl"
+                  >
+                    <Zap className="w-3 h-3" />
+                    Boosted
+                  </Badge>
+                  {intel.boostedAt && (
+                    <span className="text-[10px] text-muted-foreground">
+                      {compactDate(intel.boostedAt)}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-3">
-                {/* Revenue */}
+              <div className="grid grid-cols-2 gap-2">
                 {intel.revenue && (
-                  <div className="flex items-start gap-2">
-                    <DollarSign className="w-4 h-4 text-green-500 mt-0.5" />
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Annual Revenue</p>
-                      <p className="text-sm font-medium">{intel.revenue}</p>
+                  <div className="rounded-xl border border-white/10 bg-muted/20 p-2.5">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <DollarSign className="w-3.5 h-3.5 text-green-500" />
+                      <span className="text-[10px] uppercase tracking-wide font-medium">Revenue</span>
                     </div>
+                    <div className="mt-1 text-sm font-semibold">{intel.revenue}</div>
                   </div>
                 )}
 
-                {/* Funding */}
+                {intel.primaryPhone && (
+                  <div className="rounded-xl border border-white/10 bg-muted/20 p-2.5">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Phone className="w-3.5 h-3.5" />
+                      <span className="text-[10px] uppercase tracking-wide font-medium">Phone</span>
+                    </div>
+                    <a
+                      href={`tel:${intel.primaryPhone}`}
+                      className="mt-1 block text-sm font-semibold text-primary hover:underline"
+                      data-testid="link-phone"
+                    >
+                      {intel.primaryPhone}
+                    </a>
+                  </div>
+                )}
+
                 {intel.funding && (intel.funding.totalRaised || intel.funding.latestRound) && (
-                  <div className="flex items-start gap-2">
-                    <Landmark className="w-4 h-4 text-blue-500 mt-0.5" />
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Funding</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {intel.funding.totalRaised && (
-                          <span className="text-sm font-medium">{intel.funding.totalRaised}</span>
-                        )}
-                        {intel.funding.latestRound && (
-                          <Badge variant="outline" className="text-[10px] py-0">
-                            {intel.funding.latestRound}
-                          </Badge>
-                        )}
-                      </div>
-                      {intel.funding.investors && intel.funding.investors.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {intel.funding.investors.slice(0, 3).join(", ")}
-                          {intel.funding.investors.length > 3 && ` +${intel.funding.investors.length - 3} more`}
-                        </p>
+                  <div className="col-span-2 rounded-xl border border-white/10 bg-muted/20 p-2.5">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Landmark className="w-3.5 h-3.5 text-blue-500" />
+                      <span className="text-[10px] uppercase tracking-wide font-medium">Funding</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      {intel.funding.totalRaised && (
+                        <span className="text-sm font-semibold">{intel.funding.totalRaised}</span>
+                      )}
+                      {intel.funding.latestRound && (
+                        <Badge variant="outline" className="text-[10px] py-0 rounded-xl">
+                          {intel.funding.latestRound}
+                        </Badge>
                       )}
                     </div>
-                  </div>
-                )}
-
-                {/* Phone */}
-                {intel.primaryPhone && (
-                  <div className="flex items-start gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Primary Phone</p>
-                      <a 
-                        href={`tel:${intel.primaryPhone}`}
-                        className="text-sm font-medium text-primary hover:underline"
-                        data-testid="link-phone"
-                      >
-                        {intel.primaryPhone}
-                      </a>
-                    </div>
+                    {intel.funding.investors && intel.funding.investors.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {intel.funding.investors.slice(0, 3).join(", ")}
+                        {intel.funding.investors.length > 3 && ` +${intel.funding.investors.length - 3} more`}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -511,39 +575,40 @@ export function CompanyIntelV2Card({
         </motion.div>
       )}
 
-      {/* SECTION 6: Boost Intel Button (only show if not boosted and has website) */}
+      {/* SECTION 6: Boost button */}
       {!intel.isBoosted && intel.website && onBoost && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.22 }}
         >
           <Card className="glass-subtle border-dashed">
-            <CardContent className="py-4">
+            <CardContent className="p-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                    <Zap className="w-5 h-5 text-amber-500" />
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                    <Zap className="w-4.5 h-4.5 text-amber-500" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">Boost Intel</p>
-                    <p className="text-xs text-muted-foreground">
-                      Get revenue, funding, and phone data
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-tight">Boost Intel</p>
+                    <p className="text-xs text-muted-foreground leading-tight">
+                      Revenue, funding, phone
                     </p>
                   </div>
                 </div>
+
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleBoostClick}
+                  onClick={() => setShowBoostConfirm(true)}
                   disabled={isBoosting}
-                  className="gap-1.5"
+                  className="gap-1.5 rounded-xl"
                   data-testid="button-boost-intel"
                 >
                   {isBoosting ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Boosting...
+                      Boosting…
                     </>
                   ) : (
                     <>
@@ -558,20 +623,7 @@ export function CompanyIntelV2Card({
         </motion.div>
       )}
 
-      {/* Empty State */}
-      {(!intel.latestSignals || intel.latestSignals.length === 0) && !intel.hq && !intel.headcount && !intel.summary && (
-        <Card className="glass-subtle">
-          <CardContent className="py-6">
-            <div className="text-center text-muted-foreground text-sm">
-              <Building2 className="w-6 h-6 mx-auto mb-2 opacity-50" />
-              <p>Limited information available</p>
-              {intel.error && <p className="text-xs mt-1">{intel.error}</p>}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Boost Confirmation Dialog */}
+      {/* Boost Confirmation */}
       <AlertDialog open={showBoostConfirm} onOpenChange={setShowBoostConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -580,12 +632,11 @@ export function CompanyIntelV2Card({
               Boost Company Intel?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will use <strong>1 Apollo credit</strong> to fetch additional company data including:
+              This will use <strong>1 Apollo credit</strong> to fetch extra company data:
               <ul className="mt-2 space-y-1 text-sm">
                 <li>• Annual revenue estimates</li>
                 <li>• Funding history and investors</li>
-                <li>• Primary contact phone number</li>
-                <li>• Additional company details</li>
+                <li>• Primary phone number</li>
               </ul>
               <p className="mt-3 text-xs text-muted-foreground">
                 Free tier includes 100 credits per month.

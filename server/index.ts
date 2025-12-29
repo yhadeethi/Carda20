@@ -22,6 +22,12 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Health check endpoint - responds immediately for Cloud Run health checks
+// Must be before any async middleware or route registration
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok", timestamp: Date.now() });
+});
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",

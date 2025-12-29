@@ -80,19 +80,34 @@ class OCRSpaceProvider implements OCRProvider {
 }
 
 let currentProvider: OCRProvider | null = null;
+let ocrInitialized = false;
 
-export function initializeOCR(): void {
+// Lazy initialization - called on first OCR request, not at startup
+function ensureOCRInitialized(): void {
+  if (ocrInitialized) return;
+  
   const ocrSpaceApiKey = process.env.OCR_SPACE_API_KEY;
   
   if (ocrSpaceApiKey) {
     currentProvider = new OCRSpaceProvider(ocrSpaceApiKey);
-    console.log("OCR initialized with OCR.space provider");
+    console.log("OCR initialized with OCR.space provider (lazy)");
   } else {
     console.warn("OCR_SPACE_API_KEY not set - OCR functionality will be unavailable");
   }
+  
+  ocrInitialized = true;
+}
+
+// Legacy function kept for compatibility - now a no-op since we initialize lazily
+export function initializeOCR(): void {
+  // No-op - OCR is now initialized lazily on first request
+  // This avoids blocking server startup
 }
 
 export async function extractTextFromImage(imageBase64: string): Promise<OCRResult> {
+  // Lazy initialization on first use
+  ensureOCRInitialized();
+  
   if (!currentProvider) {
     return {
       rawText: "",
