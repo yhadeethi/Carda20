@@ -31,7 +31,8 @@ export interface ArticleCandidate {
   snippet?: string;
 }
 
-const ENABLE_GOOGLE_RSS_FALLBACK = process.env.ENABLE_GOOGLE_RSS === "true";
+// Enable Google RSS fallback by default (can be disabled via env var)
+const ENABLE_GOOGLE_RSS_FALLBACK = process.env.ENABLE_GOOGLE_RSS !== "false";
 
 function normalizeDomain(domain?: string | null): string {
   if (!domain) return "";
@@ -405,8 +406,8 @@ export async function generateSalesSignals(args: {
     .sort((x, y) => y.score - x.score);
 
   // Hard filter: must have some anchor, and must cross threshold
-  // If we have a domain, keep it a bit stricter; otherwise accept good name matches.
-  const threshold = domain ? 50 : 45;
+  // Lowered thresholds for better coverage (was 50/45)
+  const threshold = domain ? 40 : 35;
 
   const filtered = scored.filter((x) => x.hasAnchor && x.score >= threshold);
 
