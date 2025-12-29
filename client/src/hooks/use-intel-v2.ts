@@ -1,15 +1,41 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { CompanyIntelV2 } from "@shared/schema";
 
-const CACHE_KEY_PREFIX = "intel-v2-";
+// Cache version - increment this to invalidate all old cached intel data
+// v2: Added sales signals support (Dec 2025)
+const CACHE_VERSION = 2;
+const CACHE_KEY_PREFIX = `intel-v2-v${CACHE_VERSION}-`;
 const CACHE_TTL_DAYS = 7;
 
 interface CachedIntel {
   intel: CompanyIntelV2;
   cachedAt: number;
+  version?: number;
 }
 
 const memoryCache = new Map<string, CachedIntel>();
+
+// Clean up old cache entries on module load
+function cleanupOldCache() {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("intel-v2-") && !key.startsWith(CACHE_KEY_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    if (keysToRemove.length > 0) {
+      console.log(`[IntelCache] Cleaned up ${keysToRemove.length} old cache entries`);
+    }
+  } catch {
+    // ignore errors
+  }
+}
+
+// Run cleanup once on module load
+cleanupOldCache();
 
 function getCacheKey(companyName: string, domain?: string | null): string {
   const base = (companyName || domain || "unknown").toLowerCase().trim();
