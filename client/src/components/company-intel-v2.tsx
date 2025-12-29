@@ -23,7 +23,6 @@ import {
   MapPin,
   Users,
   Globe,
-  Newspaper,
   TrendingUp,
   TrendingDown,
   Briefcase,
@@ -35,6 +34,7 @@ import {
   Phone,
   Landmark,
   Loader2,
+  Radar,
 } from "lucide-react";
 import { SiLinkedin, SiX, SiFacebook, SiInstagram } from "react-icons/si";
 import { motion } from "framer-motion";
@@ -48,6 +48,17 @@ interface CompanyIntelV2CardProps {
   onBoost?: (domain: string) => Promise<boolean>;
   companyName?: string | null;
 }
+
+type SalesSignal = {
+  type: string;
+  title: string;
+  whyItMatters: string;
+  sourceTitle?: string;
+  sourceUrl?: string;
+  publishedAt?: string;
+  confidence: "High" | "Medium" | "Low";
+  evidence?: string[];
+};
 
 function toWebsiteUrl(website: string): string {
   const w = website.trim();
@@ -63,6 +74,12 @@ function compactDate(d: string | Date | null | undefined): string {
   } catch {
     return "";
   }
+}
+
+function confidenceBadgeVariant(conf: SalesSignal["confidence"]) {
+  if (conf === "High") return "default";
+  if (conf === "Medium") return "secondary";
+  return "outline";
 }
 
 export function CompanyIntelV2Card({
@@ -115,7 +132,9 @@ export function CompanyIntelV2Card({
         key: "stock",
         label: "Stock",
         value: v,
-        sub: change ? `${intel.stock.ticker}${intel.stock.exchange ? ` • ${intel.stock.exchange}` : ""}` : `${intel.stock.ticker}`,
+        sub: change
+          ? `${intel.stock.ticker}${intel.stock.exchange ? ` • ${intel.stock.exchange}` : ""}`
+          : `${intel.stock.ticker}`,
         icon: up ? (
           <TrendingUp className="w-3.5 h-3.5 text-green-500" />
         ) : (
@@ -171,6 +190,12 @@ export function CompanyIntelV2Card({
     }
 
     return items;
+  }, [intel]);
+
+  const signals: SalesSignal[] = useMemo(() => {
+    // server will add intel.signals
+    const raw = (intel as any)?.signals;
+    return Array.isArray(raw) ? raw : [];
   }, [intel]);
 
   const handleBoostConfirm = async () => {
@@ -234,7 +259,7 @@ export function CompanyIntelV2Card({
 
   return (
     <div className="space-y-2">
-      {/* SECTION 1: Company Profile (denser + iOS-ish) */}
+      {/* SECTION 1: Company Profile */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="glass-subtle overflow-hidden">
           <CardContent className="p-3">
@@ -342,7 +367,7 @@ export function CompanyIntelV2Card({
         </Card>
       </motion.div>
 
-      {/* SECTION 2: Quick Stats (auto, compact) */}
+      {/* SECTION 2: Quick Stats */}
       {stats.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -362,10 +387,13 @@ export function CompanyIntelV2Card({
                   <div className="text-sm font-semibold leading-tight line-clamp-2">
                     {s.value}
                   </div>
-                  {s.sub && <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{s.sub}</div>}
+                  {s.sub && (
+                    <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
+                      {s.sub}
+                    </div>
+                  )}
                 </div>
 
-                {/* optional stock badge */}
                 {s.key === "stock" &&
                   intel.stock &&
                   intel.stock.changePercent !== null &&
@@ -390,7 +418,7 @@ export function CompanyIntelV2Card({
         </motion.div>
       )}
 
-      {/* SECTION 3: Recent News (tight list) */}
+      {/* SECTION 3: Sales Signals (replaces News) */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -400,8 +428,8 @@ export function CompanyIntelV2Card({
           <CardContent className="p-3">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <Newspaper className="w-3.5 h-3.5" />
-                Recent News
+                <Radar className="w-3.5 h-3.5" />
+                Sales Signals
               </h4>
               <Button
                 variant="ghost"
@@ -414,41 +442,81 @@ export function CompanyIntelV2Card({
               </Button>
             </div>
 
-            {intel.latestSignals && intel.latestSignals.length > 0 ? (
-              <div className="divide-y divide-white/10">
-                {intel.latestSignals.slice(0, 4).map((signal, i) => (
-                  <a
+            {signals.length > 0 ? (
+              <div className="space-y-2">
+                {signals.slice(0, 6).map((s, i) => (
+                  <div
                     key={i}
-                    href={signal.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-start gap-2 py-2 group"
-                    data-testid={`news-item-${i}`}
+                    className="rounded-xl border border-white/10 bg-muted/20 p-3"
+                    data-testid={`signal-item-${i}`}
                   >
-                    <ExternalLink className="w-3.5 h-3.5 mt-0.5 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
-                    <div className="min-w-0">
-                      <p className="text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                        {signal.title}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                        <span>{signal.date}</span>
-                        <span>•</span>
-                        <span className="truncate">{signal.sourceName}</span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium leading-snug line-clamp-2">
+                          {s.title}
+                        </div>
+                        <div className="mt-1 text-sm text-muted-foreground leading-snug">
+                          {s.whyItMatters}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <Badge variant="secondary" className="text-[10px] rounded-xl">
+                          {s.type}
+                        </Badge>
+                        <Badge variant={confidenceBadgeVariant(s.confidence)} className="text-[10px] rounded-xl">
+                          {s.confidence}
+                        </Badge>
                       </div>
                     </div>
-                  </a>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                      {s.sourceUrl ? (
+                        <a
+                          href={s.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 underline"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span className="truncate">{s.sourceTitle || "Source"}</span>
+                        </a>
+                      ) : (
+                        <span>{s.sourceTitle || "Source"}</span>
+                      )}
+                      {s.publishedAt ? (
+                        <>
+                          <span>•</span>
+                          <span>{compactDate(s.publishedAt)}</span>
+                        </>
+                      ) : null}
+                    </div>
+
+                    {Array.isArray(s.evidence) && s.evidence.length > 0 ? (
+                      <details className="mt-2 group">
+                        <summary className="cursor-pointer list-none text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                          <span className="underline">Why this matched</span>
+                        </summary>
+                        <ul className="mt-2 list-disc pl-5 text-[10px] text-muted-foreground space-y-1">
+                          {s.evidence.slice(0, 4).map((e, idx) => (
+                            <li key={idx}>{e}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             ) : (
               <div className="text-sm text-muted-foreground bg-muted/25 border border-white/10 rounded-xl p-3">
-                No recent news found (or the feed didn’t return results).
+                No high-confidence signals found recently.
               </div>
             )}
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* SECTION 4: Competitors (chips + expandable detail) */}
+      {/* SECTION 4: Competitors */}
       {intel.competitors && intel.competitors.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -492,7 +560,7 @@ export function CompanyIntelV2Card({
         </motion.div>
       )}
 
-      {/* SECTION 5: Boosted Data (compact grid) */}
+      {/* SECTION 5: Boosted Data */}
       {intel.isBoosted && (intel.revenue || intel.funding || intel.primaryPhone) && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -591,9 +659,7 @@ export function CompanyIntelV2Card({
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium leading-tight">Boost Intel</p>
-                    <p className="text-xs text-muted-foreground leading-tight">
-                      Revenue, funding, phone
-                    </p>
+                    <p className="text-xs text-muted-foreground leading-tight">Revenue, funding, phone</p>
                   </div>
                 </div>
 
@@ -638,9 +704,7 @@ export function CompanyIntelV2Card({
                 <li>• Funding history and investors</li>
                 <li>• Primary phone number</li>
               </ul>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Free tier includes 100 credits per month.
-              </p>
+              <p className="mt-3 text-xs text-muted-foreground">Free tier includes 100 credits per month.</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
