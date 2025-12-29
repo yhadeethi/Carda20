@@ -1,7 +1,7 @@
 // server/salesSignalsService.ts
 import { fetch as undiciFetch } from "undici";
 
-const fetchFn: any = (globalThis as any).fetch ?? undiciFetch;
+const fetchFn: typeof fetch = ((globalThis as any).fetch ?? undiciFetch) as any;
 
 type SignalType =
   | "Hiring"
@@ -31,6 +31,8 @@ export interface ArticleCandidate {
   snippet?: string;
 }
 
+const ENABLE_GOOGLE_RSS_FALLBACK = process.env.ENABLE_GOOGLE_RSS === "true";
+
 function normalizeDomain(domain?: string | null): string {
   if (!domain) return "";
   return domain
@@ -41,8 +43,22 @@ function normalizeDomain(domain?: string | null): string {
     .split("/")[0];
 }
 
+function stripDiacritics(s: string): string {
+  try {
+    // NFD split + remove combining marks
+    return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  } catch {
+    return s;
+  }
+}
+
 function normalizeText(s?: string | null): string {
-  return (s || "").toLowerCase().trim().replace(/\s+/g, " ");
+  const raw = stripDiacritics((s || "").toLowerCase().trim());
+  return raw
+    .replace(/[\u2019']/g, "'")
+    .replace(/[^a-z0-9\s&.-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function safeHostFromUrl(url: string): string {
@@ -53,11 +69,44 @@ function safeHostFromUrl(url: string): string {
   }
 }
 
-function cleanCompanyName(name: string): string {
-  return (name || "")
-    .replace(/\b(ltd|limited|inc|inc\.|corp|corporation|plc|ag|sa|llc|gmbh|pty|pty\.|co|company|holdings)\b/gi, "")
+function removeLegalSuffixes(name: string): string {
+  return name
+    .replace(
+      /\b(ltd|limited|inc|inc\.|corp|corporation|plc|ag|sa|llc|gmbh|pty|pty\.|co|company|holdings)\b/gi,
+      ""
+    )
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function pickBrandPhrase(companyName: string): string {
+  const cleaned = normalizeText(removeLegalSuffixes(companyName));
+  const tokens = cleaned.split(" ").filter(Boolean);
+
+  // drop generic tail words that make matching worse
+  const drop = new Set([
+    "solutions",
+    "solution",
+    "storage",
+    "energy",
+    "power",
+    "conversion",
+    "systems",
+    "system",
+    "division",
+    "group",
+    "services",
+    "service",
+    "australia",
+    "global",
+  ]);
+
+  const strongTokens = tokens.filter((t) => !drop.has(t));
+  // Use 1–2 strong tokens as “brand phrase”
+  if (strongTokens.length >= 2) return `${strongTokens[0]} ${strongTokens[1]}`;
+  if (strongTokens.length === 1) return strongTokens[0];
+  // fallback to first two tokens anyway
+  return tokens.slice(0, 2).join(" ").trim();
 }
 
 function toGdeltDatetime(d: Date): string {
@@ -72,12 +121,33 @@ function toGdeltDatetime(d: Date): string {
   );
 }
 
-// --- Candidate retrieval ---
-const ENABLE_GOOGLE_RSS_FALLBACK = process.env.ENABLE_GOOGLE_RSS === "true";
+async function fetchWithTimeout(url: string, timeoutMs = 6000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchFn(url, { method: "GET", signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
 
-async function fetchGdeltArticles(query: string, max = 25): Promise<ArticleCandidate[]> {
+async function safeJson(res: Response): Promise<any | null> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GDELT DOC 2.1 (ArtList)
+ * Note: Query syntax is NOT Google. Avoid `site:`.
+ * We also include start/end datetime to avoid ancient junk.
+ */
+async function fetchGdeltArticles(query: string, max = 35): Promise<ArticleCandidate[]> {
   const now = new Date();
-  const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const start = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000); // 45d window
 
   const url =
     "https://api.gdeltproject.org/api/v2/doc/doc" +
@@ -87,58 +157,22 @@ async function fetchGdeltArticles(query: string, max = 25): Promise<ArticleCandi
     `&startdatetime=${toGdeltDatetime(start)}` +
     `&enddatetime=${toGdeltDatetime(now)}`;
 
-  const r = await fetchFn(url, { method: "GET" });
+  const r = await fetchWithTimeout(url, 6500);
   if (!r.ok) return [];
 
-  const j: any = await r.json().catch(() => null);
+  const j = await safeJson(r);
   const articles = j?.articles;
   if (!Array.isArray(articles)) return [];
 
   return articles
     .map((a: any) => ({
-      title: a?.title || "",
-      url: a?.url || "",
-      source: a?.domain || a?.sourceCountry || a?.sourceCollection || a?.source || "",
-      publishedAt: a?.seendate || a?.date || "",
-      snippet: a?.snippet || a?.excerpt || "",
+      title: String(a?.title || "").trim(),
+      url: String(a?.url || "").trim(),
+      source: String(a?.domain || a?.sourceCountry || a?.source || "").trim(),
+      publishedAt: String(a?.seendate || a?.datetime || a?.date || "").trim(),
+      snippet: String(a?.snippet || a?.excerpt || "").trim(),
     }))
     .filter((x: ArticleCandidate) => x.title && x.url);
-}
-
-async function fetchGoogleNewsRss(query: string, max = 10): Promise<ArticleCandidate[]> {
-  const url =
-    "https://news.google.com/rss/search?q=" +
-    encodeURIComponent(query) +
-    "&hl=en-AU&gl=AU&ceid=AU:en";
-
-  const r = await fetchFn(url, { method: "GET" });
-  if (!r.ok) return [];
-  const xml = await r.text().catch(() => "");
-  if (!xml) return [];
-
-  const items = xml.split("<item>").slice(1);
-  const out: ArticleCandidate[] = [];
-
-  for (const raw of items) {
-    const title = between(raw, "<title>", "</title>");
-    const link = between(raw, "<link>", "</link>");
-    const pubDate = between(raw, "<pubDate>", "</pubDate>");
-    const source = between(raw, "<source", "</source>");
-
-    if (!title || !link) continue;
-
-    out.push({
-      title: decodeEntities(stripCdata(title)),
-      url: decodeEntities(stripCdata(link)),
-      source: decodeEntities(stripCdata(stripTagAttrs(source))) || "Google News",
-      publishedAt: pubDate ? new Date(pubDate).toISOString() : undefined,
-      snippet: "",
-    });
-
-    if (out.length >= max) break;
-  }
-
-  return out;
 }
 
 function between(s: string, a: string, b: string): string {
@@ -168,61 +202,40 @@ function decodeEntities(s: string): string {
     .replace(/&gt;/g, ">");
 }
 
-// --- scoring ---
-function scoreArticle(
-  a: ArticleCandidate,
-  companyName: string,
-  domain: string,
-  locationHint?: string
-): { score: number; evidence: string[] } {
-  const evidence: string[] = [];
-  let score = 0;
+async function fetchGoogleNewsRss(query: string, max = 12): Promise<ArticleCandidate[]> {
+  const url =
+    "https://news.google.com/rss/search?q=" +
+    encodeURIComponent(query) +
+    "&hl=en-AU&gl=AU&ceid=AU:en";
 
-  const name = normalizeText(companyName);
-  const cleaned = normalizeText(cleanCompanyName(companyName));
-  const t = normalizeText(a.title);
-  const sn = normalizeText(a.snippet || "");
-  const host = safeHostFromUrl(a.url);
-  const dom = normalizeDomain(domain);
+  const r = await fetchWithTimeout(url, 4500);
+  if (!r.ok) return [];
+  const xml = await r.text().catch(() => "");
+  if (!xml) return [];
 
-  if (dom && (host === dom || host.endsWith("." + dom))) {
-    score += 40;
-    evidence.push(`Source host matches domain (${dom})`);
+  const items = xml.split("<item>").slice(1);
+  const out: ArticleCandidate[] = [];
+
+  for (const raw of items) {
+    const title = between(raw, "<title>", "</title>");
+    const link = between(raw, "<link>", "</link>");
+    const pubDate = between(raw, "<pubDate>", "</pubDate>");
+    const source = between(raw, "<source", "</source>");
+
+    if (!title || !link) continue;
+
+    out.push({
+      title: decodeEntities(stripCdata(title)),
+      url: decodeEntities(stripCdata(link)),
+      source: decodeEntities(stripCdata(stripTagAttrs(source))),
+      publishedAt: pubDate ? new Date(pubDate).toISOString() : undefined,
+      snippet: "",
+    });
+
+    if (out.length >= max) break;
   }
 
-  if (dom && (t.includes(dom) || sn.includes(dom))) {
-    score += 18;
-    evidence.push("Mentions company domain in text");
-  }
-
-  if (name && t.includes(name)) {
-    score += 30;
-    evidence.push("Title contains exact company name");
-  } else if (cleaned && t.includes(cleaned)) {
-    score += 22;
-    evidence.push("Title contains cleaned company name");
-  } else if (name && sn.includes(name)) {
-    score += 16;
-    evidence.push("Snippet contains company name");
-  } else if (cleaned && sn.includes(cleaned)) {
-    score += 12;
-    evidence.push("Snippet contains cleaned company name");
-  }
-
-  const loc = normalizeText(locationHint || "");
-  if (loc && (t.includes(loc) || sn.includes(loc))) {
-    score += 8;
-    evidence.push(`Matches location hint (${locationHint})`);
-  }
-
-  const genericBad = ["stocks", "market", "share price", "index", "earnings calendar"];
-  const anchored = score >= 30;
-  if (genericBad.some((k) => t.includes(k)) && !anchored) {
-    score -= 18;
-    evidence.push("Generic market headline without clear company anchor");
-  }
-
-  return { score, evidence };
+  return out;
 }
 
 function classifySignalType(title: string, snippet?: string): SignalType {
@@ -245,20 +258,106 @@ function classifySignalType(title: string, snippet?: string): SignalType {
 function buildWhyItMatters(type: SignalType): string {
   switch (type) {
     case "Hiring":
-      return "Hiring usually means growth or new initiatives — a clean opener for outreach.";
+      return "Hiring usually means growth or new initiatives — a perfect opener for outreach.";
     case "Contracts & Projects":
-      return "New wins or tenders signal budget + urgency. Sell into momentum.";
+      return "New wins or tenders signal budget + urgency. You can sell into momentum.";
     case "Product/Tech":
-      return "Launches expose priorities — tailor your pitch to what they just shipped.";
+      return "New launches expose priorities and gaps — tailor your pitch to what they just shipped.";
     case "Leadership":
-      return "Leadership changes reshape buying patterns — strike early.";
+      return "Leadership changes create reshuffles and new buying patterns — strike early.";
     case "Partnerships":
-      return "Partners reveal ecosystem direction — map influence fast.";
+      return "Partners reveal their ecosystem and procurement direction — map influence fast.";
     case "Regulatory/Finance":
       return "Financial/regulatory events create deadlines and constraints you can solve against.";
     default:
-      return "Potentially relevant context — use it as a hook if it matches your angle.";
+      return "A signal worth checking — use it as a context hook if it’s relevant.";
   }
+}
+
+function scoreArticle(
+  a: ArticleCandidate,
+  companyName: string,
+  domain: string,
+  locationHint?: string
+): { score: number; evidence: string[]; hasAnchor: boolean } {
+  const evidence: string[] = [];
+  let score = 0;
+
+  const host = safeHostFromUrl(a.url);
+  const dom = normalizeDomain(domain);
+  const title = normalizeText(a.title);
+  const snip = normalizeText(a.snippet || "");
+
+  const brand = normalizeText(pickBrandPhrase(companyName));
+  const companyClean = normalizeText(removeLegalSuffixes(companyName));
+  const brandTokens = brand.split(" ").filter(Boolean);
+  const companyTokens = companyClean.split(" ").filter(Boolean);
+
+  const textAll = `${title} ${snip}`;
+
+  // Anchor checks (must have at least one)
+  const hostMatches = dom && (host === dom || host.endsWith("." + dom));
+  const brandPhraseMatch = brand && title.includes(brand);
+  const tokenHits = companyTokens.filter((t) => t.length >= 4 && textAll.includes(t)).length;
+
+  const hasAnchor = Boolean(hostMatches || brandPhraseMatch || tokenHits >= 2);
+
+  // Domain anchor (press releases / company blog)
+  if (hostMatches) {
+    score += 48;
+    evidence.push(`Source host matches domain (${dom})`);
+  }
+
+  // Brand phrase / tokens
+  if (brandPhraseMatch) {
+    score += 32;
+    evidence.push(`Title contains brand phrase (“${brand}”)`);
+  } else {
+    // partial token scoring
+    const hits = brandTokens.filter((t) => t.length >= 4 && textAll.includes(t)).length;
+    if (hits >= 2) {
+      score += 24;
+      evidence.push(`Mentions key brand tokens (${hits} hits)`);
+    } else if (hits === 1) {
+      score += 14;
+      evidence.push("Mentions brand token");
+    }
+  }
+
+  // Location hint boost
+  const loc = normalizeText(locationHint || "");
+  if (loc && (title.includes(loc) || snip.includes(loc))) {
+    score += 8;
+    evidence.push(`Matches location hint (${locationHint})`);
+  }
+
+  // Signal keyword boost
+  const type = classifySignalType(a.title, a.snippet);
+  if (type !== "General") {
+    score += 6;
+    evidence.push(`Looks like ${type}`);
+  }
+
+  // Penalize generic market junk
+  const genericBad = ["stocks", "market", "share price", "index", "earnings calendar"];
+  if (genericBad.some((k) => title.includes(k)) && !brandPhraseMatch) {
+    score -= 18;
+    evidence.push("Generic market headline without clear company anchor");
+  }
+
+  return { score, evidence, hasAnchor };
+}
+
+function dedupeByUrl(items: ArticleCandidate[]): ArticleCandidate[] {
+  const seen = new Set<string>();
+  const out: ArticleCandidate[] = [];
+  for (const it of items) {
+    const k = (it.url || "").toLowerCase().trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(it);
+  }
+  return out;
 }
 
 export async function generateSalesSignals(args: {
@@ -266,51 +365,58 @@ export async function generateSalesSignals(args: {
   domain?: string | null;
   locationHint?: string | null;
   maxSignals?: number;
-}): Promise<{ signals: SalesSignal[]; debug: { queryUsed: string; candidates: number } }> {
-  const companyName = args.companyName?.trim() || "";
+}): Promise<{ signals: SalesSignal[]; debug: { queryUsed: string[]; candidates: number } }> {
+  const companyName = (args.companyName || "").trim();
   const domain = normalizeDomain(args.domain);
   const locationHint = args.locationHint || undefined;
   const maxSignals = args.maxSignals ?? 6;
 
-  const cleaned = cleanCompanyName(companyName);
+  const cleaned = removeLegalSuffixes(companyName);
+  const brand = pickBrandPhrase(companyName);
 
-  // IMPORTANT: No "site:" here — GDELT isn't Google.
-  const queries = [
-    [`"${companyName}"`, domain].filter(Boolean).join(" OR "),
-    [`"${cleaned || companyName}"`, domain].filter(Boolean).join(" OR "),
-    `"${cleaned || companyName}"`,
-    domain,
-  ].filter((q) => q && q.trim().length >= 3);
+  // Query phase A: broad company coverage (no fake `site:`)
+  const qA = `("${cleaned}" OR "${brand}" OR "${normalizeText(cleaned)}")`;
 
-  let candidates: ArticleCandidate[] = [];
-  let usedQuery = "";
+  // Query phase B: press releases / company domain coverage (if domain exists)
+  // GDELT supports domain: filter in many cases; even if not perfect, it's harmless.
+  const qB = domain ? `domain:${domain}` : "";
 
-  for (const q of queries) {
-    usedQuery = q;
-    candidates = await fetchGdeltArticles(q, 35);
-    if (candidates.length) break;
-  }
+  const queries = [qA, qB].filter(Boolean);
 
+  // Fetch candidates from GDELT (both queries), then merge/dedupe
+  const batches = await Promise.all(
+    queries.map((q) => fetchGdeltArticles(q, 40).catch(() => []))
+  );
+
+  let candidates = dedupeByUrl(batches.flat());
+
+  // Optional fallback: Google RSS (if GDELT gives nothing)
   if (candidates.length === 0 && ENABLE_GOOGLE_RSS_FALLBACK) {
-    usedQuery = `${companyName} ${domain || ""}`.trim();
-    candidates = await fetchGoogleNewsRss(usedQuery, 12);
+    const rss = await fetchGoogleNewsRss(`${cleaned} ${domain || ""}`.trim(), 12).catch(() => []);
+    candidates = dedupeByUrl(rss);
   }
 
+  // Score + filter
   const scored = candidates
     .map((a) => {
-      const { score, evidence } = scoreArticle(a, companyName, domain, locationHint);
-      return { a, score, evidence };
+      const { score, evidence, hasAnchor } = scoreArticle(a, companyName, domain, locationHint);
+      return { a, score, evidence, hasAnchor };
     })
     .sort((x, y) => y.score - x.score);
 
-  const threshold = domain ? 45 : 55;
-  const filtered = scored.filter((x) => x.score >= threshold);
+  // Hard filter: must have some anchor, and must cross threshold
+  // If we have a domain, keep it a bit stricter; otherwise accept good name matches.
+  const threshold = domain ? 50 : 45;
+
+  const filtered = scored.filter((x) => x.hasAnchor && x.score >= threshold);
+
   const top = filtered.slice(0, maxSignals);
 
   const signals: SalesSignal[] = top.map(({ a, score, evidence }) => {
     const type = classifySignalType(a.title, a.snippet);
+
     const confidence: SalesSignal["confidence"] =
-      score >= 75 ? "High" : score >= 60 ? "Medium" : "Low";
+      score >= 82 ? "High" : score >= 62 ? "Medium" : "Low";
 
     return {
       type,
@@ -326,6 +432,9 @@ export async function generateSalesSignals(args: {
 
   return {
     signals,
-    debug: { queryUsed: usedQuery, candidates: candidates.length },
+    debug: {
+      queryUsed: queries,
+      candidates: candidates.length,
+    },
   };
 }
