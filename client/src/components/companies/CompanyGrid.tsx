@@ -1,5 +1,6 @@
 /**
  * CompanyGrid - Responsive grid layout for company tiles
+ * UI refresh – logic unchanged
  */
 
 import { Building2, Plus } from "lucide-react";
@@ -31,17 +32,27 @@ export function CompanyGrid({
   // Empty state - no companies at all
   if (companies.length === 0 && !searchQuery) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-          <Building2 className="w-8 h-8 text-muted-foreground" />
+      <div className="rounded-2xl border bg-muted/20 p-8">
+        <div className="flex flex-col items-center justify-center text-center">
+          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+            <Building2 className="w-7 h-7 text-muted-foreground" />
+          </div>
+          <div className="font-medium">No companies yet</div>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+            Companies are auto-created from your scanned contacts, or you can add one manually.
+          </p>
+
+          {onAddCompany && (
+            <Button
+              onClick={onAddCompany}
+              className="gap-2 mt-5 rounded-2xl"
+              data-testid="button-add-company-empty"
+            >
+              <Plus className="w-4 h-4" />
+              Add Company
+            </Button>
+          )}
         </div>
-        <p className="text-muted-foreground mb-4">No companies yet</p>
-        {onAddCompany && (
-          <Button onClick={onAddCompany} className="gap-1.5" data-testid="button-add-company-empty">
-            <Plus className="w-4 h-4" />
-            Add Company
-          </Button>
-        )}
       </div>
     );
   }
@@ -49,19 +60,24 @@ export function CompanyGrid({
   // Empty state - no search results
   if (companies.length === 0 && searchQuery) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-          <Building2 className="w-8 h-8 text-muted-foreground" />
+      <div className="rounded-2xl border bg-muted/20 p-8">
+        <div className="flex flex-col items-center justify-center text-center">
+          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+            <Building2 className="w-7 h-7 text-muted-foreground" />
+          </div>
+          <div className="font-medium">No matching companies</div>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+            Try searching by domain (e.g., “acme.com”) or a shorter company name.
+          </p>
         </div>
-        <p className="text-muted-foreground">No matching companies</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Grid of company tiles */}
-      <div 
+      <div
         className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
         data-testid="companies-grid"
       >
@@ -78,10 +94,7 @@ export function CompanyGrid({
         ))}
       </div>
 
-      {/* Count */}
-      <p className="text-xs text-center text-muted-foreground pt-2">
-        {companies.length} compan{companies.length !== 1 ? 'ies' : 'y'}
-      </p>
+      {/* Removed bottom count – already shown in Companies header in ContactsHub */}
     </div>
   );
 }

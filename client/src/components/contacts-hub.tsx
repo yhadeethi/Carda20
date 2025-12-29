@@ -1,5 +1,6 @@
 /**
  * Contacts Hub with People / Companies Split for Org Intelligence
+ * UI refresh (company-first rows, cleaner actions, better spacing) – logic unchanged
  */
 
 import { useState, useMemo, useEffect } from "react";
@@ -10,7 +11,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Drawer,
   DrawerContent,
@@ -20,6 +30,15 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
 import {
   Company,
@@ -29,8 +48,21 @@ import {
   autoGenerateCompaniesFromContacts,
   getContactCountForCompany,
 } from "@/lib/companiesStorage";
-import { Search, Trash2, User, Building, Building2, Calendar, Tag, Users, Plus, Bell, Merge } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+
+import {
+  Search,
+  User,
+  Building,
+  Building2,
+  Calendar,
+  Tag,
+  Users,
+  Plus,
+  Bell,
+  Merge,
+  MoreHorizontal,
+} from "lucide-react";
+
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
@@ -47,7 +79,13 @@ interface ContactsHubProps {
   onSelectCompany?: (companyId: string) => void;
 }
 
-export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onContactDeleted, onSelectCompany }: ContactsHubProps) {
+export function ContactsHub({
+  onSelectContact,
+  onBackToScan,
+  refreshKey,
+  onContactDeleted,
+  onSelectCompany,
+}: ContactsHubProps) {
   const [activeTab, setActiveTab] = useState<TabMode>("people");
   const [peopleSubView, setPeopleSubView] = useState<PeopleSubView>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -55,6 +93,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
   const [contacts, setContacts] = useState<StoredContact[]>(() => loadContacts());
   const [companies, setCompanies] = useState<Company[]>(() => getCompanies());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newCompanyDomain, setNewCompanyDomain] = useState("");
@@ -62,26 +101,26 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
   const [newCompanyState, setNewCompanyState] = useState("");
   const [newCompanyCountry, setNewCompanyCountry] = useState("");
   const [newCompanyNotes, setNewCompanyNotes] = useState("");
-  
+
   // Auto-generate companies from contacts on first load
   useEffect(() => {
     const loadedContacts = loadContacts();
     setContacts(loadedContacts);
-    
+
     // Auto-generate companies from contacts
     const updatedCompanies = autoGenerateCompaniesFromContacts(loadedContacts);
     setCompanies(updatedCompanies);
   }, [refreshKey]);
-  
+
   const eventNames = useMemo(() => getUniqueEventNames(), [contacts]);
-  
+
   const filteredContacts = useMemo(() => {
     let result = [...contacts];
-    
+
     if (eventFilter !== "all") {
       result = result.filter((c) => c.eventName === eventFilter);
     }
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -90,15 +129,15 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
           c.company?.toLowerCase().includes(query)
       );
     }
-    
+
     result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
+
     return result;
   }, [contacts, searchQuery, eventFilter]);
 
   const filteredCompanies = useMemo(() => {
     let result = [...companies];
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -107,7 +146,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
           c.domain?.toLowerCase().includes(query)
       );
     }
-    
+
     // Sort by contact count (most contacts first), then by name
     result.sort((a, b) => {
       const countA = getContactCountForCompany(a.id, contacts);
@@ -115,14 +154,9 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
       if (countB !== countA) return countB - countA;
       return a.name.localeCompare(b.name);
     });
-    
+
     return result;
   }, [companies, searchQuery, contacts]);
-
-  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setDeleteConfirmId(id);
-  };
 
   const confirmDelete = () => {
     if (deleteConfirmId) {
@@ -135,7 +169,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
 
   const handleAddCompany = () => {
     if (!newCompanyName.trim()) return;
-    
+
     const company = createCompany({
       name: newCompanyName.trim(),
       domain: newCompanyDomain.trim() || null,
@@ -144,7 +178,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
       country: newCompanyCountry.trim() || null,
       notes: newCompanyNotes.trim() || null,
     });
-    
+
     upsertCompany(company);
     setCompanies(getCompanies());
     resetAddCompanyForm();
@@ -160,7 +194,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
     setNewCompanyNotes("");
   };
 
-  const contactToDelete = deleteConfirmId ? contacts.find(c => c.id === deleteConfirmId) : null;
+  const contactToDelete = deleteConfirmId ? contacts.find((c) => c.id === deleteConfirmId) : null;
 
   const formatDate = (dateStr: string) => {
     try {
@@ -170,8 +204,24 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
     }
   };
 
+  // UI helpers (no business logic changes)
+  const isNew = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr).getTime();
+      const days = (Date.now() - d) / (1000 * 60 * 60 * 24);
+      return days <= 7;
+    } catch {
+      return false;
+    }
+  };
+
+  const displayCompany = (c: StoredContact) => (c.company?.trim() ? c.company.trim() : "Unknown company");
+  const displayName = (c: StoredContact) =>
+    c.name?.trim() ? c.name.trim() : c.email?.trim() ? c.email.trim() : "Unknown";
+
   return (
     <>
+      {/* Delete dialog */}
       <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -189,90 +239,109 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Add company drawer */}
       <Drawer open={showAddCompany} onOpenChange={setShowAddCompany}>
         <DrawerContent className="max-h-[90vh]">
           <DrawerHeader className="border-b pb-4">
             <DrawerTitle className="text-xl font-semibold">Add Company</DrawerTitle>
           </DrawerHeader>
+
           <ScrollArea className="flex-1 overflow-y-auto">
             <div className="p-4 pb-[env(safe-area-inset-bottom)] space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="company-name" className="text-sm font-medium">Company Name *</Label>
+                <Label htmlFor="company-name" className="text-sm font-medium">
+                  Company Name *
+                </Label>
                 <Input
                   id="company-name"
                   placeholder="Acme Corp"
                   value={newCompanyName}
                   onChange={(e) => setNewCompanyName(e.target.value)}
-                  className="h-12"
+                  className="h-12 rounded-2xl"
                   data-testid="input-new-company-name"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="company-domain" className="text-sm font-medium">Domain</Label>
+                <Label htmlFor="company-domain" className="text-sm font-medium">
+                  Domain
+                </Label>
                 <Input
                   id="company-domain"
                   placeholder="acme.com"
                   value={newCompanyDomain}
                   onChange={(e) => setNewCompanyDomain(e.target.value)}
-                  className="h-12"
+                  className="h-12 rounded-2xl"
                   data-testid="input-new-company-domain"
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="company-city" className="text-sm font-medium">City</Label>
+                  <Label htmlFor="company-city" className="text-sm font-medium">
+                    City
+                  </Label>
                   <Input
                     id="company-city"
                     placeholder="Sydney"
                     value={newCompanyCity}
                     onChange={(e) => setNewCompanyCity(e.target.value)}
-                    className="h-12"
+                    className="h-12 rounded-2xl"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="company-state" className="text-sm font-medium">State</Label>
+                  <Label htmlFor="company-state" className="text-sm font-medium">
+                    State
+                  </Label>
                   <Input
                     id="company-state"
                     placeholder="NSW"
                     value={newCompanyState}
                     onChange={(e) => setNewCompanyState(e.target.value)}
-                    className="h-12"
+                    className="h-12 rounded-2xl"
                   />
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="company-country" className="text-sm font-medium">Country</Label>
+                <Label htmlFor="company-country" className="text-sm font-medium">
+                  Country
+                </Label>
                 <Input
                   id="company-country"
                   placeholder="Australia"
                   value={newCompanyCountry}
                   onChange={(e) => setNewCompanyCountry(e.target.value)}
-                  className="h-12"
+                  className="h-12 rounded-2xl"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="company-notes" className="text-sm font-medium">Notes</Label>
+                <Label htmlFor="company-notes" className="text-sm font-medium">
+                  Notes
+                </Label>
                 <Textarea
                   id="company-notes"
                   placeholder="Notes about this company..."
                   value={newCompanyNotes}
                   onChange={(e) => setNewCompanyNotes(e.target.value)}
                   rows={4}
-                  className="resize-none"
+                  className="resize-none rounded-2xl"
                 />
               </div>
             </div>
           </ScrollArea>
+
           <DrawerFooter className="border-t pt-4 flex-row gap-3">
             <DrawerClose asChild>
-              <Button variant="outline" onClick={resetAddCompanyForm} className="flex-1">
+              <Button variant="outline" onClick={resetAddCompanyForm} className="flex-1 rounded-2xl">
                 Cancel
               </Button>
             </DrawerClose>
-            <Button 
-              onClick={handleAddCompany} 
-              disabled={!newCompanyName.trim()} 
-              className="flex-1"
+            <Button
+              onClick={handleAddCompany}
+              disabled={!newCompanyName.trim()}
+              className="flex-1 rounded-2xl"
               data-testid="button-save-company"
             >
               Save Company
@@ -281,76 +350,100 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
         </DrawerContent>
       </Drawer>
 
+      {/* Main */}
       <Card className="glass">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">Network</CardTitle>
+          <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">
+            Network
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Network / Companies Segmented Control */}
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-            <TabsList className="w-full grid grid-cols-2 h-12">
-              <TabsTrigger value="people" className="gap-2 text-base font-medium" data-testid="tab-people">
-                <User className="w-5 h-5" />
-                Contacts
-              </TabsTrigger>
-              <TabsTrigger value="companies" className="gap-2 text-base font-medium" data-testid="tab-companies">
-                <Building2 className="w-5 h-5" />
-                Companies
-              </TabsTrigger>
-            </TabsList>
 
-            {/* Shared Search Bar */}
-            <div className="relative mt-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder={activeTab === "people" ? "Search by name or company..." : "Search companies..."}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-                data-testid="input-contacts-search"
-              />
+        <CardContent className="space-y-4">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
+            {/* Top controls */}
+            <div className="sticky top-0 z-10 bg-background/60 backdrop-blur rounded-2xl">
+              <TabsList className="w-full grid grid-cols-2 h-11 rounded-2xl">
+                <TabsTrigger value="people" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-people">
+                  <User className="w-5 h-5" />
+                  Contacts
+                </TabsTrigger>
+                <TabsTrigger value="companies" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-companies">
+                  <Building2 className="w-5 h-5" />
+                  Companies
+                </TabsTrigger>
+              </TabsList>
+
+              <div className="relative mt-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder={activeTab === "people" ? "Search by name, company, title…" : "Search companies…"}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-11 rounded-2xl"
+                  data-testid="input-contacts-search"
+                />
+              </div>
             </div>
 
             {/* People Tab */}
             <TabsContent value="people" className="mt-4 space-y-4">
-              {/* Sub-view filter badges */}
+              {/* Sub-view filter as “segmented” pills */}
               <div className="flex gap-2 overflow-x-auto pb-1">
-                <Badge
-                  variant={peopleSubView === "all" ? "default" : "outline"}
-                  className="cursor-pointer whitespace-nowrap"
+                <button
+                  className={`px-3 py-1.5 rounded-full text-sm border transition whitespace-nowrap ${
+                    peopleSubView === "all"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background hover:bg-muted border-border"
+                  }`}
                   onClick={() => setPeopleSubView("all")}
                   data-testid="filter-all"
                 >
-                  <Users className="w-3 h-3 mr-1" />
-                  All
-                </Badge>
-                <Badge
-                  variant={peopleSubView === "upcoming" ? "default" : "outline"}
-                  className="cursor-pointer whitespace-nowrap"
+                  <span className="inline-flex items-center">
+                    <Users className="w-4 h-4 mr-1" />
+                    All
+                  </span>
+                </button>
+
+                <button
+                  className={`px-3 py-1.5 rounded-full text-sm border transition whitespace-nowrap ${
+                    peopleSubView === "upcoming"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background hover:bg-muted border-border"
+                  }`}
                   onClick={() => setPeopleSubView("upcoming")}
                   data-testid="filter-upcoming"
                 >
-                  <Bell className="w-3 h-3 mr-1" />
-                  Upcoming
-                </Badge>
-                <Badge
-                  variant={peopleSubView === "duplicates" ? "default" : "outline"}
-                  className="cursor-pointer whitespace-nowrap"
+                  <span className="inline-flex items-center">
+                    <Bell className="w-4 h-4 mr-1" />
+                    Upcoming
+                  </span>
+                </button>
+
+                <button
+                  className={`px-3 py-1.5 rounded-full text-sm border transition whitespace-nowrap ${
+                    peopleSubView === "duplicates"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background hover:bg-muted border-border"
+                  }`}
                   onClick={() => setPeopleSubView("duplicates")}
                   data-testid="filter-duplicates"
                 >
-                  <Merge className="w-3 h-3 mr-1" />
-                  Duplicates
-                </Badge>
+                  <span className="inline-flex items-center">
+                    <Merge className="w-4 h-4 mr-1" />
+                    Duplicates
+                  </span>
+                </button>
               </div>
 
               {/* Sub-views */}
               {peopleSubView === "upcoming" && (
                 <div className="min-h-[300px]">
-                  <UpcomingView onSelectContact={(id) => {
-                    const contact = contacts.find(c => c.id === id);
-                    if (contact) onSelectContact(contact);
-                  }} />
+                  <UpcomingView
+                    onSelectContact={(id) => {
+                      const contact = contacts.find((c) => c.id === id);
+                      if (contact) onSelectContact(contact);
+                    }}
+                  />
                 </div>
               )}
 
@@ -364,7 +457,7 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
                 <>
                   {eventNames.length > 0 && (
                     <Select value={eventFilter} onValueChange={setEventFilter}>
-                      <SelectTrigger data-testid="select-event-filter">
+                      <SelectTrigger className="rounded-2xl" data-testid="select-event-filter">
                         <SelectValue placeholder="All events" />
                       </SelectTrigger>
                       <SelectContent>
@@ -378,9 +471,9 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
                     </Select>
                   )}
 
-                  <div className="max-h-[400px] overflow-y-auto space-y-2" data-testid="contacts-list">
+                  <div className="max-h-[65vh] overflow-y-auto space-y-3 pr-1" data-testid="contacts-list">
                     {filteredContacts.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground" data-testid="contacts-empty">
+                      <div className="text-center py-10 text-muted-foreground" data-testid="contacts-empty">
                         {contacts.length === 0 ? (
                           <p>No contacts saved yet. Scan a business card to get started!</p>
                         ) : (
@@ -391,58 +484,100 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
                       filteredContacts.map((contact) => (
                         <div
                           key={contact.id}
-                          className="p-3 rounded-lg border bg-card hover-elevate cursor-pointer group relative"
+                          className="rounded-2xl border bg-card hover:bg-muted/30 transition shadow-sm cursor-pointer"
                           onClick={() => onSelectContact(contact)}
                           data-testid={`contact-row-${contact.id}`}
                         >
-                          <div className="flex items-start justify-between gap-2">
+                          <div className="p-4 flex items-start gap-3">
+                            {/* Avatar */}
+                            <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                              <User className="w-5 h-5 text-muted-foreground" />
+                            </div>
+
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                                <span className="font-medium truncate" data-testid={`contact-name-${contact.id}`}>
-                                  {contact.name || contact.email || "Unknown"}
-                                </span>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  {/* Company-first */}
+                                  <div className="font-semibold truncate" title={displayCompany(contact)}>
+                                    {displayCompany(contact)}
+                                  </div>
+
+                                  {/* Name + title */}
+                                  <div className="text-sm text-muted-foreground truncate mt-0.5" title={displayName(contact)}>
+                                    <span className="font-medium text-foreground">{displayName(contact)}</span>
+                                    {contact.title ? <span className="text-muted-foreground"> · {contact.title}</span> : null}
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div onClick={(e) => e.stopPropagation()}>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="rounded-xl opacity-70 hover:opacity-100"
+                                        data-testid={`button-contact-actions-${contact.id}`}
+                                      >
+                                        <MoreHorizontal className="w-5 h-5" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => onSelectContact(contact)}>Open</DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        className="text-destructive"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setDeleteConfirmId(contact.id);
+                                        }}
+                                        data-testid={`button-delete-contact-${contact.id}`}
+                                      >
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                               </div>
-                              
-                              {(contact.company || contact.title) && (
-                                <div className="flex items-center gap-2 mt-1 min-w-0">
-                                  <Building className="w-4 h-4 text-muted-foreground shrink-0 invisible" />
-                                  <span className="text-sm text-muted-foreground truncate" data-testid={`contact-details-${contact.id}`}>
-                                    {[contact.company, contact.title].filter(Boolean).join(" · ")}
+
+                              {/* Meta row */}
+                              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                {isNew(contact.createdAt) && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                    New
                                   </span>
-                                </div>
-                              )}
-                              
-                              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                )}
+
+                                <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
                                   <Calendar className="w-3 h-3" />
-                                  <span>Scanned on {formatDate(contact.createdAt)}</span>
-                                </div>
-                                
+                                  Scanned {formatDate(contact.createdAt)}
+                                </span>
+
                                 {contact.eventName && (
-                                  <div className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full" data-testid={`contact-event-${contact.id}`}>
+                                  <span
+                                    className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground inline-flex items-center gap-1"
+                                    data-testid={`contact-event-${contact.id}`}
+                                    title={contact.eventName}
+                                  >
                                     <Tag className="w-3 h-3" />
                                     {contact.eventName}
-                                  </div>
+                                  </span>
+                                )}
+
+                                {(contact.company || contact.title) && (
+                                  <span className="text-xs text-muted-foreground truncate inline-flex items-center gap-1">
+                                    <Building className="w-3 h-3" />
+                                    {[contact.company, contact.title].filter(Boolean).join(" · ")}
+                                  </span>
                                 )}
                               </div>
                             </div>
-                            
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="shrink-0 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => handleDeleteClick(e, contact.id)}
-                              data-testid={`button-delete-contact-${contact.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
                           </div>
                         </div>
                       ))
                     )}
                   </div>
-              
+
                   {filteredContacts.length > 0 && (
                     <p className="text-xs text-center text-muted-foreground">
                       {filteredContacts.length} contact{filteredContacts.length !== 1 ? "s" : ""}
@@ -454,12 +589,15 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
 
             {/* Companies Tab */}
             <TabsContent value="companies" className="mt-4 space-y-4">
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  {filteredCompanies.length} compan{filteredCompanies.length === 1 ? "y" : "ies"}
+                </div>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setShowAddCompany(true)}
-                  className="gap-1"
+                  className="gap-1 rounded-2xl"
                   data-testid="button-add-company"
                 >
                   <Plus className="w-3 h-3" />
@@ -467,13 +605,13 @@ export function ContactsHub({ onSelectContact, onBackToScan, refreshKey, onConta
                 </Button>
               </div>
 
-              <div className="max-h-[450px] overflow-y-auto" data-testid="companies-list">
+              <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="companies-list">
                 <CompanyGrid
                   companies={filteredCompanies}
                   getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
                   getContactEmails={(companyId) => {
-                    const companyContacts = contacts.filter(c => c.companyId === companyId);
-                    return companyContacts.map(c => c.email).filter(e => e && e.trim().length > 0);
+                    const companyContacts = contacts.filter((c) => c.companyId === companyId);
+                    return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
                   }}
                   onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
                   onAddCompany={() => setShowAddCompany(true)}
