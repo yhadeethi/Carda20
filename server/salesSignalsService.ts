@@ -391,10 +391,14 @@ export async function generateSalesSignals(args: {
 
   let candidates = dedupeByUrl(batches.flat());
 
+  console.log(`[Signals] GDELT returned ${candidates.length} candidates for "${companyName}"`);
+
   // Optional fallback: Google RSS (if GDELT gives nothing)
   if (candidates.length === 0 && ENABLE_GOOGLE_RSS_FALLBACK) {
+    console.log(`[Signals] Falling back to Google RSS for "${companyName}"`);
     const rss = await fetchGoogleNewsRss(`${cleaned} ${domain || ""}`.trim(), 12).catch(() => []);
     candidates = dedupeByUrl(rss);
+    console.log(`[Signals] Google RSS returned ${candidates.length} candidates`);
   }
 
   // Score + filter
@@ -405,11 +409,22 @@ export async function generateSalesSignals(args: {
     })
     .sort((x, y) => y.score - x.score);
 
+  // Debug: log top 3 scores
+  if (scored.length > 0) {
+    console.log(`[Signals] Top scores for "${companyName}":`, scored.slice(0, 3).map(s => ({
+      title: s.a.title?.slice(0, 50),
+      score: s.score,
+      hasAnchor: s.hasAnchor,
+    })));
+  }
+
   // Hard filter: must have some anchor, and must cross threshold
-  // Lowered thresholds for better coverage (was 50/45)
-  const threshold = domain ? 40 : 35;
+  // Lowered thresholds for better coverage (was 50/45, then 40/35)
+  const threshold = domain ? 30 : 25;
 
   const filtered = scored.filter((x) => x.hasAnchor && x.score >= threshold);
+  
+  console.log(`[Signals] After filtering (threshold=${threshold}): ${filtered.length} signals for "${companyName}"`);
 
   const top = filtered.slice(0, maxSignals);
 

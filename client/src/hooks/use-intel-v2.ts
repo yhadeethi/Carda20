@@ -2,8 +2,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { CompanyIntelV2 } from "@shared/schema";
 
 // Cache version - increment this to invalidate all old cached intel data
-// v2: Added sales signals support (Dec 2025)
-const CACHE_VERSION = 2;
+// v4: Fixed signals scoring threshold (Dec 2025)
+const CACHE_VERSION = 4;
 const CACHE_KEY_PREFIX = `intel-v2-v${CACHE_VERSION}-`;
 const CACHE_TTL_DAYS = 7;
 
@@ -136,7 +136,12 @@ export function useIntelV2() {
         const response = await fetch(`/api/intel-v2?${params.toString()}`);
         if (!response.ok) throw new Error("Failed to fetch intel");
 
-        const data: CompanyIntelV2 = await response.json();
+        const data = await response.json();
+        
+        // Debug: log signals presence
+        const signals = (data as any)?.signals;
+        console.log(`[IntelV2] Fetched intel for ${companyName}, signals: ${signals?.length ?? 0}`);
+        
         saveToCache(cacheKey, data);
         setIntel(data);
       } catch (err) {
