@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
@@ -60,7 +60,10 @@ import {
   addTimelineEvent,
   updateContactV2,
 } from "@/lib/contacts/storage";
-import { extractDomainFromEmail, extractDomainFromWebsite } from "@/lib/companiesStorage";
+import {
+  extractDomainFromEmail,
+  extractDomainFromWebsite,
+} from "@/lib/companiesStorage";
 import { useIntelV2 } from "@/hooks/use-intel-v2";
 import {
   generateFollowUp,
@@ -104,9 +107,53 @@ function buildFollowUpCopyText(res: FollowUpResponse): string {
   return `${subject}${res.body}`.trim();
 }
 
-function isIOS(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+function sanitizePhone(p?: string | null): string | null {
+  if (!p) return null;
+  const cleaned = p.replace(/[^\d+]/g, "");
+  return cleaned.length ? cleaned : null;
+}
+
+function openMailto(to: string, subject: string | undefined, body: string) {
+  const qs = new URLSearchParams();
+  if (subject) qs.set("subject", subject);
+  qs.set("body", body);
+  window.location.href = `mailto:${encodeURIComponent(to)}?${qs.toString()}`;
+}
+
+function openSms(phone: string, body: string) {
+  const qs = new URLSearchParams();
+  qs.set("body", body);
+  window.location.href = `sms:${encodeURIComponent(phone)}?&${qs.toString()}`;
+}
+
+function useKeyboardInset(active: boolean) {
+  const [inset, setInset] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setInset(0);
+      return;
+    }
+
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const compute = () => {
+      // innerHeight stays large on iOS; visualViewport shrinks when keyboard shows.
+      const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setInset(Math.min(420, Math.round(keyboard))); // cap so we don't go crazy
+    };
+
+    compute();
+    vv.addEventListener("resize", compute);
+    vv.addEventListener("scroll", compute);
+    return () => {
+      vv.removeEventListener("resize", compute);
+      vv.removeEventListener("scroll", compute);
+    };
+  }, [active]);
+
+  return inset;
 }
 
 export function ContactDetailView({
@@ -141,20 +188,26 @@ export function ContactDetailView({
 
   // Follow-up drawer state
   const [showFollowUp, setShowFollowUp] = useState(false);
-  const [followUpMode, setFollowUpMode] = useState<FollowUpMode>("email_followup");
+  const [followUpMode, setFollowUpMode] =
+    useState<FollowUpMode>("email_followup");
   const [followUpTone, setFollowUpTone] = useState<FollowUpTone>("friendly");
-  const [followUpLength, setFollowUpLength] = useState<FollowUpLength>("medium");
+  const [followUpLength, setFollowUpLength] =
+    useState<FollowUpLength>("medium");
   const [followUpGoal, setFollowUpGoal] = useState("");
   const [followUpContext, setFollowUpContext] = useState("");
-  const [followUpResult, setFollowUpResult] = useState<FollowUpResponse | null>(null);
+  const [followUpResult, setFollowUpResult] =
+    useState<FollowUpResponse | null>(null);
   const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+
+  const keyboardInset = useKeyboardInset(showFollowUp);
 
   // Meeting drawer state
   const quickSlots = useMemo(() => getQuickTimeSlots(), []);
   const [showMeeting, setShowMeeting] = useState(false);
-  const [meetingStart, setMeetingStart] = useState<Date>(
-    () => quickSlots[0]?.getTime?.() ?? new Date()
-  );
+  const [meetingStart, setMeetingStart] = useState<Date>(() => {
+    const d = quickSlots[0]?.getTime();
+    return d ? d : new Date();
+  });
   const [meetingDuration, setMeetingDuration] = useState<number>(30);
 
   // Intel drawer state
@@ -178,7 +231,9 @@ export function ContactDetailView({
       address: contact.address,
       scannedAt: contact.createdAt,
       lastTouchedAt: contactV2?.lastTouchedAt,
-      syncedToHubspot: contactV2?.timeline?.some((t) => t.type === "hubspot_synced"),
+      syncedToHubspot: contactV2?.timeline?.some(
+        (t) => t.type === "hubspot_synced"
+      ),
     }),
     [contact, contactV2]
   );
@@ -205,8 +260,12 @@ export function ContactDetailView({
   }, [editedFields.company, contact.company]);
 
   const domainForIntel = useMemo(() => {
-    const fromWebsite = extractDomainFromWebsite(editedFields.website || contact.website || "");
-    const fromEmail = extractDomainFromEmail(editedFields.email || contact.email || "");
+    const fromWebsite = extractDomainFromWebsite(
+      editedFields.website || contact.website || ""
+    );
+    const fromEmail = extractDomainFromEmail(
+      editedFields.email || contact.email || ""
+    );
     return fromWebsite || fromEmail || null;
   }, [editedFields.website, editedFields.email, contact.website, contact.email]);
 
@@ -219,18 +278,6 @@ export function ContactDetailView({
     const a = (editedFields.address || contact.address || "").trim();
     return a.length ? a : null;
   }, [editedFields.address, contact.address]);
-
-  const scrollFieldIntoView = useCallback((el: HTMLElement | null) => {
-    if (!el) return;
-    // iOS keyboard + fixed drawers: force visibility
-    requestAnimationFrame(() => {
-      try {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      } catch {
-        // ignore
-      }
-    });
-  }, []);
 
   const handleSaveEdits = async () => {
     setIsSavingEdits(true);
@@ -267,12 +314,16 @@ export function ContactDetailView({
 
   const handleOpenWebsite = () => {
     if (!contact.website) return;
-    const url = contact.website.includes("://") ? contact.website : `https://${contact.website}`;
+    const url = contact.website.includes("://")
+      ? contact.website
+      : `https://${contact.website}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleOpenLinkedIn = () => {
-    if (contact.linkedinUrl) window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
+    if (contact.linkedinUrl) {
+      window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   const handleAddNote = async (text: string) => {
@@ -316,12 +367,16 @@ export function ContactDetailView({
       const result = await response.json();
 
       if (result.success) {
-        addTimelineEvent(contact.id, "hubspot_synced", `Synced to HubSpot (${result.action})`, {
-          hubspotId: result.hubspotId,
-        });
+        addTimelineEvent(
+          contact.id,
+          "hubspot_synced",
+          `Synced to HubSpot (${result.action})`,
+          { hubspotId: result.hubspotId }
+        );
         onUpdate();
         toast({
-          title: result.action === "created" ? "Added to HubSpot" : "Updated in HubSpot",
+          title:
+            result.action === "created" ? "Added to HubSpot" : "Updated in HubSpot",
           description: `Contact ${result.action} successfully`,
         });
       } else {
@@ -341,68 +396,47 @@ export function ContactDetailView({
     setIsSyncingHubspot(false);
   };
 
-  const openFollowUpTarget = async (res: FollowUpResponse) => {
-    const text = buildFollowUpCopyText(res);
+  const launchFollowUpComposer = async (res: FollowUpResponse) => {
+    const body = buildFollowUpCopyText(res);
     const mode = String(followUpMode);
 
-    // Best-effort detection without relying on exact enum names
-    const wantsEmail = mode.includes("email");
-    const wantsSms = mode.includes("sms") || mode.includes("text");
-    const wantsLinkedin = mode.includes("linkedin");
-
-    if (wantsEmail) {
-      const to = contact.email || "";
-      const subject = res.subject || "Follow-up";
-      const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
-        subject
-      )}&body=${encodeURIComponent(res.body)}`;
-
-      window.location.href = mailto;
-      toast({ title: "Opening email draft…" });
-      setShowFollowUp(false);
-      return;
-    }
-
-    if (wantsSms) {
-      if (!contact.phone) {
-        await navigator.clipboard.writeText(text);
-        toast({
-          title: "Copied",
-          description: "No phone number found. I copied the message so you can paste it.",
-        });
+    if (mode.includes("email")) {
+      if (!contact.email) {
+        await navigator.clipboard.writeText(body);
+        toast({ title: "Copied", description: "No email. Copied to clipboard." });
         return;
       }
-      const joiner = isIOS() ? "&" : "?";
-      const sms = `sms:${encodeURIComponent(contact.phone)}${joiner}body=${encodeURIComponent(
-        res.body
-      )}`;
-      window.location.href = sms;
-      toast({ title: "Opening message draft…" });
-      setShowFollowUp(false);
+      openMailto(contact.email, res.subject || undefined, res.body);
       return;
     }
 
-    if (wantsLinkedin) {
-      // LinkedIn doesn’t reliably support prefilled body via URL. Open profile + copy text.
+    if (mode.includes("sms") || mode.includes("text") || mode.includes("message")) {
+      const p = sanitizePhone(contact.phone);
+      if (!p) {
+        await navigator.clipboard.writeText(body);
+        toast({ title: "Copied", description: "No phone. Copied to clipboard." });
+        return;
+      }
+      openSms(p, body);
+      return;
+    }
+
+    if (mode.includes("linkedin")) {
+      await navigator.clipboard.writeText(body);
+      toast({ title: "Copied", description: "Copied. Opening LinkedIn…" });
       if (contact.linkedinUrl) window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
-      await navigator.clipboard.writeText(text);
-      toast({
-        title: "Copied",
-        description: "Opened LinkedIn (if available) and copied the draft to paste.",
-      });
       return;
     }
 
-    // fallback: copy
-    await navigator.clipboard.writeText(text);
-    toast({ title: "Copied", description: "Draft copied to clipboard." });
+    await navigator.clipboard.writeText(body);
+    toast({ title: "Copied" });
   };
 
   const handleGenerateFollowUp = async () => {
     if (!followUpGoal.trim()) {
       toast({
         title: "Goal required",
-        description: "Tell Carda what you want to achieve (e.g., book a call, send pricing, intro).",
+        description: "Tell Carda what you want to achieve.",
         variant: "destructive",
       });
       return;
@@ -438,13 +472,7 @@ export function ContactDetailView({
       );
       onUpdate();
 
-      // Auto-open the target composer (email/SMS/LinkedIn) as requested
-      // (If it fails, user still sees the text + can Copy)
-      try {
-        await openFollowUpTarget(res);
-      } catch (autoErr) {
-        console.warn("[ContactDetailView] Auto-open followup target failed:", autoErr);
-      }
+      await launchFollowUpComposer(res);
     } catch (e) {
       console.error("[ContactDetailView] Follow-up generation failed:", e);
       toast({ title: "Failed to generate follow-up", variant: "destructive" });
@@ -477,7 +505,11 @@ export function ContactDetailView({
       meetingDuration
     );
 
-    const safeName = (contact.name || "contact").trim().replace(/\s+/g, "-").toLowerCase();
+    const safeName = (contact.name || "contact")
+      .trim()
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+
     downloadIcsFile(ics, `carda-meeting-${safeName}.ics`);
 
     addTimelineEvent(contact.id, "meeting_scheduled", "Meeting invite created", {
@@ -490,7 +522,7 @@ export function ContactDetailView({
     setShowMeeting(false);
   };
 
-  const openIntel = async (forceRefresh?: boolean) => {
+  const openIntel = async (forceRefresh = false) => {
     if (!companyNameForIntel && !domainForIntel) {
       toast({
         title: "Company required",
@@ -502,14 +534,15 @@ export function ContactDetailView({
 
     setShowIntel(true);
 
-    // If intel is missing news due to caching or partial fetch, force refresh on open.
-    const shouldForce = forceRefresh ?? !intelV2.intel;
+    // Don’t refetch if we already have intel (feels instant). Use refresh button for updates.
+    if (!forceRefresh && intelV2.intel) return;
+
     await intelV2.fetchIntel(
       companyNameForIntel,
       domainForIntel,
       roleForIntel,
       addressForIntel,
-      shouldForce
+      forceRefresh
     );
   };
 
@@ -550,7 +583,7 @@ export function ContactDetailView({
         id: "intel",
         label: "Company Brief",
         icon: <Briefcase className="w-5 h-5" />,
-        onClick: () => void openIntel(undefined),
+        onClick: () => void openIntel(false),
       },
     ];
 
@@ -571,16 +604,20 @@ export function ContactDetailView({
       icon: <StickyNote className="w-5 h-5" />,
       onClick: () => {
         setTimeout(() => {
-          const el = document.querySelector(
-            '[data-testid="input-add-note"]'
-          ) as HTMLTextAreaElement | null;
+          const el = document.querySelector('[data-testid="input-add-note"]') as HTMLTextAreaElement | null;
           el?.focus();
-        }, 80);
+        }, 60);
       },
     });
 
     return actions;
   }, [contact.id, contact.name, contactV2, hubspotStatus, toast, onUpdate]);
+
+  const heroBottomLabel = useMemo(() => {
+    // wording tweak
+    if (!contactV2?.lastTouchedAt) return null;
+    return "Last interaction";
+  }, [contactV2?.lastTouchedAt]);
 
   return (
     <div className="flex flex-col min-h-full pb-24" data-testid="contact-detail-view">
@@ -596,22 +633,18 @@ export function ContactDetailView({
           <ArrowLeft className="w-4 h-4" />
           Back
         </Button>
+
         <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setIsEditing(!isEditing)}
-            data-testid="button-toggle-edit"
-          >
+          <Button size="sm" variant="ghost" onClick={() => setIsEditing(!isEditing)}>
             {isEditing ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
           </Button>
+
           {onDelete && (
             <Button
               size="icon"
               variant="ghost"
               onClick={() => setShowDeleteConfirm(true)}
               className="text-muted-foreground hover:text-destructive"
-              data-testid="button-delete-contact"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
@@ -622,87 +655,41 @@ export function ContactDetailView({
       {/* Edit Mode */}
       {isEditing ? (
         <div className="space-y-3 mb-6 p-4 rounded-2xl bg-muted/30">
+          {/* fields... unchanged */}
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Full Name</Label>
-            <Input
-              value={editedFields.name}
-              onChange={(e) => setEditedFields((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Full Name"
-              data-testid="input-edit-name"
-            />
+            <Input value={editedFields.name} onChange={(e) => setEditedFields((f) => ({ ...f, name: e.target.value }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Job Title</Label>
-            <Input
-              value={editedFields.title}
-              onChange={(e) => setEditedFields((f) => ({ ...f, title: e.target.value }))}
-              placeholder="Job Title"
-              data-testid="input-edit-title"
-            />
+            <Input value={editedFields.title} onChange={(e) => setEditedFields((f) => ({ ...f, title: e.target.value }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Company</Label>
-            <Input
-              value={editedFields.company}
-              onChange={(e) => setEditedFields((f) => ({ ...f, company: e.target.value }))}
-              placeholder="Company"
-              data-testid="input-edit-company"
-            />
+            <Input value={editedFields.company} onChange={(e) => setEditedFields((f) => ({ ...f, company: e.target.value }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Email</Label>
-            <Input
-              type="email"
-              value={editedFields.email}
-              onChange={(e) => setEditedFields((f) => ({ ...f, email: e.target.value }))}
-              placeholder="email@example.com"
-              data-testid="input-edit-email"
-            />
+            <Input type="email" value={editedFields.email} onChange={(e) => setEditedFields((f) => ({ ...f, email: e.target.value }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Phone</Label>
-            <Input
-              type="tel"
-              value={editedFields.phone}
-              onChange={(e) => setEditedFields((f) => ({ ...f, phone: e.target.value }))}
-              placeholder="+1 (555) 123-4567"
-              data-testid="input-edit-phone"
-            />
+            <Input type="tel" value={editedFields.phone} onChange={(e) => setEditedFields((f) => ({ ...f, phone: e.target.value }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Website</Label>
-            <Input
-              value={editedFields.website}
-              onChange={(e) => setEditedFields((f) => ({ ...f, website: e.target.value }))}
-              placeholder="https://example.com"
-              data-testid="input-edit-website"
-            />
+            <Input value={editedFields.website} onChange={(e) => setEditedFields((f) => ({ ...f, website: e.target.value }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">LinkedIn</Label>
-            <Input
-              value={editedFields.linkedinUrl}
-              onChange={(e) => setEditedFields((f) => ({ ...f, linkedinUrl: e.target.value }))}
-              placeholder="https://linkedin.com/in/username"
-              data-testid="input-edit-linkedin"
-            />
+            <Input value={editedFields.linkedinUrl} onChange={(e) => setEditedFields((f) => ({ ...f, linkedinUrl: e.target.value }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Address</Label>
-            <Input
-              value={editedFields.address}
-              onChange={(e) => setEditedFields((f) => ({ ...f, address: e.target.value }))}
-              placeholder="123 Main St, City, State"
-              data-testid="input-edit-address"
-            />
+            <Input value={editedFields.address} onChange={(e) => setEditedFields((f) => ({ ...f, address: e.target.value }))} />
           </div>
 
-          <Button
-            onClick={handleSaveEdits}
-            disabled={isSavingEdits}
-            className="w-full mt-2"
-            data-testid="button-save-edits"
-          >
+          <Button onClick={handleSaveEdits} disabled={isSavingEdits} className="w-full mt-2">
             {isSavingEdits ? "Saving..." : "Save Changes"}
           </Button>
         </div>
@@ -714,14 +701,12 @@ export function ContactDetailView({
             onEmail={handleEmail}
             onOpenWebsite={handleOpenWebsite}
             onOpenLinkedIn={handleOpenLinkedIn}
+            // OPTIONAL: if your ContactHeroCard supports it
+            // lastTouchedLabel={heroBottomLabel}
           />
 
           <div className="mt-6">
-            <TimelineFeed
-              items={timelineItems}
-              onAddNote={handleAddNote}
-              isAddingNote={isAddingNote}
-            />
+            <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} />
           </div>
         </>
       )}
@@ -736,13 +721,12 @@ export function ContactDetailView({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 onDelete?.(contact.id);
                 setShowDeleteConfirm(false);
               }}
-              data-testid="button-confirm-delete"
             >
               Delete
             </AlertDialogAction>
@@ -750,138 +734,116 @@ export function ContactDetailView({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Quick Actions Sheet */}
       <QuickActionsSheet open={showQuickActions} onOpenChange={setShowQuickActions} actions={quickActions} />
 
       {/* Follow-up Drawer */}
-      <Drawer open={showFollowUp} onOpenChange={setShowFollowUp} repositionInputs>
-        <DrawerContent
-          className="rounded-t-3xl max-h-[85dvh] overflow-hidden flex flex-col"
-          data-testid="drawer-followup"
-        >
-          <DrawerHeader className="flex items-center justify-between text-left">
-            <DrawerTitle>Follow-up Generator</DrawerTitle>
+      <Drawer open={showFollowUp} handleOnly onOpenChange={setShowFollowUp}>
+        <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
+          <DrawerHeader>
+            <DrawerTitle>Follow-up</DrawerTitle>
             <DrawerClose asChild>
-              <Button size="icon" variant="ghost" className="rounded-full">
-                <X className="w-4 h-4" />
-              </Button>
+              <Button variant="ghost" size="sm">Done</Button>
             </DrawerClose>
           </DrawerHeader>
 
-          <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+          <div
+            className="flex-1 overflow-y-auto px-4"
+            style={{
+              paddingBottom: Math.max(16, keyboardInset + 16),
+            }}
+          >
+            <div className="space-y-4 pb-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Mode</Label>
+                  <Select value={followUpMode} onValueChange={(v) => setFollowUpMode(v as FollowUpMode)}>
+                    <SelectTrigger><SelectValue placeholder="Mode" /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(FOLLOWUP_MODE_LABELS).map(([k, label]) => (
+                        <SelectItem key={k} value={k}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Tone</Label>
+                  <Select value={followUpTone} onValueChange={(v) => setFollowUpTone(v as FollowUpTone)}>
+                    <SelectTrigger><SelectValue placeholder="Tone" /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(FOLLOWUP_TONE_LABELS).map(([k, label]) => (
+                        <SelectItem key={k} value={k}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Mode</Label>
-                <Select value={followUpMode} onValueChange={(v) => setFollowUpMode(v as FollowUpMode)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Mode" />
-                  </SelectTrigger>
+                <Label className="text-xs text-muted-foreground">Length</Label>
+                <Select value={followUpLength} onValueChange={(v) => setFollowUpLength(v as FollowUpLength)}>
+                  <SelectTrigger><SelectValue placeholder="Length" /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(FOLLOWUP_MODE_LABELS).map(([k, label]) => (
-                      <SelectItem key={k} value={k}>
-                        {label}
-                      </SelectItem>
+                    {Object.entries(FOLLOWUP_LENGTH_LABELS).map(([k, label]) => (
+                      <SelectItem key={k} value={k}>{label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Tone</Label>
-                <Select value={followUpTone} onValueChange={(v) => setFollowUpTone(v as FollowUpTone)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Tone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(FOLLOWUP_TONE_LABELS).map(([k, label]) => (
-                      <SelectItem key={k} value={k}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs text-muted-foreground">Goal</Label>
+                <Textarea
+                  value={followUpGoal}
+                  onChange={(e) => setFollowUpGoal(e.target.value)}
+                  placeholder="e.g., book a 20-min call next week"
+                  className="min-h-[110px] resize-none"
+                />
               </div>
-            </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Length</Label>
-              <Select value={followUpLength} onValueChange={(v) => setFollowUpLength(v as FollowUpLength)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Length" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(FOLLOWUP_LENGTH_LABELS).map(([k, label]) => (
-                    <SelectItem key={k} value={k}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Goal</Label>
-              <Textarea
-                value={followUpGoal}
-                onChange={(e) => setFollowUpGoal(e.target.value)}
-                onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
-                placeholder="e.g., book a 20-min call next week to discuss their BESS requirements"
-                className="min-h-[84px] resize-none"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Context (optional)</Label>
-              <Textarea
-                value={followUpContext}
-                onChange={(e) => setFollowUpContext(e.target.value)}
-                onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
-                placeholder="e.g., met at All-Energy Melbourne, discussed 2-hour BESS"
-                className="min-h-[72px] resize-none"
-              />
-            </div>
-
-            {followUpResult && (
-              <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
-                {followUpResult.subject && (
-                  <div className="text-sm">
-                    <span className="text-xs text-muted-foreground">Subject</span>
-                    <div className="font-medium">{followUpResult.subject}</div>
-                  </div>
-                )}
-                <div className="text-sm whitespace-pre-wrap">{followUpResult.body}</div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Context (optional)</Label>
+                <Textarea
+                  value={followUpContext}
+                  onChange={(e) => setFollowUpContext(e.target.value)}
+                  placeholder="e.g., met at All-Energy Melbourne"
+                  className="min-h-[90px] resize-none"
+                />
               </div>
-            )}
+
+              <div className="flex gap-2 pt-1">
+                <Button className="flex-1 gap-2" onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp}>
+                  <Sparkles className="w-4 h-4" />
+                  {isGeneratingFollowUp ? "Generating..." : "Generate"}
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={handleCopyFollowUp} disabled={!followUpResult}>
+                  Copy
+                </Button>
+              </div>
+
+              {followUpResult && (
+                <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
+                  {followUpResult.subject && (
+                    <div className="text-sm">
+                      <span className="text-xs text-muted-foreground">Subject</span>
+                      <div className="font-medium">{followUpResult.subject}</div>
+                    </div>
+                  )}
+                  <div className="text-sm whitespace-pre-wrap">{followUpResult.body}</div>
+                </div>
+              )}
+            </div>
           </div>
-
-          <DrawerFooter className="gap-2 pb-[calc(env(safe-area-inset-bottom)+16px)]">
-            <div className="flex gap-2">
-              <Button className="flex-1 gap-2" onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp}>
-                <Sparkles className="w-4 h-4" />
-                {isGeneratingFollowUp ? "Generating..." : "Generate"}
-              </Button>
-
-              <Button variant="outline" className="flex-1" onClick={handleCopyFollowUp} disabled={!followUpResult}>
-                Copy
-              </Button>
-            </div>
-
-            <DrawerClose asChild>
-              <Button variant="ghost">Close</Button>
-            </DrawerClose>
-          </DrawerFooter>
         </DrawerContent>
       </Drawer>
 
-      {/* Meeting Drawer */}
-      <Drawer open={showMeeting} onOpenChange={setShowMeeting} repositionInputs>
-        <DrawerContent className="rounded-t-3xl" data-testid="drawer-meeting">
-          <DrawerHeader className="flex items-center justify-between text-left">
+      {/* Meeting Drawer (leave as-is) */}
+      <Drawer open={showMeeting} onOpenChange={setShowMeeting}>
+        <DrawerContent>
+          <DrawerHeader>
             <DrawerTitle>Meeting Invite</DrawerTitle>
             <DrawerClose asChild>
-              <Button size="icon" variant="ghost" className="rounded-full">
-                <X className="w-4 h-4" />
-              </Button>
+              <Button variant="ghost" size="sm">Done</Button>
             </DrawerClose>
           </DrawerHeader>
 
@@ -892,11 +854,7 @@ export function ContactDetailView({
                 {quickSlots.map((s) => (
                   <Button
                     key={s.label}
-                    variant={
-                      toDatetimeLocalValue(meetingStart) === toDatetimeLocalValue(s.getTime())
-                        ? "default"
-                        : "outline"
-                    }
+                    variant={toDatetimeLocalValue(meetingStart) === toDatetimeLocalValue(s.getTime()) ? "default" : "outline"}
                     size="sm"
                     onClick={() => setMeetingStart(s.getTime())}
                     className="shrink-0"
@@ -922,14 +880,10 @@ export function ContactDetailView({
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Duration</Label>
               <Select value={String(meetingDuration)} onValueChange={(v) => setMeetingDuration(Number(v))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Duration" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Duration" /></SelectTrigger>
                 <SelectContent>
                   {[15, 30, 45, 60].map((m) => (
-                    <SelectItem key={m} value={String(m)}>
-                      {m} minutes
-                    </SelectItem>
+                    <SelectItem key={m} value={String(m)}>{m} minutes</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -942,36 +896,21 @@ export function ContactDetailView({
             </div>
           </div>
 
-          <DrawerFooter className="gap-2 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+          <DrawerFooter>
             <Button className="w-full" onClick={handleCreateMeetingInvite}>
               Download .ics invite
             </Button>
-            <DrawerClose asChild>
-              <Button variant="ghost">Close</Button>
-            </DrawerClose>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
 
       {/* Intel Drawer */}
-      <Drawer
-        open={showIntel}
-        onOpenChange={(v) => {
-          setShowIntel(v);
-          if (!v) intelV2.reset();
-        }}
-        repositionInputs
-      >
-        <DrawerContent
-          className="rounded-t-3xl max-h-[85dvh] overflow-hidden flex flex-col"
-          data-testid="drawer-intel"
-        >
-          <DrawerHeader className="flex items-center justify-between text-left">
-            <DrawerTitle>Company Intel</DrawerTitle>
+      <Drawer open={showIntel} handleOnly onOpenChange={(v) => setShowIntel(v)}>
+        <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
+          <DrawerHeader>
+            <DrawerTitle>Company Brief</DrawerTitle>
             <DrawerClose asChild>
-              <Button size="icon" variant="ghost" className="rounded-full">
-                <X className="w-4 h-4" />
-              </Button>
+              <Button variant="ghost" size="sm">Done</Button>
             </DrawerClose>
           </DrawerHeader>
 
@@ -979,23 +918,14 @@ export function ContactDetailView({
             <CompanyIntelV2Card
               intel={intelV2.intel}
               isLoading={intelV2.isLoading}
-              isBoosting={intelV2.isBoosting}
               error={intelV2.error}
               onRefresh={() => void openIntel(true)}
-              onBoost={(domain) => intelV2.boostIntel(domain)}
               companyName={companyNameForIntel || undefined}
             />
           </div>
-
-          <DrawerFooter className="pb-[calc(env(safe-area-inset-bottom)+16px)]">
-            <DrawerClose asChild>
-              <Button variant="ghost">Close</Button>
-            </DrawerClose>
-          </DrawerFooter>
         </DrawerContent>
       </Drawer>
 
-      {/* Bottom Bar */}
       <ContactBottomBar
         isSaved={true}
         onSave={onDownloadVCard}

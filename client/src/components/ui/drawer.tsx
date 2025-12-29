@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
-
 import { cn } from "@/lib/utils";
 
 const Drawer = ({
@@ -23,47 +22,33 @@ const DrawerOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Overlay
     ref={ref}
-    className={cn(
-      "fixed inset-0 z-50 bg-black/45 backdrop-blur-sm",
-      className
-    )}
+    className={cn("fixed inset-0 z-50 bg-black/35 backdrop-blur-sm", className)}
     {...props}
   />
 ));
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 
-const DrawerHandle = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Handle>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Handle>
->(({ className, ...props }, ref) => (
-  <DrawerPrimitive.Handle
-    ref={ref}
-    className={cn(
-      "mx-auto mt-3 h-1.5 w-[92px] rounded-full bg-foreground/15",
-      className
-    )}
-    {...props}
-  />
-));
-DrawerHandle.displayName = "DrawerHandle";
-
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> & {
-    showHandle?: boolean;
-  }
->(({ className, children, showHandle = true, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
   <DrawerPortal>
     <DrawerOverlay />
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-2xl border border-white/10 bg-background/70 backdrop-blur-2xl",
+        "fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border border-white/10 bg-background/80 backdrop-blur-2xl shadow-xl",
+        // sensible default height (you can override per drawer)
+        "max-h-[92dvh]",
         className
       )}
       {...props}
     >
-      {showHandle ? <DrawerHandle /> : null}
+      {/* Vaul handle — required for handleOnly swipe */}
+      <div
+        data-vaul-handle
+        className="mx-auto mt-3 h-1.5 w-[92px] rounded-full bg-foreground/15 cursor-grab active:cursor-grabbing"
+      />
       {children}
     </DrawerPrimitive.Content>
   </DrawerPortal>
@@ -74,10 +59,7 @@ const DrawerHeader = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn("grid gap-1.5 p-4 text-center sm:text-left", className)}
-    {...props}
-  />
+  <div className={cn("flex items-center justify-between px-4 pt-3 pb-2", className)} {...props} />
 );
 DrawerHeader.displayName = "DrawerHeader";
 
@@ -85,7 +67,7 @@ const DrawerFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("mt-auto flex flex-col gap-2 p-4", className)} {...props} />
+  <div className={cn("mt-auto px-4 pb-4 pt-2", className)} {...props} />
 );
 DrawerFooter.displayName = "DrawerFooter";
 
@@ -95,7 +77,7 @@ const DrawerTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn("text-base font-semibold leading-none tracking-tight", className)}
     {...props}
   />
 ));
@@ -119,7 +101,6 @@ export {
   DrawerOverlay,
   DrawerTrigger,
   DrawerClose,
-  DrawerHandle,
   DrawerContent,
   DrawerHeader,
   DrawerFooter,

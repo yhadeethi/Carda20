@@ -5,8 +5,8 @@ import { z } from "zod";
 import { extractTextFromImage, initializeOCR } from "./ocrService";
 import { parseContact, ParsedContact, splitAuAddress } from "./parseService";
 import { getOrCreateCompanyIntel } from "./intelService";
-import { generateIntelV2, fetchApolloEnrichment } from "./intelV2Service";
-import { CompanyIntelV2, HeadcountRange } from "@shared/schema";
+import { generateIntelV2 } from "./intelV2Service";
+// CompanyIntelV2 and HeadcountRange removed - Apollo boost disabled
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
@@ -298,94 +298,10 @@ export async function registerRoutes(
     }
   });
 
-  // Apollo Boost endpoint - user-triggered enrichment (uses API credits)
-  app.post("/api/intel-v2/boost", async (req: Request, res: Response) => {
-    try {
-      const { domain, existingIntel } = req.body;
-
-      if (!domain) {
-        return res.status(400).json({ error: "Domain is required for boost" });
-      }
-
-      // Check if Apollo API key is configured
-      if (!process.env.APOLLO_API_KEY) {
-        return res.status(400).json({ error: "Apollo API key not configured" });
-      }
-
-      console.log(`[Boost] Fetching Apollo enrichment for domain: ${domain}`);
-      const apolloData = await fetchApolloEnrichment(domain);
-
-      if (!apolloData) {
-        return res.status(404).json({ error: "No enrichment data found for this company" });
-      }
-
-      console.log(`[Boost] Apollo data received:`, JSON.stringify({
-        name: apolloData.name,
-        industry: apolloData.industry,
-        employeeCountRange: apolloData.employeeCountRange,
-        revenue: apolloData.annualRevenueFormatted,
-        funding: apolloData.totalFundingFormatted,
-        phone: apolloData.primaryPhone,
-      }));
-      console.log(`[Boost] Existing intel has ${existingIntel.latestSignals?.length || 0} news items`);
-
-      // Merge Apollo data with existing intel - EXPLICITLY preserve latestSignals
-      const boostedIntel: CompanyIntelV2 = {
-        ...existingIntel,
-        isBoosted: true,
-        boostedAt: new Date().toISOString(),
-        
-        // CRITICAL: Explicitly preserve news/signals
-        latestSignals: existingIntel.latestSignals || [],
-        
-        // Update headcount if Apollo has it and existing doesn't
-        headcount: existingIntel.headcount || (apolloData.employeeCountRange ? {
-          range: apolloData.employeeCountRange as HeadcountRange,
-          source: { title: "Apollo.io", url: "https://app.apollo.io" }
-        } : null),
-        
-        // Update HQ if Apollo has it and existing doesn't
-        hq: existingIntel.hq || ((apolloData.city || apolloData.country) ? {
-          city: apolloData.city,
-          country: apolloData.country,
-          source: { title: "Apollo.io", url: "https://app.apollo.io" }
-        } : null),
-        
-        // Update industry if Apollo has it and existing doesn't
-        industry: existingIntel.industry || apolloData.industry || null,
-        
-        // Update founded if Apollo has it and existing doesn't
-        founded: existingIntel.founded || (apolloData.foundedYear?.toString() || null),
-        
-        // Update social links if missing
-        linkedinUrl: existingIntel.linkedinUrl || apolloData.linkedinUrl || null,
-        twitterUrl: existingIntel.twitterUrl || apolloData.twitterUrl || null,
-        facebookUrl: existingIntel.facebookUrl || apolloData.facebookUrl || null,
-        
-        // Add boost-only fields (revenue, funding, phone)
-        revenue: apolloData.annualRevenueFormatted || null,
-        funding: (apolloData.totalFunding || apolloData.latestFundingRoundType || apolloData.investors) ? {
-          totalRaised: apolloData.totalFundingFormatted || null,
-          latestRound: apolloData.latestFundingRoundType || null,
-          investors: apolloData.investors || [],
-        } : null,
-        primaryPhone: apolloData.primaryPhone || null,
-        
-        // Add Apollo to sources
-        sources: [
-          ...(existingIntel.sources || []),
-          { title: "Apollo.io", url: "https://app.apollo.io" }
-        ],
-      };
-      
-      console.log(`[Boost] Boosted intel has ${boostedIntel.latestSignals?.length || 0} news items`);
-
-      console.log(`[Boost] Successfully boosted intel for ${domain}`);
-      res.json(boostedIntel);
-    } catch (error) {
-      console.error("Error boosting company intel:", error);
-      res.status(500).json({ error: "Failed to boost company intel" });
-    }
+  // Apollo Boost endpoint - disabled (fetchApolloEnrichment not implemented)
+  // TODO: Implement Apollo enrichment when API integration is ready
+  app.post("/api/intel-v2/boost", async (_req: Request, res: Response) => {
+    res.status(501).json({ error: "Apollo boost feature not yet implemented" });
   });
 
   app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Response) => {

@@ -1,8 +1,13 @@
+// server/intelV2Service.ts
 import OpenAI from "openai";
-import { CompanyIntelV2, IntelSource, SignalItem, HeadcountRange, StockData, CompetitorInfo, ApolloEnrichmentData } from "@shared/schema";
-import { db } from "./db";
-import { apolloCache } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import {
+  CompanyIntelV2,
+  IntelSource,
+  SignalItem,
+  HeadcountRange,
+  StockData,
+  CompetitorInfo,
+} from "@shared/schema";
 
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -17,105 +22,118 @@ interface SourceSnippet {
 
 function isValidDomain(domain: string): boolean {
   if (!domain) return false;
-  
+
   const cleanDomain = domain.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
-  
-  if (/^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.)/.test(cleanDomain)) {
+
+  // block local/private
+  if (
+    /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.)/.test(cleanDomain)
+  ) {
     return false;
   }
-  
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(cleanDomain)) {
-    return false;
-  }
-  
-  if (!cleanDomain.includes(".") || cleanDomain.length < 4) {
-    return false;
-  }
-  
+
+  // raw IP
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(cleanDomain)) return false;
+
+  if (!cleanDomain.includes(".") || cleanDomain.length < 4) return false;
+
   return /^[a-z0-9][a-z0-9.-]+[a-z0-9]$/.test(cleanDomain);
 }
 
+function sanitizeCompanyQuery(companyName: string): string {
+  // Keep it simple; avoid quotes; remove weird punctuation that can kill RSS search.
+  return (companyName || "")
+    .replace(/[“”"']/g, "")
+    .replace(/[(){}\[\]]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 interface WikipediaInfo {
-  extract?: string;
-  pageUrl?: string;
-  infobox?: Record<string, string>;
-  ticker?: string;
+  extract?: string | null;
+  pageUrl?: string | null;
+  ticker?: string | undefined;
 }
 
 async function fetchWikipediaSummary(companyName: string): Promise<WikipediaInfo | null> {
   try {
-    const searchUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(companyName)}`;
-    const response = await fetch(searchUrl);
-    
-    if (!response.ok) {
-      const searchQuery = encodeURIComponent(companyName + " company");
-      const altUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${searchQuery}`;
-      const altResponse = await fetch(altUrl);
-      if (!altResponse.ok) return null;
-      const altData = await altResponse.json();
+    const directUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(companyName)}`;
+    const res = await fetch(directUrl);
+
+    const parse = async (r: Response): Promise<WikipediaInfo | null> => {
+      if (!r.ok) return null;
+      const data = await r.json();
+
+      let ticker: string | undefined;
+      const extract: string | undefined = data.extract;
+      const tickerMatch = extract?.match(/\b(NYSE|NASDAQ|TSX|LSE|ASX)[:\s]+([A-Z]{1,6})(?:\b|\.|,)/i);
+      if (tickerMatch) ticker = tickerMatch[2];
+
       return {
-        extract: altData.extract || null,
-        pageUrl: altData.content_urls?.desktop?.page || null,
+        extract: data.extract || null,
+        pageUrl: data.content_urls?.desktop?.page || null,
+        ticker,
       };
-    }
-    
-    const data = await response.json();
-    
-    let ticker: string | undefined;
-    const tickerMatch = data.extract?.match(/\b(NYSE|NASDAQ|TSX|LSE|ASX)[:\s]+([A-Z]{1,5})\b/i);
-    if (tickerMatch) {
-      ticker = tickerMatch[2];
-    }
-    
-    return {
-      extract: data.extract || null,
-      pageUrl: data.content_urls?.desktop?.page || null,
-      ticker,
     };
-  } catch (error) {
-    console.error("Wikipedia fetch error:", error);
+
+    const direct = await parse(res);
+    if (direct) return direct;
+
+    // fallback: append "company"
+    const altQuery = `${companyName} company`;
+    const altUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(altQuery)}`;
+    const altRes = await fetch(altUrl);
+    return await parse(altRes);
+  } catch (e) {
+    console.error("Wikipedia fetch error:", e);
     return null;
   }
 }
 
 async function fetchWebsiteContent(domain: string, paths: string[]): Promise<SourceSnippet[]> {
   const snippets: SourceSnippet[] = [];
-  
   if (!isValidDomain(domain)) {
     console.log(`Intel V2: Skipping invalid domain: ${domain}`);
     return snippets;
   }
-  
-  const baseUrl = domain.startsWith("http") ? domain : `https://${domain}`;
-  
+
+  const cleanDomain = domain.replace(/^https?:\/\//, "").split("/")[0];
+  const baseUrl = `https://${cleanDomain}`;
+
   for (const path of paths.slice(0, 3)) {
     try {
       const url = `${baseUrl}${path}`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
+      const timeoutId = setTimeout(() => controller.abort(), 6500);
+
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; IntelBot/1.0)",
+          // More “normal browser” UA helps a lot
+          "User-Agent":
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
         },
       });
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) continue;
-      
+
       const html = await response.text();
+
       const textContent = html
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "")
         .replace(/<[^>]+>/g, " ")
         .replace(/\s+/g, " ")
         .trim()
-        .substring(0, 2000);
-      
-      if (textContent.length > 100) {
+        .substring(0, 2200);
+
+      if (textContent.length > 120) {
         snippets.push({
-          sourceTitle: `${domain}${path}`,
+          sourceTitle: `${cleanDomain}${path}`,
           url,
           textExcerpt: textContent,
         });
@@ -124,7 +142,7 @@ async function fetchWebsiteContent(domain: string, paths: string[]): Promise<Sou
       continue;
     }
   }
-  
+
   return snippets;
 }
 
@@ -135,71 +153,133 @@ interface NewsItem {
   source: string;
 }
 
-async function fetchGoogleNewsRSS(companyName: string): Promise<NewsItem[]> {
+function extractBetween(xml: string, tag: string): string[] {
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml))) out.push(m[1]);
+  return out;
+}
+
+function decodeCdata(text: string): string {
+  const cdata = text.match(/<!\[CDATA\[([\s\S]*?)\]\]>/i);
+  return (cdata ? cdata[1] : text).trim();
+}
+
+function normalizeGoogleNewsLink(link: string): string {
+  // Google News RSS often uses `news.google.com/rss/articles/...`
+  // keep as-is; it opens fine; just trim.
+  return (link || "").trim();
+}
+
+async function fetchGoogleNewsRSSByUrl(url: string, label: string): Promise<NewsItem[]> {
   try {
-    // Use simple query without quotes for better results
-    const query = encodeURIComponent(companyName);
-    const url = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
-    
-    console.log(`[News] Fetching Google News for: "${companyName}"`);
-    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    
+    const timeoutId = setTimeout(() => controller.abort(), 9000);
+
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        // Try to avoid 403/429
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.7",
+        "Accept-Language": "en-US,en;q=0.9",
       },
     });
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
-      console.log(`[News] Google News response not OK: ${response.status}`);
+      console.log(`[News] ${label} response not OK: ${response.status}`);
       return [];
     }
-    
+
     const xml = await response.text();
-    console.log(`[News] RSS response length: ${xml.length} chars`);
-    
-    const items: NewsItem[] = [];
-    
-    const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/g) || [];
-    console.log(`[News] Found ${itemMatches.length} raw items in RSS`);
-    
-    for (const itemMatch of itemMatches) {
-      const match = [itemMatch, itemMatch.replace(/<\/?item>/g, "")];
-      const itemContent = match[1];
-      const titleMatch = itemContent.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>(.*?)<\/title>/);
-      const linkMatch = itemContent.match(/<link>(.*?)<\/link>/);
-      const pubDateMatch = itemContent.match(/<pubDate>(.*?)<\/pubDate>/);
-      const sourceMatch = itemContent.match(/<source[^>]*>(.*?)<\/source>/);
-      
-      if (titleMatch && linkMatch) {
-        const title = (titleMatch[1] || titleMatch[2] || "").trim();
-        const link = linkMatch[1].trim();
-        const pubDate = pubDateMatch?.[1] || "";
-        const source = sourceMatch?.[1] || "Google News";
-        
-        if (title && link && !title.toLowerCase().includes("view full coverage")) {
-          items.push({ title, link, pubDate, source });
-        }
-      }
-      
-      if (items.length >= 10) break;
+    if (!xml || xml.length < 200) {
+      console.log(`[News] ${label} empty/short RSS`);
+      return [];
     }
-    
-    console.log(`[News] Parsed ${items.length} valid news items for "${companyName}"`);
+
+    const itemsRaw = xml.match(/<item>([\s\S]*?)<\/item>/gi) || [];
+    const items: NewsItem[] = [];
+
+    for (const itemXml of itemsRaw) {
+      const titleRaw = extractBetween(itemXml, "title")[0] || "";
+      const linkRaw = extractBetween(itemXml, "link")[0] || "";
+      const pubRaw = extractBetween(itemXml, "pubDate")[0] || "";
+      const sourceRaw = extractBetween(itemXml, "source")[0] || "";
+
+      const title = decodeCdata(titleRaw);
+      const link = normalizeGoogleNewsLink(decodeCdata(linkRaw));
+      const pubDate = decodeCdata(pubRaw);
+      const source = decodeCdata(sourceRaw) || "Google News";
+
+      if (!title || !link) continue;
+      const t = title.toLowerCase();
+      if (t.includes("view full coverage")) continue;
+
+      items.push({ title, link, pubDate, source });
+      if (items.length >= 12) break;
+    }
+
+    console.log(`[News] ${label} parsed items: ${items.length}`);
     return items;
   } catch (error) {
-    console.log(`[News] Google News RSS fetch error for "${companyName}":`, error);
+    console.log(`[News] ${label} fetch error:`, error);
     return [];
   }
+}
+
+async function fetchGoogleNewsRSS(companyName: string, domain?: string | null): Promise<NewsItem[]> {
+  const qName = sanitizeCompanyQuery(companyName);
+  const queries: { url: string; label: string }[] = [];
+
+  // Strategy: try multiple regions + slightly different queries.
+  // Google News RSS can be picky and/or rate-limited; this improves hit-rate.
+  if (qName) {
+    const q1 = encodeURIComponent(qName);
+    const q2 = encodeURIComponent(`${qName} company`);
+    queries.push({
+      url: `https://news.google.com/rss/search?q=${q1}&hl=en-US&gl=US&ceid=US:en`,
+      label: "US:name",
+    });
+    queries.push({
+      url: `https://news.google.com/rss/search?q=${q2}&hl=en-US&gl=US&ceid=US:en`,
+      label: "US:name+company",
+    });
+    // AU feed often works better for AU companies
+    queries.push({
+      url: `https://news.google.com/rss/search?q=${q1}&hl=en-AU&gl=AU&ceid=AU:en`,
+      label: "AU:name",
+    });
+  }
+
+  if (domain && isValidDomain(domain)) {
+    const cleanDomain = domain.replace(/^https?:\/\//, "").split("/")[0];
+    const qd = encodeURIComponent(`"${cleanDomain}"`);
+    queries.push({
+      url: `https://news.google.com/rss/search?q=${qd}&hl=en-US&gl=US&ceid=US:en`,
+      label: "US:domain",
+    });
+    queries.push({
+      url: `https://news.google.com/rss/search?q=${qd}&hl=en-AU&gl=AU&ceid=AU:en`,
+      label: "AU:domain",
+    });
+  }
+
+  for (const attempt of queries) {
+    console.log(`[News] Fetching Google News (${attempt.label}) for "${companyName}"`);
+    const items = await fetchGoogleNewsRSSByUrl(attempt.url, attempt.label);
+    if (items.length > 0) return items;
+  }
+
+  return [];
 }
 
 function parseNewsDate(pubDate: string): string {
   try {
     const date = new Date(pubDate);
+    if (Number.isNaN(date.getTime())) throw new Error("bad date");
     return date.toISOString().split("T")[0];
   } catch {
     return new Date().toISOString().split("T")[0];
@@ -208,33 +288,37 @@ function parseNewsDate(pubDate: string): string {
 
 async function fetchYahooFinanceStock(ticker: string): Promise<StockData | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+      ticker
+    )}?interval=1d&range=1d`;
+
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; CardaBot/1.0)",
+        "Accept": "application/json, text/plain, */*",
       },
     });
-    
+
     if (!response.ok) return null;
-    
+
     const data = await response.json();
     const result = data?.chart?.result?.[0];
     if (!result) return null;
-    
+
     const meta = result.meta;
     const price = meta?.regularMarketPrice;
     const previousClose = meta?.previousClose || meta?.chartPreviousClose;
-    
+
     let changePercent: number | null = null;
-    if (price && previousClose) {
+    if (typeof price === "number" && typeof previousClose === "number" && previousClose !== 0) {
       changePercent = ((price - previousClose) / previousClose) * 100;
     }
-    
+
     return {
       ticker: ticker.toUpperCase(),
       exchange: meta?.exchangeName || null,
-      price: price || null,
-      changePercent: changePercent ? Math.round(changePercent * 100) / 100 : null,
+      price: typeof price === "number" ? price : null,
+      changePercent: typeof changePercent === "number" ? Math.round(changePercent * 100) / 100 : null,
       currency: meta?.currency || "USD",
     };
   } catch (error) {
@@ -243,136 +327,11 @@ async function fetchYahooFinanceStock(ticker: string): Promise<StockData | null>
   }
 }
 
-// Apollo.io Organization Enrichment API (exported for boost endpoint)
-export async function fetchApolloEnrichment(domain: string): Promise<ApolloEnrichmentData | null> {
-  const apiKey = process.env.APOLLO_API_KEY;
-  if (!apiKey) {
-    console.log("Apollo: No API key configured");
-    return null;
-  }
-  
-  try {
-    // Check cache first (30-day expiry)
-    const cached = await db.select()
-      .from(apolloCache)
-      .where(eq(apolloCache.domain, domain))
-      .limit(1);
-    
-    if (cached.length > 0 && cached[0].cachedAt) {
-      const cacheAge = Date.now() - new Date(cached[0].cachedAt).getTime();
-      const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-      if (cacheAge < thirtyDays && cached[0].apolloData) {
-        console.log(`Apollo: Cache hit for ${domain}`);
-        return cached[0].apolloData;
-      }
-    }
-    
-    console.log(`Apollo: Fetching enrichment for ${domain}`);
-    const response = await fetch("https://api.apollo.io/api/v1/organizations/enrich", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Api-Key": apiKey,
-      },
-      body: JSON.stringify({ domain }),
-    });
-    
-    if (!response.ok) {
-      console.log(`Apollo: API error ${response.status}`);
-      return null;
-    }
-    
-    const data = await response.json();
-    const org = data.organization;
-    
-    if (!org) {
-      console.log(`Apollo: No organization found for ${domain}`);
-      return null;
-    }
-    
-    const enrichmentData: ApolloEnrichmentData = {
-      name: org.name || null,
-      websiteUrl: org.website_url || null,
-      linkedinUrl: org.linkedin_url || null,
-      twitterUrl: org.twitter_url || null,
-      facebookUrl: org.facebook_url || null,
-      industry: org.industry || null,
-      employeeCount: org.estimated_num_employees || null,
-      employeeCountRange: null,
-      foundedYear: org.founded_year || null,
-      city: org.city || null,
-      state: org.state || null,
-      country: org.country || null,
-      description: org.short_description || org.seo_description || null,
-      logoUrl: org.logo_url || null,
-      ceoName: null,
-      annualRevenue: org.annual_revenue || null,
-      annualRevenueFormatted: org.annual_revenue_printed || null,
-      totalFunding: org.total_funding || null,
-      totalFundingFormatted: org.total_funding_printed || null,
-      latestFundingRoundType: org.latest_funding_round_type || null,
-      latestFundingAmount: org.latest_funding_amount || null,
-      technologies: org.technologies || null,
-      primaryPhone: org.primary_phone?.number || org.phone || null,
-      investors: org.investors || null,
-    };
-    
-    // Convert employee count to range
-    if (enrichmentData.employeeCount) {
-      const count = enrichmentData.employeeCount;
-      if (count <= 10) enrichmentData.employeeCountRange = "1-10";
-      else if (count <= 50) enrichmentData.employeeCountRange = "11-50";
-      else if (count <= 200) enrichmentData.employeeCountRange = "51-200";
-      else if (count <= 500) enrichmentData.employeeCountRange = "201-500";
-      else if (count <= 1000) enrichmentData.employeeCountRange = "501-1k";
-      else if (count <= 5000) enrichmentData.employeeCountRange = "1k-5k";
-      else if (count <= 10000) enrichmentData.employeeCountRange = "5k-10k";
-      else enrichmentData.employeeCountRange = "10k+";
-    }
-    
-    // Cache the result
-    await db.insert(apolloCache)
-      .values({
-        domain,
-        apolloData: enrichmentData,
-        cachedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: apolloCache.domain,
-        set: {
-          apolloData: enrichmentData,
-          cachedAt: new Date(),
-        },
-      });
-    
-    console.log(`Apollo: Successfully enriched ${domain}`);
-    return enrichmentData;
-  } catch (error) {
-    console.error("Apollo enrichment error:", error);
-    return null;
-  }
-}
-
-// Check if key intel fields are missing (triggers Apollo fallback)
-function needsApolloEnrichment(llmResult: LLMIntelResult, headcount: HeadcountRange | null): boolean {
-  const missingFields = [];
-  if (!headcount && !llmResult.headcount) missingFields.push("headcount");
-  if (!llmResult.industry) missingFields.push("industry");
-  if (!llmResult.founded) missingFields.push("founded");
-  if (!llmResult.founderOrCeo) missingFields.push("CEO");
-  
-  // Need at least 2 missing fields to justify an API call
-  const needsEnrichment = missingFields.length >= 2;
-  if (needsEnrichment) {
-    console.log(`Intel: Missing fields [${missingFields.join(", ")}] - will try Apollo fallback`);
-  }
-  return needsEnrichment;
-}
-
 function parseHeadcount(text: string): HeadcountRange | null {
   const numMatch = text.match(/(\d[\d,]*)\s*(employees|staff|people|workers)/i);
   if (numMatch) {
-    const num = parseInt(numMatch[1].replace(/,/g, ""));
+    const num = parseInt(numMatch[1].replace(/,/g, ""), 10);
+    if (Number.isNaN(num)) return null;
     if (num <= 10) return "1-10";
     if (num <= 50) return "11-50";
     if (num <= 200) return "51-200";
@@ -383,131 +342,6 @@ function parseHeadcount(text: string): HeadcountRange | null {
     return "10k+";
   }
   return null;
-}
-
-export async function generateIntelV2(
-  companyName: string,
-  domain: string | null,
-  contactRole?: string,
-  contactAddress?: string
-): Promise<CompanyIntelV2> {
-  console.log(`[IntelV2] Starting for company: "${companyName}", domain: "${domain}"`);
-  
-  const snippets: SourceSnippet[] = [];
-  let wikipediaUrl: string | undefined;
-  let wikiTicker: string | undefined;
-  
-  console.log(`[IntelV2] Fetching Wikipedia and Google News in parallel...`);
-  const [wikiInfo, newsItems] = await Promise.all([
-    fetchWikipediaSummary(companyName),
-    fetchGoogleNewsRSS(companyName),
-  ]);
-  
-  console.log(`[IntelV2] Wikipedia result: ${wikiInfo ? "found" : "not found"}`);
-  console.log(`[IntelV2] News items fetched: ${newsItems.length}`);
-  
-  if (wikiInfo?.extract) {
-    snippets.push({
-      sourceTitle: "Wikipedia",
-      url: wikiInfo.pageUrl || `https://en.wikipedia.org/wiki/${encodeURIComponent(companyName)}`,
-      textExcerpt: wikiInfo.extract,
-    });
-    wikipediaUrl = wikiInfo.pageUrl;
-    wikiTicker = wikiInfo.ticker;
-  }
-  
-  if (domain) {
-    console.log(`[IntelV2] Fetching website content for domain: ${domain}`);
-    const websiteSnippets = await fetchWebsiteContent(domain, ["/", "/about", "/about-us", "/company", "/products", "/services"]);
-    console.log(`[IntelV2] Website snippets fetched: ${websiteSnippets.length}`);
-    snippets.push(...websiteSnippets);
-  }
-  
-  // Limit news to 4 items as requested
-  const latestSignals: SignalItem[] = newsItems.slice(0, 4).map(item => ({
-    date: parseNewsDate(item.pubDate),
-    title: item.title,
-    url: item.link,
-    sourceName: item.source,
-  }));
-  console.log(`[IntelV2] Signals (news) created: ${latestSignals.length}`);
-  
-  if (snippets.length === 0 && newsItems.length === 0) {
-    console.log(`[IntelV2] No data found, returning empty intel`);
-    return createEmptyIntel(companyName, domain);
-  }
-  
-  console.log(`[IntelV2] Calling LLM for intel extraction...`);
-  const llmResult = await callLLMForIntel(companyName, domain, snippets);
-  console.log(`[IntelV2] LLM result - headcount: ${llmResult.headcount}, industry: ${llmResult.industry}, founded: ${llmResult.founded}, CEO: ${llmResult.founderOrCeo}`);
-  
-  let headcount = llmResult.headcount || parseHeadcount(snippets.map(s => s.textExcerpt).join(" "));
-  let industry = llmResult.industry;
-  let founded = llmResult.founded;
-  let founderOrCeo = llmResult.founderOrCeo;
-  let hq = llmResult.hq;
-  let linkedinUrl = llmResult.linkedinUrl;
-  let twitterUrl = llmResult.twitterUrl;
-  let facebookUrl = llmResult.facebookUrl;
-  
-  // Apollo enrichment is now user-triggered via the "Boost" button
-  // No automatic Apollo fallback - users control when to use credits
-  
-  // Use ticker from LLM or Wikipedia extraction
-  const ticker = llmResult.ticker || wikiTicker;
-  
-  // Fetch stock data if ticker available
-  let stockData: StockData | null = null;
-  if (ticker) {
-    stockData = await fetchYahooFinanceStock(ticker);
-  }
-  
-  // Default LinkedIn URL if none found
-  const finalLinkedinUrl = linkedinUrl || `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`;
-  
-  const allSources: IntelSource[] = [
-    ...snippets.map(s => ({ title: s.sourceTitle, url: s.url })),
-    ...newsItems.slice(0, 3).map(n => ({ title: n.source, url: n.link })),
-  ];
-  
-  const intel: CompanyIntelV2 = {
-    companyName,
-    website: domain,
-    lastRefreshedAt: new Date().toISOString(),
-    
-    // Section 1: Company Profile
-    summary: llmResult.summary || null,
-    industry,
-    founded,
-    founderOrCeo,
-    
-    // Social links
-    linkedinUrl: finalLinkedinUrl,
-    twitterUrl,
-    facebookUrl,
-    instagramUrl: llmResult.instagramUrl,
-    
-    // Section 2: Quick Visual Cards
-    headcount: headcount ? {
-      range: headcount,
-      source: { title: "Wikipedia", url: wikipediaUrl || snippets[0]?.url || "" },
-    } : null,
-    hq,
-    stock: stockData,
-    
-    // Section 3: Recent News
-    latestSignals,
-    
-    // Section 4: Competitors
-    competitors: llmResult.competitors,
-    
-    // Apollo Boost data (not boosted yet)
-    isBoosted: false,
-    
-    sources: allSources,
-  };
-  
-  return intel;
 }
 
 interface LLMIntelResult {
@@ -531,31 +365,44 @@ async function callLLMForIntel(
   snippets: SourceSnippet[]
 ): Promise<LLMIntelResult> {
   const emptyResult: LLMIntelResult = {
-    hq: null, headcount: null, industry: null, summary: null, founded: null,
-    founderOrCeo: null, ticker: null, linkedinUrl: null, twitterUrl: null,
-    facebookUrl: null, instagramUrl: null, competitors: []
+    hq: null,
+    headcount: null,
+    industry: null,
+    summary: null,
+    founded: null,
+    founderOrCeo: null,
+    ticker: null,
+    linkedinUrl: null,
+    twitterUrl: null,
+    facebookUrl: null,
+    instagramUrl: null,
+    competitors: [],
   };
-  
+
   if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
     return emptyResult;
   }
-  
-  const snippetText = snippets.map((s, i) => 
-    `[Source ${i + 1}: ${s.sourceTitle}]\nURL: ${s.url}\n${s.textExcerpt}`
-  ).join("\n\n");
-  
-  const systemPrompt = `You produce ONLY valid JSON. Extract company details from provided snippets. Never fabricate data - only include what you find in the snippets.
 
-Extract these fields:
-- summary: 1-2 sentence company description (what they do)
-- hq: headquarters city and country
-- headcount: employee count bucket: "1-10", "11-50", "51-200", "201-500", "501-1k", "1k-5k", "5k-10k", "10k+"
-- industry: brief industry (max 5 words, e.g. "Enterprise Software", "Energy Technology")
-- founded: year founded if mentioned
-- founderOrCeo: current CEO or founder name if mentioned
-- ticker: stock ticker symbol if publicly traded (e.g. "AAPL", "WRT1V.HE")
-- socialUrls: LinkedIn, Twitter/X, Facebook, Instagram URLs if found
-- competitors: 2-4 key competitors in the same industry (company names with brief descriptions)`;
+  const snippetText = snippets
+    .map(
+      (s, i) =>
+        `[Source ${i + 1}: ${s.sourceTitle}]\nURL: ${s.url}\n${s.textExcerpt}`
+    )
+    .join("\n\n");
+
+  const systemPrompt =
+    `You produce ONLY valid JSON. Extract company details from provided snippets. ` +
+    `Never fabricate data. If not found, use null.\n\n` +
+    `Extract:\n` +
+    `- summary: 1-2 sentences describing what the company does\n` +
+    `- hq: headquarters city and country (if present)\n` +
+    `- headcount: employee bucket: "1-10","11-50","51-200","201-500","501-1k","1k-5k","5k-10k","10k+"\n` +
+    `- industry: max 5 words\n` +
+    `- founded: year (string) if present\n` +
+    `- founderOrCeo: name if present\n` +
+    `- ticker: stock ticker symbol if present\n` +
+    `- linkedinUrl/twitterUrl/facebookUrl/instagramUrl: only if in snippets\n` +
+    `- competitors: 2-4 competitors (name + brief description)\n`;
 
   const userPrompt = `Company: ${companyName}
 Domain: ${domain || "unknown"}
@@ -563,20 +410,20 @@ Domain: ${domain || "unknown"}
 Snippets:
 ${snippetText}
 
-Return JSON:
+Return JSON with this exact shape:
 {
-  "summary": "brief description of what the company does",
-  "hq": { "city": "...", "country": "..." },
+  "summary": "string or null",
+  "hq": { "city": "string or null", "country": "string or null" },
   "headcount": "bucket string or null",
-  "industry": "brief industry",
-  "founded": "year or null",
-  "founderOrCeo": "name or null",
-  "ticker": "symbol or null",
-  "linkedinUrl": "url or null",
-  "twitterUrl": "url or null",
-  "facebookUrl": "url or null",
-  "instagramUrl": "url or null",
-  "competitors": [{ "name": "Company A", "description": "brief description" }]
+  "industry": "string or null",
+  "founded": "string or null",
+  "founderOrCeo": "string or null",
+  "ticker": "string or null",
+  "linkedinUrl": "string or null",
+  "twitterUrl": "string or null",
+  "facebookUrl": "string or null",
+  "instagramUrl": "string or null",
+  "competitors": [{ "name": "string", "description": "string optional" }]
 }`;
 
   try {
@@ -587,49 +434,89 @@ Return JSON:
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 2048,
+      max_tokens: 1400,
     });
-    
+
     const content = response.choices[0]?.message?.content;
-    if (!content) {
-      return emptyResult;
-    }
-    
+    if (!content) return emptyResult;
+
     const parsed = JSON.parse(content);
-    
+
+    // HQ
     let hq: CompanyIntelV2["hq"] = null;
     if (parsed.hq?.city || parsed.hq?.country) {
       hq = {
         city: parsed.hq.city || null,
         country: parsed.hq.country || null,
         source: {
-          title: "Wikipedia",
+          title: snippets[0]?.sourceTitle || "Source",
           url: snippets[0]?.url || "",
         },
       };
     }
-    
-    const validHeadcounts: HeadcountRange[] = ["1-10", "11-50", "51-200", "201-500", "501-1k", "1k-5k", "5k-10k", "10k+"];
-    const headcount: HeadcountRange | null = validHeadcounts.includes(parsed.headcount) ? parsed.headcount : null;
+
+    const validHeadcounts: HeadcountRange[] = [
+      "1-10",
+      "11-50",
+      "51-200",
+      "201-500",
+      "501-1k",
+      "1k-5k",
+      "5k-10k",
+      "10k+",
+    ];
+    const headcount: HeadcountRange | null = validHeadcounts.includes(parsed.headcount)
+      ? parsed.headcount
+      : null;
+
     const industry: string | null = parsed.industry || null;
     const summary: string | null = parsed.summary || null;
     const founded: string | null = parsed.founded || null;
     const founderOrCeo: string | null = parsed.founderOrCeo || null;
     const ticker: string | null = parsed.ticker || null;
-    
-    const linkedinUrl: string | null = parsed.linkedinUrl && typeof parsed.linkedinUrl === "string" && parsed.linkedinUrl.includes("linkedin.com") ? parsed.linkedinUrl : null;
-    const twitterUrl: string | null = parsed.twitterUrl && typeof parsed.twitterUrl === "string" && (parsed.twitterUrl.includes("twitter.com") || parsed.twitterUrl.includes("x.com")) ? parsed.twitterUrl : null;
-    const facebookUrl: string | null = parsed.facebookUrl && typeof parsed.facebookUrl === "string" && parsed.facebookUrl.includes("facebook.com") ? parsed.facebookUrl : null;
-    const instagramUrl: string | null = parsed.instagramUrl && typeof parsed.instagramUrl === "string" && parsed.instagramUrl.includes("instagram.com") ? parsed.instagramUrl : null;
-    
-    const competitors: CompetitorInfo[] = Array.isArray(parsed.competitors) 
-      ? parsed.competitors.filter((c: { name?: string }) => c?.name).map((c: { name: string; description?: string }) => ({
-          name: c.name,
-          description: c.description || undefined,
-        }))
+
+    const linkedinUrl: string | null =
+      typeof parsed.linkedinUrl === "string" && parsed.linkedinUrl.includes("linkedin.com")
+        ? parsed.linkedinUrl
+        : null;
+    const twitterUrl: string | null =
+      typeof parsed.twitterUrl === "string" &&
+      (parsed.twitterUrl.includes("twitter.com") || parsed.twitterUrl.includes("x.com"))
+        ? parsed.twitterUrl
+        : null;
+    const facebookUrl: string | null =
+      typeof parsed.facebookUrl === "string" && parsed.facebookUrl.includes("facebook.com")
+        ? parsed.facebookUrl
+        : null;
+    const instagramUrl: string | null =
+      typeof parsed.instagramUrl === "string" && parsed.instagramUrl.includes("instagram.com")
+        ? parsed.instagramUrl
+        : null;
+
+    const competitors: CompetitorInfo[] = Array.isArray(parsed.competitors)
+      ? parsed.competitors
+          .filter((c: any) => c?.name)
+          .slice(0, 4)
+          .map((c: any) => ({
+            name: String(c.name),
+            description: c.description ? String(c.description) : undefined,
+          }))
       : [];
-    
-    return { hq, headcount, industry, summary, founded, founderOrCeo, ticker, linkedinUrl, twitterUrl, facebookUrl, instagramUrl, competitors };
+
+    return {
+      hq,
+      headcount,
+      industry,
+      summary,
+      founded,
+      founderOrCeo,
+      ticker,
+      linkedinUrl,
+      twitterUrl,
+      facebookUrl,
+      instagramUrl,
+      competitors,
+    };
   } catch (error) {
     console.error("LLM call error:", error);
     return emptyResult;
@@ -648,13 +535,143 @@ function createEmptyIntel(companyName: string, domain: string | null): CompanyIn
     headcount: null,
     hq: null,
     stock: null,
-    linkedinUrl: `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`,
+    linkedinUrl: `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(
+      companyName
+    )}`,
     twitterUrl: null,
     facebookUrl: null,
     instagramUrl: null,
     latestSignals: [],
     competitors: [],
     sources: [],
+    isBoosted: false, // keep schema compatibility; UI can ignore/remove
     error: "Limited public information available for this company",
   };
+}
+
+export async function generateIntelV2(
+  companyName: string,
+  domain: string | null,
+  contactRole?: string,
+  contactAddress?: string
+): Promise<CompanyIntelV2> {
+  const safeName = sanitizeCompanyQuery(companyName);
+  console.log(`[IntelV2] Starting for "${safeName}", domain="${domain || "null"}"`);
+
+  const snippets: SourceSnippet[] = [];
+  let wikipediaUrl: string | undefined;
+  let wikiTicker: string | undefined;
+
+  // Fetch Wikipedia + News (with improved multi-try RSS)
+  const [wikiInfo, newsItems] = await Promise.all([
+    safeName ? fetchWikipediaSummary(safeName) : Promise.resolve(null),
+    fetchGoogleNewsRSS(safeName || companyName, domain),
+  ]);
+
+  console.log(`[IntelV2] Wikipedia: ${wikiInfo ? "found" : "none"}, News items: ${newsItems.length}`);
+
+  if (wikiInfo?.extract) {
+    snippets.push({
+      sourceTitle: "Wikipedia",
+      url: wikiInfo.pageUrl || `https://en.wikipedia.org/wiki/${encodeURIComponent(safeName || companyName)}`,
+      textExcerpt: wikiInfo.extract,
+    });
+    wikipediaUrl = wikiInfo.pageUrl || undefined;
+    wikiTicker = wikiInfo.ticker;
+  }
+
+  if (domain) {
+    const websiteSnippets = await fetchWebsiteContent(domain, [
+      "/",
+      "/about",
+      "/about-us",
+      "/company",
+      "/products",
+      "/services",
+      "/careers",
+      "/news",
+    ]);
+    snippets.push(...websiteSnippets);
+  }
+
+  // Convert news -> signals (cap 4)
+  const latestSignals: SignalItem[] = newsItems.slice(0, 4).map((item) => ({
+    date: parseNewsDate(item.pubDate),
+    title: item.title,
+    url: item.link,
+    sourceName: item.source,
+  }));
+
+  if (snippets.length === 0 && latestSignals.length === 0) {
+    console.log(`[IntelV2] No snippets/news -> empty intel`);
+    return createEmptyIntel(companyName, domain);
+  }
+
+  // LLM extraction for summary/industry/etc.
+  const llmResult = await callLLMForIntel(companyName, domain, snippets);
+
+  // Derive headcount if LLM missed it
+  const headcount = llmResult.headcount || parseHeadcount(snippets.map((s) => s.textExcerpt).join(" "));
+
+  // Use ticker from LLM or Wikipedia extraction
+  const ticker = llmResult.ticker || wikiTicker;
+
+  // Stock data if ticker exists
+  let stockData: StockData | null = null;
+  if (ticker) stockData = await fetchYahooFinanceStock(ticker);
+
+  // Default LinkedIn fallback if none found
+  const finalLinkedinUrl =
+    llmResult.linkedinUrl ||
+    `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`;
+
+  const allSources: IntelSource[] = [
+    ...snippets.map((s) => ({ title: s.sourceTitle, url: s.url })),
+    ...newsItems.slice(0, 3).map((n) => ({ title: n.source, url: n.link })),
+  ];
+
+  const intel: CompanyIntelV2 = {
+    companyName,
+    website: domain,
+    lastRefreshedAt: new Date().toISOString(),
+
+    // Profile
+    summary: llmResult.summary || null,
+    industry: llmResult.industry || null,
+    founded: llmResult.founded || null,
+    founderOrCeo: llmResult.founderOrCeo || null,
+
+    // Socials
+    linkedinUrl: finalLinkedinUrl,
+    twitterUrl: llmResult.twitterUrl || null,
+    facebookUrl: llmResult.facebookUrl || null,
+    instagramUrl: llmResult.instagramUrl || null,
+
+    // Quick cards
+    headcount: headcount
+      ? {
+          range: headcount,
+          source: { title: "Wikipedia", url: wikipediaUrl || snippets[0]?.url || "" },
+        }
+      : null,
+    hq: llmResult.hq,
+    stock: stockData,
+
+    // News
+    latestSignals,
+
+    // Competitors
+    competitors: llmResult.competitors || [],
+
+    // Boost removed (kept for schema compatibility; UI should not show it)
+    isBoosted: false,
+
+    sources: allSources,
+  };
+
+  // Optional: if you pass role/address, you can later enrich prompts without breaking API.
+  void contactRole;
+  void contactAddress;
+
+  return intel;
 }
