@@ -1,97 +1,57 @@
-# Carda - Contact Scanner & AI Intel Assistant
+# Carda 2.0 - Lean Contact Scanner
 
 ## Overview
-
-Carda is a mobile-first web application that transforms business cards and email signatures into actionable contact intelligence. Users can scan physical cards, paste text, and receive AI-powered company insights and sales briefs. The app also provides personal QR code generation, contact management with organizational mapping, and industry event tracking.
-
-**Core capabilities:**
-- Business card OCR scanning with AI-powered parsing (GPT-4o-mini)
-- Email signature text parsing
-- Company intelligence generation with verified sources
-- Contact storage with organizational hierarchy tracking
-- Personal digital business card with QR code sharing
-- Industry events hub (Renewables, Mining, Construction)
-- HubSpot CRM integration
+Carda 2.0 is a mobile-first business card scanner that extracts contact information using AI, generates AI-powered company insights, and helps manage professional networks. It aims to streamline contact management, facilitate smart follow-ups, and provide organizational intelligence for B2B sales and networking.
 
 ## User Preferences
-
-Preferred communication style: Simple, everyday language.
+I prefer iterative development, so please break down tasks into smaller, manageable steps. Focus on high-level feature implementation and architectural decisions. I value clear, concise explanations and prefer that you ask for clarification if anything is unclear before proceeding with major changes. Ensure all changes are mobile-first and responsive.
 
 ## System Architecture
 
-### Frontend Architecture
-- **Framework:** React 18 with TypeScript
-- **Routing:** Wouter (lightweight React router)
-- **State Management:** TanStack Query for server state, React useState/useContext for local state
-- **Styling:** TailwindCSS with shadcn/ui components (Radix UI primitives)
-- **Animations:** Framer Motion for transitions and micro-interactions
-- **Build Tool:** Vite
+### UI/UX Decisions
+-   **Mobile-first, Responsive Design**: Optimized for mobile experience with graceful degradation for larger screens.
+-   **Glassmorphism**: Utilizes glassmorphism for card designs and the bottom navigation bar.
+-   **Bottom Navigation**: Apple-style liquid glass bottom nav bar with smooth Framer Motion transitions and scroll-driven morph effects.
+-   **System Font Stack**: Employs system fonts for a native look and feel.
+-   **Dark Mode Support**: Provides a consistent experience across different lighting conditions.
+-   **Company Detail Page**: Features a three-tab interface (People, Org, Notes).
+-   **Org Map v3**: Hierarchy-first approach with a collapsible tree structure as the default view and an optional React Flow canvas diagram with drag-and-drop functionality for reporting lines.
 
-**UI Design Pattern:** Mobile-first, iOS-inspired "liquid glass" aesthetic with floating bottom navigation, backdrop blur effects, and smooth transitions. The app uses a three-tab bottom navigation (Scan, Contacts, Events) with morphing animations on scroll.
+### Technical Implementations
+-   **Frontend**: React SPA using TypeScript.
+-   **Backend**: Express.js server using TypeScript.
+-   **Authentication**: Replit Auth (OpenID Connect) supporting Google, GitHub, Apple, X, and email/password login. Sessions stored in PostgreSQL with 7-day TTL.
+-   **Contact Storage**: PostgreSQL database with user-specific contacts (authenticated) or `localStorage` (fallback for legacy features). User contacts are isolated per account.
+-   **Client-Side Image Compression**: Resizes images and progressively compresses them to optimize for OCR services, staying under 1MB.
+-   **Modular OCR**: Designed with a `OCRProvider` interface to allow easy swapping of OCR services (currently OCR.space).
+-   **AI-Powered Parsing (gpt-4o-mini)**: Primary parsing mechanism with a robust prompt for business card and email signature extraction, providing structured JSON output. It includes logo detection, OCR noise handling, and validation.
+-   **Deterministic Parsing**: Fallback mechanism using regex and heuristics for robust extraction of contact details, including AU-aware address extraction, email domain-derived company names, and sophisticated email signature parsing.
+-   **Company Intel Generation (gpt-4o)**: Uses OpenAI via Replit AI Integrations to create detailed sales briefs, including company snapshots, relevance to sales, role insights, high-impact questions, key developments, **funding data** (stage, total raised, investors), **technology stack** (by category with key insights), and **competitive landscape** (direct/indirect competitors, market position), with a 24-hour caching mechanism.
+-   **Org Intelligence v3**: Auto-generates companies from contact data, enables organizational mapping with departments, roles, and manager assignments, and provides an interactive Org Map.
+-   **Smart Follow-Up**: AI-powered generation of personalized follow-up messages (email, LinkedIn) with tone and length selection, integrated with task and reminder management.
+-   **Contact Timeline**: Comprehensive history of interactions with each contact, supporting various event types and filtering.
+-   **ContactDetailView (iOS-style)**: Dedicated contact detail page with digital business card hero, sticky bottom bar with quick actions, timeline feed, and inline editing. Uses a callback pattern where `onContactUpdated(contactId)` fires only after confirmed persistence to localStorage.
+-   **Duplicate Detection & Merge**: Fuzzy matching and scoring for contact deduplication, with a side-by-side merge UI and undo support.
+-   **Calendar Integration**: Generates ICS files for meeting invites with customizable dates, times, and durations.
+-   **Batch Scanning (Event Mode)**: Multi-photo capture mode that queues business cards for background processing. Users can snap multiple cards quickly, then process all at once with a review/approve workflow before saving.
 
-**Component Organization:**
-- `/client/src/components/` - Reusable UI components
-- `/client/src/components/contact/` - Contact-specific components (ContactHeroCard, ContactDetailView)
-- `/client/src/components/ui/` - shadcn/ui base components
-- `/client/src/pages/` - Page-level components
-- `/client/src/hooks/` - Custom React hooks
-- `/client/src/lib/` - Utilities, storage helpers, type definitions
-
-### Backend Architecture
-- **Runtime:** Node.js with Express
-- **Language:** TypeScript
-- **API Pattern:** RESTful endpoints under `/api/`
-
-**Key Services:**
-- `aiParseService.ts` - GPT-4o-mini powered business card text parsing
-- `ocrService.ts` - OCR.space integration for image-to-text
-- `intelService.ts` - Company intelligence generation (legacy)
-- `intelV2Service.ts` - Enhanced company intel with verified sources, stock data, headcount
-- `salesSignalsService.ts` - Sales-focused signal generation
-- `hubspotService.ts` - HubSpot CRM sync via Replit connector
-- `parseService.ts` - Deterministic text parsing (fallback/utilities)
-
-**AI Integration Strategy:** The system uses AI as the primary parsing path (`/api/scan-ai`, `/api/parse-ai`) with legacy regex-based parsing as fallback. OpenAI calls go through Replit's AI Integrations service.
-
-### Data Storage
-- **Database:** PostgreSQL via Neon serverless with Drizzle ORM
-- **Session Store:** PostgreSQL-backed sessions (connect-pg-simple) with memorystore fallback
-- **Client Storage:** localStorage for contacts, events preferences, and recent accounts
-- **Schema Location:** `/shared/schema.ts` using Drizzle schema definitions
-
-**Contact Data Model:** Contacts include standard fields (name, email, phone, company) plus organizational metadata (department, reportsToId, role, influence level). Companies are derived from contacts and support org chart visualization.
-
-### Authentication
-- Passport.js with Local Strategy (email/password)
-- Scrypt password hashing with timing-safe comparison
-- Express sessions with 30-day cookie expiration
-- Public profile URLs with generated slugs
-
-### Build & Deployment
-- Custom build script (`script/build.ts`) using esbuild for server bundling and Vite for client
-- Server dependencies are bundled to reduce cold start times
-- Health check endpoint at `/healthz` for container orchestration
-- Static file serving for production builds
+### Feature Specifications
+-   **Business Card OCR**: Upload/scan images to extract text.
+-   **Contact Parsing**: Extracts name, title, company, email, phone, website, LinkedIn, and address.
+-   **Editable Results**: Allows users to review and modify extracted fields.
+-   **vCard Export**: Exports contacts as .vcf files.
+-   **My QR**: Generates personal QR codes for quick contact sharing.
+-   **Events Hub**: Discovery and tracking of industry events with user-controlled preferences (pin, attendance, notes).
+-   **Org Intelligence**: Manages company and organizational data, including department filtering and auto-grouping based on job titles.
+-   **Smart Follow-Up**: Creates personalized messages and manages tasks/reminders.
+-   **Contact Timeline**: Logs all interactions and events for a contact.
+-   **Duplicate Management**: Detects and helps merge duplicate contacts.
+-   **Calendar Integration**: Facilitates meeting scheduling and ICS export.
+-   **Batch Scanning**: In Event Mode, enables multi-photo capture with thumbnail previews, background OCR processing, and batch review/approve workflow for rapid networking events.
 
 ## External Dependencies
-
-### AI Services
-- **OpenAI API** (via Replit AI Integrations) - GPT-4o-mini for business card parsing and company intel generation. Access through `process.env.AI_INTEGRATIONS_OPENAI_BASE_URL`
-
-### OCR Service
-- **OCR.space** - Image-to-text extraction for business card scanning. Free tier has 1MB file size limit; client-side image compression is implemented
-
-### CRM Integration
-- **HubSpot** - Contact sync via Replit connector with OAuth. Uses `@hubspot/api-client` for API calls
-
-### Database
-- **Neon PostgreSQL** - Serverless Postgres with WebSocket connections. Connection string in `DATABASE_URL`
-
-### External Data (Company Intel)
-- Google Favicon API for company logos (`https://www.google.com/s2/favicons`)
-- Stock data and company information fetched dynamically for Intel v2 feature
-
-### Client Libraries
-- `@xyflow/react` (React Flow) - Org chart visualization with dagre layout
-- `react-icons` - Icon library (includes LinkedIn icon)
-- `date-fns` - Date formatting utilities
+-   **OCR.space API**: For Optical Character Recognition.
+-   **OpenAI API (via Replit AI Integrations)**: Used for AI-powered parsing (gpt-4o-mini) and company intelligence generation (gpt-4o).
+-   **Framer Motion**: For UI animations, particularly in navigation and organizational hierarchy.
+-   **React Flow**: For rendering interactive organizational diagram.
+-   **Dagre**: For auto-layout of organizational charts.
