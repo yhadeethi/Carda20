@@ -10,7 +10,25 @@ import { generateIntelV2 } from "./intelV2Service";
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
-import { isHubSpotConnected, syncContactToHubSpot } from "./hubspotService";
+
+async function getCurrentUserId(req: Request): Promise<number> {
+  const authId = (req.user as any)?.claims?.sub;
+  if (!authId) throw new Error("Unauthorized");
+  const user = await storage.getUserByAuthId(authId);
+  if (!user) throw new Error("Unauthorized");
+  return user.id;
+}
+
+function getHubSpotRedirectUri(req: Request): string {
+  const envOverride = process.env.HUBSPOT_REDIRECT_URI;
+  if (envOverride) return envOverride;
+  const host = req.get("host");
+  const proto = req.get("x-forwarded-proto") || "https";
+  return `${proto}://${host}/api/hubspot/callback`;
+}
+
+import { buildHubSpotAuthUrl, connectHubSpotForUser, disconnectHubSpotForUser, isHubSpotConnected, syncContactToHubSpot } from "./hubspotService";
+import crypto from "crypto";
 
 const contactInputSchema = z.object({
   fullName: z.string().nullable().optional(),
@@ -304,9 +322,62 @@ export async function registerRoutes(
     res.status(501).json({ error: "Apollo boost feature not yet implemented" });
   });
 
-  app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Response) => {
+  
+  // HubSpot OAuth (per-user)
+  app.get("/api/hubspot/connect", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const connected = await isHubSpotConnected();
+      const userId = await getCurrentUserId(req);
+      const state = crypto.randomUUID();
+      (req.session as any).hubspot_oauth_state = state;
+      (req.session as any).hubspot_oauth_user = userId;
+
+      const redirectUri = getHubSpotRedirectUri(req);
+      const url = buildHubSpotAuthUrl({ redirectUri, state });
+      res.redirect(url);
+    } catch (e: any) {
+      res.status(500).json({ message: e?.message || "Failed to start HubSpot OAuth" });
+    }
+  });
+
+  app.get("/api/hubspot/callback", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const code = req.query.code as string | undefined;
+      const state = req.query.state as string | undefined;
+      const expectedState = (req.session as any).hubspot_oauth_state as string | undefined;
+      const userId = (req.session as any).hubspot_oauth_user as number | undefined;
+
+      if (!code || !state || !expectedState || state !== expectedState || !userId) {
+        return res.status(400).send("Invalid HubSpot OAuth callback.");
+      }
+
+      const redirectUri = getHubSpotRedirectUri(req);
+      await connectHubSpotForUser({ userId, code, redirectUri });
+
+      // cleanup
+      (req.session as any).hubspot_oauth_state = undefined;
+      (req.session as any).hubspot_oauth_user = undefined;
+
+      res.redirect("/?hubspot=connected");
+    } catch (e: any) {
+      console.error("HubSpot callback error:", e);
+      res.redirect("/?hubspot=error");
+    }
+  });
+
+  app.post("/api/hubspot/disconnect", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      await disconnectHubSpotForUser(userId);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e?.message || "Failed to disconnect HubSpot" });
+    }
+  });
+
+app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const connected = await isHubSpotConnected(userId);
       res.json({ connected });
     } catch (error) {
       console.error("Error checking HubSpot status:", error);
@@ -316,28 +387,25 @@ export async function registerRoutes(
 
   app.post("/api/hubspot/sync", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { email, firstname, lastname, phone, company, jobtitle, website, city, address } = req.body;
-      
-      if (!email) {
-        return res.status(400).json({ success: false, error: "Email is required" });
-      }
+      const userId = await getCurrentUserId(req);
+      const { email, firstname, lastname, company, jobtitle, phone, website, linkedinUrl } = req.body || {};
 
-      const result = await syncContactToHubSpot({
-        email,
-        firstname,
-        lastname,
-        phone,
-        company,
-        jobtitle,
-        website,
-        city,
-        address,
+      const name = [firstname, lastname].filter(Boolean).join(" ").trim() || null;
+
+      const result = await syncContactToHubSpot(userId, {
+        email: email || null,
+        name,
+        company: company || null,
+        title: jobtitle || null,
+        phone: phone || null,
+        website: website || null,
+        linkedinUrl: linkedinUrl || null,
       });
 
       res.json(result);
     } catch (error: any) {
-      console.error("Error syncing to HubSpot:", error);
-      res.status(500).json({ success: false, error: error.message || "Failed to sync with HubSpot" });
+      console.error("HubSpot sync error:", error);
+      res.status(500).json({ success: false, message: error?.message || "HubSpot sync failed" });
     }
   });
 

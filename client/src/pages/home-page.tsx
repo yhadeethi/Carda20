@@ -3,6 +3,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import { useAuth } from "@/hooks/useAuth";
 import { ScanTab } from "@/components/scan-tab";
+import { RelationshipDetailView } from "@/components/relationship/RelationshipDetailView";
 import { ContactsHub } from "@/components/contacts-hub";
 import { EventsHub } from "@/components/events-hub";
 import { CompanyDetail } from "@/components/company-detail";
@@ -155,7 +156,7 @@ export default function HomePage() {
 
   const tabs = [
     { id: "scan" as TabMode, label: "Scan", icon: Camera },
-    { id: "contacts" as TabMode, label: "Network", icon: Users },
+    { id: "contacts" as TabMode, label: "Relationships", icon: Users },
     { id: "events" as TabMode, label: "Events", icon: Calendar },
   ];
 
@@ -290,17 +291,12 @@ export default function HomePage() {
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <ScanTab
-                viewingContact={selectedContact}
-                onBackToContacts={handleBackToContacts}
-                onDeleteContact={handleDeleteContact}
-                eventModeEnabled={eventModeEnabled}
-                currentEventName={currentEventName}
-                onEventModeChange={setEventModeEnabled}
-                onEventNameChange={setCurrentEventName}
-                onContactSaved={refreshContacts}
+              <RelationshipDetailView
+                contact={selectedContact}
+                onBack={handleBackToContacts}
+                onDelete={handleDeleteContact}
                 onContactUpdated={handleContactUpdated}
-                onViewInOrgMap={(companyId) => handleSelectCompany(companyId, 'orgmap')}
+                onViewInOrgMap={(companyId) => handleSelectCompany(companyId, "orgmap")}
               />
             </motion.div>
           )}

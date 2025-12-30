@@ -1,9 +1,10 @@
 import { 
-  users, contacts, companies, companyIntel,
+  users, contacts, companies, companyIntel, hubspotTokens,
   type User, type InsertUser, type UpsertUser,
   type Contact, type InsertContact,
   type Company, type InsertCompany,
   type CompanyIntel, type InsertCompanyIntel,
+  type HubspotToken, type InsertHubspotToken,
   type CompanyIntelData
 } from "@shared/schema";
 import { db } from "./db";
@@ -31,8 +32,12 @@ export interface IStorage {
   updateCompany(id: number, updates: Partial<Company>): Promise<Company | undefined>;
   
   getCompanyIntelByCompanyId(companyId: number): Promise<CompanyIntel | undefined>;
-  createCompanyIntel(intel: InsertCompanyIntel): Promise<CompanyIntel>;
-}
+  createCompanyIntel(intel: InsertCompanyIntel): Promise<CompanyIntel>
+  // HubSpot OAuth tokens
+  getHubspotTokens(userId: number): Promise<HubspotToken | undefined>;
+  upsertHubspotTokens(tokens: InsertHubspotToken): Promise<HubspotToken>;
+  deleteHubspotTokens(userId: number): Promise<void>;
+}}
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {

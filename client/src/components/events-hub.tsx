@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,7 @@ import {
   BellOff,
   Camera,
   Users,
+  CalendarPlus,
 } from "lucide-react";
 import {
   EventItem,
@@ -46,7 +48,6 @@ import {
   sortEventsByDate,
 } from "@/lib/eventsData";
 import {
-  getEventPrefs,
   setEventPinned,
   setEventAttending,
   setEventNote,
@@ -55,6 +56,7 @@ import {
   getAllEventPrefs,
 } from "@/lib/eventsStorage";
 import { loadContacts } from "@/lib/contactsStorage";
+import { buildIcsEvent, downloadIcsFile } from "@/lib/calendar/ics";
 
 const industryIcons: Record<EventIndustryId, typeof Sun> = {
   renewable: Sun,
@@ -68,9 +70,10 @@ interface EventCardProps {
   onPrefsChange: () => void;
   contactCount: number;
   onScanHere?: (eventName: string) => void;
+  density?: "normal" | "compact";
 }
 
-function EventCard({ event, prefs, onPrefsChange, contactCount, onScanHere }: EventCardProps) {
+function EventCard({ event, prefs, onPrefsChange, contactCount, onScanHere, density = "normal" }: EventCardProps) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState(prefs.note);
 
@@ -83,6 +86,31 @@ function EventCard({ event, prefs, onPrefsChange, contactCount, onScanHere }: Ev
     if (onScanHere) {
       onScanHere(event.name);
     }
+  };
+
+  const handleAddToCalendar = () => {
+    if (!event.startDateIso) return;
+    // Default event times (local) to keep the experience one-tap.
+    // Users can edit inside their calendar app.
+    const startIso = `${event.startDateIso}T09:00:00`;
+    const endIso = `${(event.endDateIso || event.startDateIso)}T17:00:00`;
+    const location = [event.venue, `${event.city}, ${event.state}`].filter(Boolean).join(" · ");
+    const descriptionLines = [
+      event.description,
+      "",
+      `Industry: ${INDUSTRIES.find(i => i.id === event.industryId)?.label || event.industryId}`,
+      event.websiteUrl ? `Website: ${event.websiteUrl}` : "",
+      "",
+      "Created with Carda",
+    ].filter(Boolean);
+    const ics = buildIcsEvent({
+      title: event.name,
+      description: descriptionLines.join("\n"),
+      location: location || undefined,
+      startIso: new Date(startIso).toISOString(),
+      endIso: new Date(endIso).toISOString(),
+    });
+    downloadIcsFile(ics, `${event.name}`);
   };
 
   useEffect(() => {
@@ -131,7 +159,7 @@ function EventCard({ event, prefs, onPrefsChange, contactCount, onScanHere }: Ev
           <Pin className="w-3 h-3" />
         </div>
       )}
-      <CardHeader className="pb-2">
+      <CardHeader className={density === "compact" ? "pb-1" : "pb-2"}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <CardTitle className="text-base font-semibold leading-tight">
@@ -160,15 +188,17 @@ function EventCard({ event, prefs, onPrefsChange, contactCount, onScanHere }: Ev
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className={density === "compact" ? "space-y-2" : "space-y-3"}>
         <div className="flex items-center gap-1.5 text-sm">
           <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <span className="font-medium">{event.dateRangeLabel}</span>
         </div>
 
-        <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
-          {event.description}
-        </p>
+        {density === "normal" && (
+          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
+            {event.description}
+          </p>
+        )}
 
         {event.tags && event.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -190,7 +220,7 @@ function EventCard({ event, prefs, onPrefsChange, contactCount, onScanHere }: Ev
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className={density === "compact" ? "flex flex-wrap items-center gap-2 pt-0" : "flex flex-wrap items-center gap-2 pt-1"}>
           <Button
             size="sm"
             variant={prefs.pinned ? "default" : "outline"}
@@ -293,6 +323,19 @@ function EventCard({ event, prefs, onPrefsChange, contactCount, onScanHere }: Ev
             </DialogContent>
           </Dialog>
 
+          {event.startDateIso && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              onClick={handleAddToCalendar}
+              data-testid={`event-calendar-${event.id}`}
+            >
+              <CalendarPlus className="w-3 h-3" />
+              Add to calendar
+            </Button>
+          )}
+
           {event.websiteUrl && (
             <Button
               size="sm"
@@ -356,9 +399,12 @@ interface EventsHubProps {
 }
 
 export function EventsHub({ onScanAtEvent }: EventsHubProps) {
+  const [topMode, setTopMode] = useState<'my' | 'discover'>('my');
   const [selectedIndustry, setSelectedIndustry] = useState<EventIndustryId>('renewable');
   const [allPrefs, setAllPrefs] = useState(() => getAllEventPrefs());
   const [contacts] = useState(() => loadContacts());
+  const [monthFilter, setMonthFilter] = useState<string>('all');
+  const [locationFilter, setLocationFilter] = useState<string>('all');
 
   const refreshPrefs = useCallback(() => {
     setAllPrefs(getAllEventPrefs());
@@ -368,12 +414,71 @@ export function EventsHub({ onScanAtEvent }: EventsHubProps) {
     return contacts.filter(c => c.eventName === eventName).length;
   }, [contacts]);
 
+  const allEvents = useMemo(() => {
+    return sortEventsByDate([
+      ...getEventsByIndustry('renewable'),
+      ...getEventsByIndustry('mining'),
+      ...getEventsByIndustry('construction'),
+    ]);
+  }, []);
+
+  const monthOptions = useMemo(() => {
+    const months = new Map<string, string>();
+    allEvents.forEach(e => {
+      if (!e.startDateIso) return;
+      const d = new Date(e.startDateIso + 'T00:00:00');
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+      months.set(key, label);
+    });
+    return Array.from(months.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([value, label]) => ({ value, label }));
+  }, [allEvents]);
+
+  const locationOptions = useMemo(() => {
+    const locs = new Set<string>();
+    allEvents.forEach(e => {
+      locs.add(`${e.city}, ${e.state}`);
+    });
+    return Array.from(locs.values()).sort();
+  }, [allEvents]);
+
+  const applyFilters = useCallback((events: EventItem[]) => {
+    return events.filter(e => {
+      if (locationFilter !== 'all') {
+        const loc = `${e.city}, ${e.state}`;
+        if (loc !== locationFilter) return false;
+      }
+      if (monthFilter !== 'all' && e.startDateIso) {
+        const d = new Date(e.startDateIso + 'T00:00:00');
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (key !== monthFilter) return false;
+      }
+      return true;
+    });
+  }, [locationFilter, monthFilter]);
+
+  const myEvents = useMemo(() => {
+    // “My Events” = anything you interacted with (pinned, attending, reminder, note)
+    const interacted = allEvents.filter(e => {
+      const p = allPrefs[e.id];
+      if (!p) return false;
+      return !!(p.pinned || p.attending || p.reminderSet || (p.note && p.note.trim().length > 0));
+    });
+    return applyFilters(interacted);
+  }, [allEvents, allPrefs, applyFilters]);
+
+  const myPinned = useMemo(() => myEvents.filter(e => allPrefs[e.id]?.pinned), [myEvents, allPrefs]);
+  const myAttending = useMemo(() => myEvents.filter(e => allPrefs[e.id]?.attending === 'yes'), [myEvents, allPrefs]);
+  const myMaybe = useMemo(() => myEvents.filter(e => allPrefs[e.id]?.attending === 'maybe'), [myEvents, allPrefs]);
+
   const getSortedEventsForIndustry = useCallback((industryId: EventIndustryId) => {
     const events = sortEventsByDate(getEventsByIndustry(industryId));
     const pinnedEvents = events.filter((e) => allPrefs[e.id]?.pinned);
     const unpinnedEvents = events.filter((e) => !allPrefs[e.id]?.pinned);
-    return [...pinnedEvents, ...unpinnedEvents];
-  }, [allPrefs]);
+    return applyFilters([...pinnedEvents, ...unpinnedEvents]);
+  }, [allPrefs, applyFilters]);
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
@@ -382,55 +487,173 @@ export function EventsHub({ onScanAtEvent }: EventsHubProps) {
           Events Hub
         </h1>
         <p className="text-sm text-muted-foreground">
-          Discover industry events across Australia. Pin events and track your attendance.
+          Plan your week, pin key events, and flip straight into scanning mode when you're on the floor.
         </p>
       </div>
 
-      <Tabs value={selectedIndustry} onValueChange={(v) => setSelectedIndustry(v as EventIndustryId)}>
-        <TabsList className="w-full grid grid-cols-3">
-          {INDUSTRIES.map((industry) => {
-            const Icon = industryIcons[industry.id];
-            return (
-              <TabsTrigger
-                key={industry.id}
-                value={industry.id}
-                className="gap-1.5 text-xs"
-                data-testid={`industry-tab-${industry.id}`}
-              >
-                <Icon className="w-4 h-4" />
-                <span className="hidden sm:inline">{industry.label}</span>
-                <span className="sm:hidden">
-                  {industry.id === 'renewable' ? 'Renewables' : industry.id === 'mining' ? 'Mining' : 'Construction'}
-                </span>
-              </TabsTrigger>
-            );
-          })}
+      <div className="grid grid-cols-2 gap-3">
+        <Select value={monthFilter} onValueChange={setMonthFilter}>
+          <SelectTrigger className="h-10" data-testid="events-filter-month">
+            <SelectValue placeholder="Month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All months</SelectItem>
+            {monthOptions.map(m => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={locationFilter} onValueChange={setLocationFilter}>
+          <SelectTrigger className="h-10" data-testid="events-filter-location">
+            <SelectValue placeholder="Location" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All locations</SelectItem>
+            {locationOptions.map(loc => (
+              <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Tabs value={topMode} onValueChange={(v) => setTopMode(v as any)}>
+        <TabsList className="w-full grid grid-cols-2">
+          <TabsTrigger value="my" className="gap-2" data-testid="events-tab-my">
+            <Pin className="w-4 h-4" />
+            My Events
+          </TabsTrigger>
+          <TabsTrigger value="discover" className="gap-2" data-testid="events-tab-discover">
+            <Sparkles className="w-4 h-4" />
+            Discover
+          </TabsTrigger>
         </TabsList>
 
-        {INDUSTRIES.map((industry) => {
-          const industryEvents = getSortedEventsForIndustry(industry.id);
-          return (
-            <TabsContent key={industry.id} value={industry.id} className="mt-4 space-y-4">
-              {industryEvents.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No events found for {industry.label}</p>
+        <TabsContent value="my" className="mt-4 space-y-4">
+          {myEvents.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No saved events yet</p>
+              <p className="text-xs mt-1">Pin events or set attendance to build your weekly plan.</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {myPinned.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold">Pinned</h2>
+                    <Badge variant="secondary" className="text-xs">{myPinned.length}</Badge>
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {myPinned.map(event => (
+                      <div key={event.id} className="min-w-[320px] max-w-[320px] shrink-0">
+                        <EventCard
+                          event={event}
+                          prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '', reminderSet: false, reminderDismissed: false }}
+                          onPrefsChange={refreshPrefs}
+                          contactCount={getContactCountForEvent(event.name)}
+                          onScanHere={onScanAtEvent}
+                          density="compact"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                industryEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '', reminderSet: false, reminderDismissed: false }}
-                    onPrefsChange={refreshPrefs}
-                    contactCount={getContactCountForEvent(event.name)}
-                    onScanHere={onScanAtEvent}
-                  />
-                ))
               )}
-            </TabsContent>
-          );
-        })}
+
+              {myAttending.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold">Going</h2>
+                    <Badge variant="secondary" className="text-xs">{myAttending.length}</Badge>
+                  </div>
+                  <div className="space-y-4">
+                    {myAttending.map(event => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '', reminderSet: false, reminderDismissed: false }}
+                        onPrefsChange={refreshPrefs}
+                        contactCount={getContactCountForEvent(event.name)}
+                        onScanHere={onScanAtEvent}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {myMaybe.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold">Maybe</h2>
+                    <Badge variant="secondary" className="text-xs">{myMaybe.length}</Badge>
+                  </div>
+                  <div className="space-y-4">
+                    {myMaybe.map(event => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '', reminderSet: false, reminderDismissed: false }}
+                        onPrefsChange={refreshPrefs}
+                        contactCount={getContactCountForEvent(event.name)}
+                        onScanHere={onScanAtEvent}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="discover" className="mt-4 space-y-4">
+          <Tabs value={selectedIndustry} onValueChange={(v) => setSelectedIndustry(v as EventIndustryId)}>
+            <TabsList className="w-full grid grid-cols-3">
+              {INDUSTRIES.map((industry) => {
+                const Icon = industryIcons[industry.id];
+                return (
+                  <TabsTrigger
+                    key={industry.id}
+                    value={industry.id}
+                    className="gap-1.5 text-xs"
+                    data-testid={`industry-tab-${industry.id}`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="hidden sm:inline">{industry.label}</span>
+                    <span className="sm:hidden">
+                      {industry.id === 'renewable' ? 'Renewables' : industry.id === 'mining' ? 'Mining' : 'Construction'}
+                    </span>
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+
+            {INDUSTRIES.map((industry) => {
+              const industryEvents = getSortedEventsForIndustry(industry.id);
+              return (
+                <TabsContent key={industry.id} value={industry.id} className="mt-4 space-y-4">
+                  {industryEvents.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>No events found for {industry.label}</p>
+                    </div>
+                  ) : (
+                    industryEvents.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        prefs={allPrefs[event.id] || { pinned: false, attending: null, note: '', reminderSet: false, reminderDismissed: false }}
+                        onPrefsChange={refreshPrefs}
+                        contactCount={getContactCountForEvent(event.name)}
+                        onScanHere={onScanAtEvent}
+                      />
+                    ))
+                  )}
+                </TabsContent>
+              );
+            })}
+          </Tabs>
+        </TabsContent>
       </Tabs>
 
       <div className="text-center pt-4">

@@ -7,8 +7,18 @@
  * - Minimal, clean interface
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerFooter,
+  DrawerClose,
+} from "@/components/ui/drawer";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +54,8 @@ interface OrgMapProps {
 export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }: OrgMapProps) {
   const [showDiagram, setShowDiagram] = useState(false);
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
+  const [showQuickEdit, setShowQuickEdit] = useState(false);
+  const [focusMode, setFocusMode] = useState(true);
   const [relayoutKey, setRelayoutKey] = useState(0);
   const canvasRef = useRef<{ fitView: () => void; zoomIn: () => void; zoomOut: () => void } | null>(null);
   const { toast } = useToast();
@@ -94,7 +106,25 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
   const handleNodeClick = useCallback((contact: StoredContact) => {
     setSelectedContact(contact);
+    setShowQuickEdit(true);
   }, []);
+
+  const companyContacts = useMemo(() => contacts, [contacts]);
+
+  const managerOptions = useMemo(() => {
+    if (!selectedContact) return [] as StoredContact[];
+    return companyContacts.filter(c => c.id !== selectedContact.id);
+  }, [companyContacts, selectedContact]);
+
+  const handleUpdateOrg = useCallback((patch: Partial<NonNullable<StoredContact["org"]>>) => {
+    if (!selectedContact) return;
+    const currentOrg = selectedContact.org || { ...DEFAULT_ORG };
+    updateContact(selectedContact.id, { org: { ...currentOrg, ...patch } });
+    onContactUpdate();
+    // refresh local selected contact
+    const refreshed = contacts.find(c => c.id === selectedContact.id);
+    if (refreshed) setSelectedContact(refreshed);
+  }, [selectedContact, contacts, onContactUpdate]);
 
   const handleFitView = useCallback(() => {
     canvasRef.current?.fitView();
@@ -149,6 +179,76 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         </div>
       </div>
 
+      {/* Quick Edit - Bottom Sheet (diagram + list) */}
+      <Drawer open={showQuickEdit} onOpenChange={setShowQuickEdit}>
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="border-b">
+            <DrawerTitle className="text-base font-semibold">
+              {selectedContact?.name || 'Edit relationship'}
+            </DrawerTitle>
+          </DrawerHeader>
+
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Department</Label>
+                <Select
+                  value={selectedContact?.org?.department || 'UNKNOWN'}
+                  onValueChange={(v) => handleUpdateOrg({ department: v as Department })}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['EXEC','LEGAL','PROJECT_DELIVERY','SALES','FINANCE','OPS','UNKNOWN'] as Department[]).map((d) => (
+                      <SelectItem key={d} value={d}>{d.replace('_',' ')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Reports to</Label>
+                <Select
+                  value={selectedContact?.org?.reportsToId || 'none'}
+                  onValueChange={(v) => handleUpdateOrg({ reportsToId: v === 'none' ? null : v })}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {managerOptions.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name || m.email || 'Unknown'}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => selectedContact && onSelectContact(selectedContact)}
+                disabled={!selectedContact}
+              >
+                Open Relationship
+              </Button>
+              <DrawerClose asChild>
+                <Button className="flex-1">Done</Button>
+              </DrawerClose>
+            </div>
+          </div>
+
+          <DrawerFooter className="border-t">
+            <DrawerClose asChild>
+              <Button variant="ghost" className="w-full">Close</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
       {/* Diagram Modal - Full Screen Sheet */}
       <Dialog open={showDiagram} onOpenChange={setShowDiagram}>
         <DialogContent className="max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] p-0 rounded-none sm:rounded-none">
@@ -162,6 +262,14 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 </DialogDescription>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant={focusMode ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFocusMode((v) => !v)}
+                  data-testid="button-diagram-focus"
+                >
+                  Focus
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -191,6 +299,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   onNodeClick={handleNodeClick}
                   onSetManager={handleSetManager}
                   editMode={true}
+                  focusId={focusMode ? (selectedContact?.id || null) : null}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">

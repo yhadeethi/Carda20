@@ -110,6 +110,8 @@ const NODE_HEIGHT = 96;
 interface ContactNodeData extends Record<string, unknown> {
   contact: StoredContact;
   onNodeClick?: (contact: StoredContact) => void;
+  isDimmed?: boolean;
+  isFocused?: boolean;
 }
 
 // Get initials from name
@@ -123,6 +125,8 @@ function getInitials(name: string): string {
 // Custom Apple-style Contact Node Component with enhanced visuals
 function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   const { contact, onNodeClick } = data;
+  const isDimmed = Boolean(data.isDimmed);
+  const isFocused = Boolean(data.isFocused);
   const department = contact.org?.department || 'UNKNOWN';
   const colors = DEPARTMENT_COLORS[department];
 
@@ -138,6 +142,7 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
         group relative rounded-2xl border cursor-pointer overflow-hidden
         transition-all duration-200 ease-out
         ${colors.bg} ${colors.border}
+        ${isDimmed ? 'opacity-25 saturate-50' : 'opacity-100'}
         ${selected 
           ? 'ring-2 ring-primary ring-offset-2 shadow-xl scale-[1.02]' 
           : 'shadow-lg shadow-black/8 dark:shadow-black/20 hover:shadow-xl hover:shadow-black/12 hover:scale-[1.01] active:scale-[0.97] active:shadow-md'
@@ -152,6 +157,11 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
       
       {/* Left accent bar - more prominent */}
       <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full ${colors.accent} shadow-sm`} />
+
+      {/* Focus glow */}
+      {isFocused && (
+        <div className="absolute inset-0 ring-2 ring-primary/60 ring-inset pointer-events-none" />
+      )}
       
       <Handle
         type="target"
@@ -227,7 +237,8 @@ const nodeTypes = {
 // Build graph data from contacts using dagre for layout
 function buildGraphWithLayout(
   contacts: StoredContact[],
-  onNodeClick?: (contact: StoredContact) => void
+  onNodeClick?: (contact: StoredContact) => void,
+  focusId?: string | null
 ): { nodes: Node<ContactNodeData>[]; edges: Edge[] } {
   if (contacts.length === 0) {
     return { nodes: [], edges: [] };
@@ -247,6 +258,43 @@ function buildGraphWithLayout(
   // Find root nodes (nodes with no manager or manager not in this company)
   const contactIds = new Set(contacts.map(c => c.id));
   const rootNodes = contacts.filter(c => !c.org?.reportsToId || !contactIds.has(c.org.reportsToId));
+
+  // Focus set: when a contact is focused, dim everything else except
+  // - the focused node
+  // - its manager chain
+  // - its full report tree
+  const focusSet: Set<string> = new Set();
+  if (focusId && contactIds.has(focusId)) {
+    const byId = new Map(contacts.map(c => [c.id, c] as const));
+
+    // ancestors
+    let current = byId.get(focusId);
+    while (current) {
+      focusSet.add(current.id);
+      const managerId = current.org?.reportsToId;
+      if (!managerId) break;
+      const manager = byId.get(managerId);
+      if (!manager) break;
+      current = manager;
+    }
+
+    // descendants
+    const childrenByManager = new Map<string, string[]>();
+    contacts.forEach(c => {
+      const m = c.org?.reportsToId;
+      if (!m) return;
+      if (!childrenByManager.has(m)) childrenByManager.set(m, []);
+      childrenByManager.get(m)!.push(c.id);
+    });
+    const stack = [...(childrenByManager.get(focusId) || [])];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (focusSet.has(id)) continue;
+      focusSet.add(id);
+      const kids = childrenByManager.get(id);
+      if (kids) stack.push(...kids);
+    }
+  }
   
   // If multiple roots, add virtual company root
   const hasVirtualRoot = rootNodes.length > 1;
@@ -266,6 +314,9 @@ function buildGraphWithLayout(
   contacts.forEach((contact) => {
     if (contact.org?.reportsToId && contactIds.has(contact.org.reportsToId)) {
       g.setEdge(contact.org.reportsToId, contact.id);
+
+      const hasFocus = focusSet.size > 0;
+      const inFocusEdge = hasFocus && focusSet.has(contact.org.reportsToId) && focusSet.has(contact.id);
       edges.push({
         id: `${contact.org.reportsToId}-${contact.id}`,
         source: contact.org.reportsToId,
@@ -279,10 +330,11 @@ function buildGraphWithLayout(
         },
         style: { 
           stroke: 'url(#edge-gradient)', 
-          strokeWidth: 2.5,
+          strokeWidth: inFocusEdge ? 3.2 : 2.5,
           strokeLinecap: 'round',
+          opacity: !hasFocus ? 1 : (inFocusEdge ? 1 : 0.18),
         },
-        animated: false,
+        animated: inFocusEdge,
       });
     } else if (hasVirtualRoot) {
       // Connect root nodes to virtual root
@@ -294,6 +346,9 @@ function buildGraphWithLayout(
   dagre.layout(g);
 
   // Convert dagre positions to React Flow nodes
+
+  const hasFocus = focusSet.size > 0;
+
   const nodes: Node<ContactNodeData>[] = contacts.map((contact) => {
     const nodeWithPosition = g.node(contact.id);
     return {
@@ -306,6 +361,8 @@ function buildGraphWithLayout(
       data: {
         contact,
         onNodeClick,
+        isDimmed: hasFocus && !focusSet.has(contact.id),
+        isFocused: hasFocus && contact.id === focusId,
       },
     };
   });
@@ -324,10 +381,11 @@ interface OrgChartCanvasInnerProps {
   onNodeClick?: (contact: StoredContact) => void;
   onSetManager?: (sourceId: string, targetId: string) => void;
   editMode?: boolean;
+  focusId?: string | null;
 }
 
 const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInnerProps>(
-  function OrgChartCanvasInner({ contacts, onNodeClick, onSetManager, editMode }, ref) {
+  function OrgChartCanvasInner({ contacts, onNodeClick, onSetManager, editMode, focusId }, ref) {
     const { fitView, zoomIn, zoomOut } = useReactFlow();
 
     // Expose methods to parent
@@ -339,8 +397,8 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
 
     // Build initial graph
     const initialGraph = useMemo(
-      () => buildGraphWithLayout(contacts, onNodeClick),
-      [contacts, onNodeClick]
+      () => buildGraphWithLayout(contacts, onNodeClick, focusId),
+      [contacts, onNodeClick, focusId]
     );
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
@@ -348,10 +406,10 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
 
     // Update graph when contacts change
     useEffect(() => {
-      const newGraph = buildGraphWithLayout(contacts, onNodeClick);
+      const newGraph = buildGraphWithLayout(contacts, onNodeClick, focusId);
       setNodes(newGraph.nodes);
       setEdges(newGraph.edges);
-    }, [contacts, onNodeClick, setNodes, setEdges]);
+    }, [contacts, onNodeClick, focusId, setNodes, setEdges]);
 
     // Handle connection (drag from source to target)
     const handleConnect = useCallback((connection: Connection) => {
@@ -415,10 +473,11 @@ interface OrgChartCanvasProps {
   onNodeClick?: (contact: StoredContact) => void;
   onSetManager?: (sourceId: string, targetId: string) => void;
   editMode?: boolean;
+  focusId?: string | null;
 }
 
 export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasProps>(
-  function OrgChartCanvas({ contacts, onNodeClick, onSetManager, editMode = false }, ref) {
+  function OrgChartCanvas({ contacts, onNodeClick, onSetManager, editMode = false, focusId }, ref) {
     return (
       <ReactFlowProvider>
         <OrgChartCanvasInner 
@@ -427,6 +486,7 @@ export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasPro
           onNodeClick={onNodeClick}
           onSetManager={onSetManager}
           editMode={editMode}
+          focusId={focusId}
         />
       </ReactFlowProvider>
     );

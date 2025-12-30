@@ -362,6 +362,7 @@ export function ContactDetailView({
         company: contact.company,
         jobtitle: contact.title,
         website: contact.website,
+        linkedinUrl: contact.linkedinUrl,
       });
 
       const result = await response.json();
@@ -595,6 +596,16 @@ export function ContactDetailView({
         icon: <SiHubspot className="w-5 h-5 text-[#FF7A59]" />,
         status: isSynced ? "Synced" : "Not synced",
         onClick: handleSyncToHubspot,
+      });
+    } else {
+      actions.push({
+        id: "hubspot-connect",
+        label: "Connect HubSpot",
+        icon: <SiHubspot className="w-5 h-5 text-[#FF7A59]" />,
+        status: "Not connected",
+        onClick: () => {
+          window.location.href = "/api/hubspot/connect";
+        },
       });
     }
 
