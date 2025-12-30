@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { WheelPickerPopover } from "@/components/ui/wheel-picker";
 import {
   Dialog,
   DialogContent,
@@ -492,17 +493,26 @@ export function EventsHub({ onScanAtEvent }: EventsHubProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Select value={monthFilter} onValueChange={setMonthFilter}>
-          <SelectTrigger className="h-10" data-testid="events-filter-month">
-            <SelectValue placeholder="Month" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All months</SelectItem>
-            {monthOptions.map(m => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <WheelPickerPopover
+          options={[{ value: 'all', label: 'All months' }, ...monthOptions]}
+          value={monthFilter}
+          onChange={setMonthFilter}
+          title="Select Month"
+          trigger={
+            <Button
+              variant="outline"
+              className="h-10 w-full justify-between"
+              data-testid="events-filter-month"
+            >
+              <span>
+                {monthFilter === 'all'
+                  ? 'All months'
+                  : monthOptions.find(m => m.value === monthFilter)?.label || 'Month'}
+              </span>
+              <ChevronDown className="h-4 w-4 opacity-50" />
+            </Button>
+          }
+        />
 
         <Select value={locationFilter} onValueChange={setLocationFilter}>
           <SelectTrigger className="h-10" data-testid="events-filter-location">

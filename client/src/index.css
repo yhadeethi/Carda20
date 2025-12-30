@@ -520,4 +520,13 @@
     transform-origin: left;
     animation: timeline-line 2s ease-in-out infinite 0.6s;
   }
+
+  /* Hide scrollbar for wheel picker */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
