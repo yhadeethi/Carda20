@@ -1,7 +1,13 @@
-import React, { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+} from "@/components/ui/drawer";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface WheelPickerOption {
   value: string;
@@ -180,14 +186,13 @@ interface WheelPickerDialogProps {
   options: WheelPickerOption[];
   value: string;
   onChange: (value: string) => void;
-  trigger: React.ReactNode;
+  trigger: ReactNode;
   title?: string;
 }
 
 /**
  * WheelPickerPopover
- * Fix: auto-apply selection when the popover closes (tap outside / escape),
- * while still supporting explicit Cancel/Done.
+ * Uses Drawer on mobile for better touch support, Popover on desktop.
  */
 export function WheelPickerPopover({
   options,
@@ -198,6 +203,7 @@ export function WheelPickerPopover({
 }: WheelPickerDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [tempValue, setTempValue] = useState(value);
+  const isMobile = useIsMobile();
 
   // Track whether the last close action was an explicit Cancel
   const cancelRef = useRef(false);
@@ -220,55 +226,75 @@ export function WheelPickerPopover({
     setIsOpen(false);
   };
 
-  return (
-    <Popover
-      open={isOpen}
-      onOpenChange={(open) => {
-        // If closing (e.g. click outside), auto-apply unless user explicitly cancelled
-        if (!open) {
-          if (!cancelRef.current && tempValue !== value) {
-            onChange(tempValue);
-          }
-          cancelRef.current = false;
-        }
-        setIsOpen(open);
-      }}
-    >
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+  const handleOpenChange = (open: boolean) => {
+    // If closing (e.g. tap outside), auto-apply unless user explicitly cancelled
+    if (!open) {
+      if (!cancelRef.current && tempValue !== value) {
+        onChange(tempValue);
+      }
+      cancelRef.current = false;
+    }
+    setIsOpen(open);
+  };
 
-      <PopoverContent className="w-64 p-4" align="start">
-        {title && (
-          <div className="mb-3 text-center text-sm font-medium text-muted-foreground">
-            {title}
-          </div>
-        )}
-
-        <WheelPicker
-          options={options}
-          value={tempValue}
-          onChange={setTempValue}
-          className="mb-4"
-        />
-
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCancel}
-            className="flex-1"
-            data-testid="wheel-picker-cancel"
-          >
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleConfirm}
-            className="flex-1"
-            data-testid="wheel-picker-confirm"
-          >
-            Done
-          </Button>
+  const pickerContent = (
+    <>
+      {title && (
+        <div className="mb-3 text-center text-sm font-medium text-muted-foreground">
+          {title}
         </div>
+      )}
+
+      <WheelPicker
+        options={options}
+        value={tempValue}
+        onChange={setTempValue}
+        className="mb-4"
+      />
+
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleCancel}
+          className="flex-1"
+          data-testid="wheel-picker-cancel"
+        >
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleConfirm}
+          className="flex-1"
+          data-testid="wheel-picker-confirm"
+        >
+          Done
+        </Button>
+      </div>
+    </>
+  );
+
+  // Use Drawer on mobile for better touch support
+  if (isMobile) {
+    return (
+      <Drawer open={isOpen} onOpenChange={handleOpenChange}>
+        <div onClick={() => setIsOpen(true)}>{trigger}</div>
+        <DrawerContent>
+          <div className="px-4 pt-4 pb-2">
+            {pickerContent}
+          </div>
+          <DrawerFooter />
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  // Use Popover on desktop
+  return (
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent className="w-64 p-4" align="start">
+        {pickerContent}
       </PopoverContent>
     </Popover>
   );

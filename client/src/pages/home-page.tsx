@@ -55,7 +55,8 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
 
-  const showBottomNav = viewMode !== "contact-detail";
+  const [scanShowingContact, setScanShowingContact] = useState(false);
+  const showBottomNav = viewMode !== "contact-detail" && !scanShowingContact;
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [companyDetailTab, setCompanyDetailTab] = useState<'contacts' | 'orgmap' | 'notes'>('orgmap');
@@ -261,6 +262,7 @@ export default function HomePage() {
                 onEventNameChange={setCurrentEventName}
                 onContactSaved={refreshContacts}
                 onViewInOrgMap={(companyId) => handleSelectCompany(companyId, 'orgmap')}
+                onShowingContactChange={setScanShowingContact}
               />
             </motion.div>
           )}
@@ -354,7 +356,7 @@ export default function HomePage() {
           data-testid="nav-bottom"
         >
           {tabs.map((tab) => {
-            const isActive = activeTab === tab.id || ((viewMode === "contact-detail" || viewMode === "company-detail") && tab.id === "contacts");
+            const isActive = activeTab === tab.id || (viewMode === "company-detail" && tab.id === "contacts");
             const Icon = tab.icon;
             return (
               <button

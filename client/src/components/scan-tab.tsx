@@ -90,6 +90,7 @@ interface ScanTabProps {
   onContactSaved?: () => void;
   onContactUpdated?: (contactId: string) => void;
   onViewInOrgMap?: (companyId: string) => void;
+  onShowingContactChange?: (showing: boolean) => void;
 }
 
 interface HubSpotSyncButtonProps {
@@ -204,6 +205,7 @@ export function ScanTab({
   onContactSaved,
   onContactUpdated,
   onViewInOrgMap,
+  onShowingContactChange,
 }: ScanTabProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -626,6 +628,15 @@ export function ScanTab({
   const activeStoredContact = viewingContact || scannedStoredContact;
   const isViewingFromHub = !!viewingContact;
 
+  // Notify parent when showing/hiding a contact (for hiding bottom nav)
+  useEffect(() => {
+    onShowingContactChange?.(!!activeStoredContact);
+    // Cleanup: reset to false when unmounting to prevent stale nav state
+    return () => {
+      onShowingContactChange?.(false);
+    };
+  }, [activeStoredContact, onShowingContactChange]);
+
   const companyIdForContact = getCompanyIdForStoredContact(activeStoredContact);
   const companyContactCount = companyIdForContact
     ? getContactCountForCompany(companyIdForContact, loadContacts())
@@ -688,18 +699,6 @@ export function ScanTab({
             onViewInOrgMap={onViewInOrgMap}
             companyId={companyIdForContact || undefined}
           />
-
-          {/* Timeline underneath (as requested) */}
-          {contactV2 && (
-            <Card className="glass">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold">Timeline</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <ContactTimelineTab contact={contactV2} onUpdate={() => setV2RefreshKey((k) => k + 1)} />
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
 
