@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ export function WheelPicker({
 }: WheelPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isScrolling, setIsScrolling] = useState(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedIndex = options.findIndex((opt) => opt.value === value);
   const containerHeight = itemHeight * visibleItems;
@@ -101,10 +101,7 @@ export function WheelPicker({
 
   return (
     <div
-      className={cn(
-        "relative overflow-hidden rounded-lg bg-muted/50",
-        className
-      )}
+      className={cn("relative overflow-hidden rounded-lg bg-muted/50", className)}
       style={{ height: containerHeight }}
     >
       <div
@@ -153,9 +150,7 @@ export function WheelPicker({
               key={option.value}
               className={cn(
                 "flex cursor-pointer items-center justify-center transition-all duration-150",
-                isSelected
-                  ? "font-semibold text-foreground"
-                  : "text-muted-foreground"
+                isSelected ? "font-semibold text-foreground" : "text-muted-foreground"
               )}
               style={{
                 height: itemHeight,
@@ -187,6 +182,11 @@ interface WheelPickerDialogProps {
   title?: string;
 }
 
+/**
+ * WheelPickerPopover
+ * Fix: auto-apply selection when the popover closes (tap outside / escape),
+ * while still supporting explicit Cancel/Done.
+ */
 export function WheelPickerPopover({
   options,
   value,
@@ -197,6 +197,9 @@ export function WheelPickerPopover({
   const [isOpen, setIsOpen] = useState(false);
   const [tempValue, setTempValue] = useState(value);
 
+  // Track whether the last close action was an explicit Cancel
+  const cancelRef = useRef(false);
+
   useEffect(() => {
     if (isOpen) {
       setTempValue(value);
@@ -204,20 +207,33 @@ export function WheelPickerPopover({
   }, [isOpen, value]);
 
   const handleConfirm = () => {
+    cancelRef.current = false;
     onChange(tempValue);
     setIsOpen(false);
   };
 
   const handleCancel = () => {
+    cancelRef.current = true;
     setTempValue(value);
     setIsOpen(false);
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        {trigger}
-      </PopoverTrigger>
+    <Popover
+      open={isOpen}
+      onOpenChange={(open) => {
+        // If closing (e.g. click outside), auto-apply unless user explicitly cancelled
+        if (!open) {
+          if (!cancelRef.current && tempValue !== value) {
+            onChange(tempValue);
+          }
+          cancelRef.current = false;
+        }
+        setIsOpen(open);
+      }}
+    >
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+
       <PopoverContent className="w-64 p-4" align="start">
         {title && (
           <div className="mb-3 text-center text-sm font-medium text-muted-foreground">

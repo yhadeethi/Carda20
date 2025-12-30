@@ -449,6 +449,10 @@ export function EventsHub({ onScanAtEvent }: EventsHubProps) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([value, label]) => ({ value, label }));
   }, [allEvents]);
+  const monthWheelOptions = useMemo(
+    () => [{ value: "all", label: "All months" }, ...monthOptions],
+    [monthOptions]
+  );
 
   // Filters (month only)
   const applyFilters = useCallback(
@@ -539,7 +543,8 @@ export function EventsHub({ onScanAtEvent }: EventsHubProps) {
 
         {/* Month filter pill (wheel) */}
         <WheelPickerPopover
-          options={[{ value: "all", label: "All months" }, ...monthOptions]}
+          options={monthWheelOptions}
+
           value={monthFilter}
           onChange={setMonthFilter}
           title="Select Month"

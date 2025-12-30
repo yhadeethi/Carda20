@@ -1,12 +1,11 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -19,12 +18,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CompanyIntelV2Card } from "@/components/company-intel-v2";
-import { ContactActionsTab } from "@/components/contact-actions-tab";
+
 import { ContactTimelineTab } from "@/components/contact-timeline-tab";
-import { useIntelV2 } from "@/hooks/use-intel-v2";
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
-import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
+import {
+  loadContactsV2,
+  ContactV2,
+  upsertContact as upsertContactV2,
+} from "@/lib/contacts/storage";
 import { generateId as generateTimelineId } from "@/lib/contacts/ids";
 import {
   getContactCountForCompany,
@@ -32,6 +33,7 @@ import {
   extractDomainFromEmail,
   findCompanyByDomain,
 } from "@/lib/companiesStorage";
+
 import {
   Camera,
   FileText,
@@ -39,35 +41,22 @@ import {
   Upload,
   X,
   Download,
-  Sparkles,
-  CheckCircle2,
-  User,
-  Building,
-  Briefcase,
-  Mail,
-  Phone,
-  Globe,
-  MapPin,
-  Search,
   Calendar,
-  Network,
   Layers,
   Check,
 } from "lucide-react";
-import { SiLinkedin, SiHubspot } from "react-icons/si";
-import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
+import { SiHubspot } from "react-icons/si";
+import {
+  compressImageForOCR,
+  formatFileSize,
+  CompressionError,
+} from "@/lib/imageUtils";
 import { BatchScanMode } from "@/components/batch-scan-mode";
 import { BatchReview } from "@/components/batch-review";
 import { ContactDetailView } from "@/components/contact";
 import { QueuedScan, getAllQueueItems, clearBatchSession } from "@/lib/batchScanStorage";
 import { processBatchQueue } from "@/lib/batchProcessor";
-import { addTimelineEvent, addReminder } from "@/lib/contacts/storage";
-import { useQuery } from "@tanstack/react-query";
-import { addDays, format } from "date-fns";
-import { Bell } from "lucide-react";
-
-// ✅ NEW: shared relationship card used in Relationships tab
-import { RelationshipContactCard } from "@/components/relationship/RelationshipContactCard";
+import { addTimelineEvent } from "@/lib/contacts/storage";
 
 type ScanMode = "scan" | "paste";
 type BatchState = "idle" | "capturing" | "processing" | "reviewing";
@@ -155,9 +144,12 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
         });
 
         if (contactId) {
-          addTimelineEvent(contactId, "hubspot_synced", `Synced to HubSpot (${result.action})`, {
-            hubspotId: result.hubspotId,
-          });
+          addTimelineEvent(
+            contactId,
+            "hubspot_synced",
+            `Synced to HubSpot (${result.action})`,
+            { hubspotId: result.hubspotId }
+          );
           onSynced?.();
         }
       } else {
@@ -179,9 +171,7 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
     setIsSyncing(false);
   };
 
-  if (!hubspotStatus?.connected) {
-    return null;
-  }
+  if (!hubspotStatus?.connected) return null;
 
   return (
     <Button
@@ -200,58 +190,6 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
       )}
       {syncStatus === "synced" ? "Synced" : "HubSpot"}
     </Button>
-  );
-}
-
-interface QuickReminderChipsProps {
-  contactId: string;
-  onUpdate: () => void;
-}
-
-function QuickReminderChips({ contactId, onUpdate }: QuickReminderChipsProps) {
-  const { toast } = useToast();
-  const [addedChip, setAddedChip] = useState<string | null>(null);
-
-  const reminderOptions = [
-    { label: "Tomorrow", days: 1 },
-    { label: "3 days", days: 3 },
-    { label: "1 week", days: 7 },
-  ];
-
-  const handleQuickReminder = (days: number, label: string) => {
-    const dueDate = addDays(new Date(), days);
-    addReminder(contactId, `Follow up`, dueDate.toISOString());
-    setAddedChip(label);
-    onUpdate();
-    toast({
-      title: "Reminder set",
-      description: `Follow up reminder for ${format(dueDate, "MMM d")}`,
-    });
-    setTimeout(() => setAddedChip(null), 2000);
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="text-xs text-muted-foreground flex items-center gap-1">
-        <Bell className="w-3 h-3" />
-        Quick Reminder
-      </div>
-      <div className="flex gap-2">
-        {reminderOptions.map((opt) => (
-          <Button
-            key={opt.label}
-            variant={addedChip === opt.label ? "default" : "outline"}
-            size="sm"
-            onClick={() => handleQuickReminder(opt.days, opt.label)}
-            className="flex-1 gap-1"
-            data-testid={`button-reminder-${opt.days}d`}
-          >
-            {addedChip === opt.label ? <Check className="w-3 h-3" /> : null}
-            {opt.label}
-          </Button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -276,76 +214,28 @@ export function ScanTab({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [rawText, setRawText] = useState<string | null>(null);
-  const [contact, setContact] = useState<ParsedContact | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedContact, setEditedContact] = useState<ParsedContact | null>(null);
+
+  // Local “scanned contact” that we show via ContactDetailView immediately
+  const [scannedStoredContact, setScannedStoredContact] = useState<StoredContact | null>(null);
 
   const [isCompressing, setIsCompressing] = useState(false);
 
   const [tempEventName, setTempEventName] = useState("");
   const [isEditingEventName, setIsEditingEventName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
   const [v2RefreshKey, setV2RefreshKey] = useState(0);
-
-  // ✅ NEW: keep the saved V1 contact so we can render the SAME relationship card
-  const [savedContactV1, setSavedContactV1] = useState<StoredContact | null>(null);
-
-  // ✅ NEW: local “detail view” when tapping the relationship card (for scan flow)
-  const [localDetailContact, setLocalDetailContact] = useState<StoredContact | null>(null);
 
   // Batch scan state
   const [batchState, setBatchState] = useState<BatchState>("idle");
   const [batchItems, setBatchItems] = useState<QueuedScan[]>([]);
 
-  // Intel V2 hook - manually triggered, not on every keystroke
-  const {
-    intel: intelV2,
-    isLoading: intelV2Loading,
-    isBoosting: intelV2Boosting,
-    error: intelV2Error,
-    fetchIntel: fetchIntelV2,
-    boostIntel: boostIntelV2,
-    reset: resetIntelV2,
-  } = useIntelV2();
-
-  const handleFetchIntelV2 = useCallback(() => {
-    if (editedContact) {
-      const domain = editedContact.email?.split("@")[1] || editedContact.website || null;
-      fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null, editedContact.address || null);
-    }
-  }, [editedContact, fetchIntelV2]);
-
-  const handleRefreshIntelV2 = useCallback(() => {
-    if (editedContact) {
-      const domain = editedContact.email?.split("@")[1] || editedContact.website || null;
-      fetchIntelV2(
-        editedContact.companyName || null,
-        domain,
-        editedContact.jobTitle || null,
-        editedContact.address || null,
-        true
-      );
-    }
-  }, [editedContact, fetchIntelV2]);
-
+  // When navigating in from Relationships (hub)
   useEffect(() => {
     if (viewingContact) {
-      const parsed: ParsedContact = {
-        fullName: viewingContact.name,
-        jobTitle: viewingContact.title,
-        companyName: viewingContact.company,
-        email: viewingContact.email,
-        phone: viewingContact.phone,
-        website: viewingContact.website,
-        linkedinUrl: viewingContact.linkedinUrl,
-        address: viewingContact.address,
-      };
-      setContact(parsed);
-      setEditedContact(parsed);
-      setSavedContactV1(viewingContact);
+      setScannedStoredContact(null);
 
-      // Load V2 contact for Actions/Timeline tabs
       const v2Contacts = loadContactsV2();
       const v2 = v2Contacts.find((c) => c.id === viewingContact.id);
       setContactV2(v2 || null);
@@ -357,9 +247,7 @@ export function ScanTab({
     if (file) {
       setSelectedFile(file);
       const reader = new FileReader();
-      reader.onload = (event) => {
-        setPreviewImage(event.target?.result as string);
-      };
+      reader.onload = (event) => setPreviewImage(event.target?.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -367,12 +255,20 @@ export function ScanTab({
   const clearImage = () => {
     setSelectedFile(null);
     setPreviewImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const saveContactToStorage = (parsedContact: ParsedContact) => {
+  const resetFlow = () => {
+    setScannedStoredContact(null);
+    setContactV2(null);
+    setRawText(null);
+    setPastedText("");
+    clearImage();
+    setBatchState("idle");
+    setBatchItems([]);
+  };
+
+  const saveContactToStorage = (parsedContact: ParsedContact): StoredContact | null => {
     try {
       const contactData = {
         name: parsedContact.fullName || "",
@@ -386,74 +282,64 @@ export function ScanTab({
       };
 
       const savedContact = saveContact(contactData, eventModeEnabled ? currentEventName : null);
+      if (!savedContact) return null;
 
-      // ✅ NEW: keep the saved contact so scan UI can render identical card
-      if (savedContact) {
-        setSavedContactV1(savedContact);
+      const existingV2Contacts = loadContactsV2();
+      const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
+
+      let v2Contact: ContactV2;
+
+      if (existingV2) {
+        v2Contact = {
+          ...existingV2,
+          name: savedContact.name,
+          company: savedContact.company,
+          title: savedContact.title,
+          email: savedContact.email,
+          phone: savedContact.phone,
+          website: savedContact.website,
+          linkedinUrl: savedContact.linkedinUrl,
+          address: savedContact.address,
+          eventName: savedContact.eventName,
+          companyId: savedContact.companyId,
+          timeline: [
+            ...existingV2.timeline,
+            {
+              id: generateTimelineId(),
+              type: "contact_updated" as const,
+              at: new Date().toISOString(),
+              summary: "Contact updated via scan",
+            },
+          ],
+          lastTouchedAt: new Date().toISOString(),
+        };
+      } else {
+        v2Contact = {
+          ...savedContact,
+          tasks: [],
+          reminders: [],
+          timeline: [
+            {
+              id: generateTimelineId(),
+              type: "scan_created" as const,
+              at: savedContact.createdAt || new Date().toISOString(),
+              summary: "Contact created via scan",
+            },
+          ],
+          lastTouchedAt: savedContact.createdAt,
+          notes: "",
+        };
       }
 
-      // Ensure the contact is in V2 storage - merge with existing data if present
-      if (savedContact) {
-        const existingV2Contacts = loadContactsV2();
-        const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
-
-        let v2Contact: ContactV2;
-
-        if (existingV2) {
-          v2Contact = {
-            ...existingV2,
-            name: savedContact.name,
-            company: savedContact.company,
-            title: savedContact.title,
-            email: savedContact.email,
-            phone: savedContact.phone,
-            website: savedContact.website,
-            linkedinUrl: savedContact.linkedinUrl,
-            address: savedContact.address,
-            eventName: savedContact.eventName,
-            companyId: savedContact.companyId,
-            timeline: [
-              ...existingV2.timeline,
-              {
-                id: generateTimelineId(),
-                type: "note_updated" as const,
-                at: new Date().toISOString(),
-                summary: "Contact updated via scan",
-              },
-            ],
-            lastTouchedAt: new Date().toISOString(),
-          };
-        } else {
-          v2Contact = {
-            ...savedContact,
-            tasks: [],
-            reminders: [],
-            timeline: [
-              {
-                id: generateTimelineId(),
-                type: "scan_created" as const,
-                at: savedContact.createdAt || new Date().toISOString(),
-                summary: "Contact created via scan",
-              },
-            ],
-            lastTouchedAt: savedContact.createdAt,
-            notes: "",
-          };
-        }
-
-        upsertContactV2(v2Contact);
-        setContactV2(v2Contact);
-
-        // Auto-fetch Company Intel
-        if (parsedContact.companyName && !intelV2 && !intelV2Loading) {
-          const domain = parsedContact.email?.split("@")[1] || parsedContact.website || null;
-          fetchIntelV2(parsedContact.companyName, domain, parsedContact.jobTitle || null, parsedContact.address || null);
-        }
-      }
+      upsertContactV2(v2Contact);
+      setContactV2(v2Contact);
 
       onContactSaved?.();
+
+      return savedContact;
     } catch (e) {
       console.error("[ScanTab] Failed to save contact to storage:", e);
+      return null;
     }
   };
 
@@ -468,15 +354,8 @@ export function ScanTab({
           body: formData,
           credentials: "include",
         });
-        if (aiRes.ok) {
-          const result = (await aiRes.json()) as ScanResult;
-          console.log("[Scan] AI parsing succeeded");
-          return result;
-        }
-        console.log("[Scan] AI endpoint failed, falling back to deterministic");
-      } catch (aiError) {
-        console.log("[Scan] AI endpoint error, falling back:", aiError);
-      }
+        if (aiRes.ok) return (await aiRes.json()) as ScanResult;
+      } catch {}
 
       const formData2 = new FormData();
       formData2.append("image", file);
@@ -488,11 +367,13 @@ export function ScanTab({
       if (!res.ok) {
         const text = await res.text();
         if (text.includes("File size exceeds") || text.includes("maximum size limit")) {
-          throw new Error("This photo is too large for the scanner. Please retake the photo a bit further away or crop it.");
+          throw new Error(
+            "This photo is too large for the scanner. Please retake the photo a bit further away or crop it."
+          );
         }
         throw new Error(text || "Failed to scan card");
       }
-      return res.json() as Promise<ScanResult>;
+      return (await res.json()) as ScanResult;
     },
     onSuccess: (data) => {
       if (data.error) {
@@ -503,14 +384,23 @@ export function ScanTab({
         });
         return;
       }
+
       setRawText(data.rawText);
-      setContact(data.contact);
-      setEditedContact(data.contact);
-      saveContactToStorage(data.contact);
-      toast({
-        title: "Card scanned",
-        description: "Contact information extracted successfully",
-      });
+
+      const saved = saveContactToStorage(data.contact);
+      if (saved) {
+        setScannedStoredContact(saved);
+        toast({
+          title: "Saved",
+          description: "Contact captured successfully",
+        });
+      } else {
+        toast({
+          title: "Save failed",
+          description: "Could not save this contact",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -525,28 +415,29 @@ export function ScanTab({
     mutationFn: async (text: string) => {
       try {
         const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
-        if (aiRes.ok) {
-          const result = (await aiRes.json()) as ScanResult;
-          console.log("[Parse] AI parsing succeeded");
-          return result;
-        }
-        console.log("[Parse] AI endpoint failed, falling back to deterministic");
-      } catch (aiError) {
-        console.log("[Parse] AI endpoint error, falling back:", aiError);
-      }
+        if (aiRes.ok) return (await aiRes.json()) as ScanResult;
+      } catch {}
 
       const res = await apiRequest("POST", "/api/parse", { text });
-      return res.json() as Promise<ScanResult>;
+      return (await res.json()) as ScanResult;
     },
     onSuccess: (data) => {
       setRawText(data.rawText);
-      setContact(data.contact);
-      setEditedContact(data.contact);
-      saveContactToStorage(data.contact);
-      toast({
-        title: "Text parsed",
-        description: "Contact information extracted successfully",
-      });
+
+      const saved = saveContactToStorage(data.contact);
+      if (saved) {
+        setScannedStoredContact(saved);
+        toast({
+          title: "Saved",
+          description: "Contact captured successfully",
+        });
+      } else {
+        toast({
+          title: "Save failed",
+          description: "Could not save this contact",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -567,28 +458,21 @@ export function ScanTab({
       if (result.wasCompressed) {
         toast({
           title: "Image optimized",
-          description: `Compressed from ${formatFileSize(result.originalSize)} to ${formatFileSize(result.compressedSize)}`,
+          description: `Compressed from ${formatFileSize(result.originalSize)} to ${formatFileSize(
+            result.compressedSize
+          )}`,
         });
       }
 
       scanCardMutation.mutate(result.file);
     } catch (error) {
       if (error instanceof CompressionError) {
-        if (error.type === "still_too_large") {
-          toast({
-            title: "Image too large",
-            description: error.message,
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Image processing failed",
-            description: error.message || "Could not process this image. Please try a different photo.",
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: error.type === "still_too_large" ? "Image too large" : "Image processing failed",
+          description: error.message || "Could not process this image. Please try a different photo.",
+          variant: "destructive",
+        });
       } else {
-        console.error("Unexpected error during compression:", error);
         toast({
           title: "Something went wrong",
           description: "Could not process this image. Please try a different photo.",
@@ -601,19 +485,26 @@ export function ScanTab({
   };
 
   const handleParseText = () => {
-    if (pastedText.trim()) {
-      parseTextMutation.mutate(pastedText);
-    }
+    if (pastedText.trim()) parseTextMutation.mutate(pastedText);
   };
 
-  const handleDownloadVCard = async () => {
-    if (!editedContact) return;
+  const handleDownloadVCard = async (payload?: any) => {
+    const contactForVcard = payload || {
+      fullName: viewingContact?.name || scannedStoredContact?.name,
+      jobTitle: viewingContact?.title || scannedStoredContact?.title,
+      companyName: viewingContact?.company || scannedStoredContact?.company,
+      email: viewingContact?.email || scannedStoredContact?.email,
+      phone: viewingContact?.phone || scannedStoredContact?.phone,
+      website: viewingContact?.website || scannedStoredContact?.website,
+      linkedinUrl: viewingContact?.linkedinUrl || scannedStoredContact?.linkedinUrl,
+      address: viewingContact?.address || scannedStoredContact?.address,
+    };
 
     try {
       const res = await fetch("/api/vcard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editedContact),
+        body: JSON.stringify(contactForVcard),
         credentials: "include",
       });
 
@@ -623,7 +514,7 @@ export function ScanTab({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${editedContact.fullName?.replace(/[^a-z0-9]/gi, "_") || "contact"}.vcf`;
+      a.download = `${(contactForVcard.fullName || "contact").replace(/[^a-z0-9]/gi, "_")}.vcf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -633,7 +524,7 @@ export function ScanTab({
         title: "vCard downloaded",
         description: "Contact saved to your device",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Download failed",
         description: "Could not generate vCard",
@@ -642,33 +533,13 @@ export function ScanTab({
     }
   };
 
-  const handleFieldChange = (field: keyof ParsedContact, value: string) => {
-    if (editedContact) {
-      setEditedContact({ ...editedContact, [field]: value || undefined });
-    }
-  };
-
-  const resetFlow = () => {
-    setContact(null);
-    setEditedContact(null);
-    setRawText(null);
-    setPastedText("");
-    clearImage();
-    resetIntelV2();
-    setIsEditing(false);
-    setSavedContactV1(null);
-    setLocalDetailContact(null);
-  };
-
-  // Determine if input should be visible: event mode on AND (no event name yet OR user clicked Change)
+  // Event mode inline input
   const shouldShowInput = eventModeEnabled && (isEditingEventName || !currentEventName);
 
   const handleEventModeToggle = (enabled: boolean) => {
     if (enabled) {
       onEventModeChange(true);
-      if (!currentEventName) {
-        setTempEventName("");
-      }
+      if (!currentEventName) setTempEventName("");
     } else {
       onEventModeChange(false);
       onEventNameChange(null);
@@ -693,15 +564,11 @@ export function ScanTab({
   const handleCancelEventEdit = () => {
     setIsEditingEventName(false);
     setTempEventName("");
-    if (!currentEventName) {
-      onEventModeChange(false);
-    }
+    if (!currentEventName) onEventModeChange(false);
   };
 
   // Batch scan handlers
-  const handleStartBatchMode = () => {
-    setBatchState("capturing");
-  };
+  const handleStartBatchMode = () => setBatchState("capturing");
 
   const handleExitBatchMode = () => {
     setBatchState("idle");
@@ -731,20 +598,14 @@ export function ScanTab({
     onContactSaved?.();
   };
 
-  const handleBatchBack = () => {
-    setBatchState("capturing");
-  };
+  const handleBatchBack = () => setBatchState("capturing");
 
   const isProcessing = isCompressing || scanCardMutation.isPending || parseTextMutation.isPending;
 
-  const currentContact = editedContact;
-
-  const isViewingFromHub = !!viewingContact;
-
-  // Helper to find company ID for the current contact
-  const getCompanyIdForContact = (): string | null => {
-    const companyName = currentContact?.companyName;
-    const email = currentContact?.email;
+  // Helper to find company ID for org map
+  const getCompanyIdForStoredContact = (c?: StoredContact | null): string | null => {
+    const companyName = c?.company;
+    const email = c?.email;
 
     if (companyName) {
       const byName = findCompanyByName(companyName);
@@ -762,11 +623,13 @@ export function ScanTab({
     return null;
   };
 
-  const companyIdForContact = getCompanyIdForContact();
-  const companyContactCount = companyIdForContact ? getContactCountForCompany(companyIdForContact, loadContacts()) : 0;
+  const activeStoredContact = viewingContact || scannedStoredContact;
+  const isViewingFromHub = !!viewingContact;
 
-  // ✅ If user taps the relationship card in scan flow, show the same detail view locally
-  const isLocalDetail = !!localDetailContact;
+  const companyIdForContact = getCompanyIdForStoredContact(activeStoredContact);
+  const companyContactCount = companyIdForContact
+    ? getContactCountForCompany(companyIdForContact, loadContacts())
+    : 0;
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
@@ -805,30 +668,46 @@ export function ScanTab({
         <BatchReview items={batchItems} eventName={currentEventName} onComplete={handleBatchComplete} onBack={handleBatchBack} />
       )}
 
-      {/* Local Detail (from Scan) */}
-      {isLocalDetail && localDetailContact && (
-        <ContactDetailView
-          contact={localDetailContact}
-          contactV2={contactV2}
-          onBack={() => setLocalDetailContact(null)}
-          onDelete={onDeleteContact}
-          onUpdate={() => setV2RefreshKey((k) => k + 1)}
-          onContactUpdated={onContactUpdated}
-          onDownloadVCard={handleDownloadVCard}
-          onViewInOrgMap={onViewInOrgMap}
-          companyId={companyIdForContact}
-        />
+      {/* If we have an active contact (either from hub or scanned) show the SAME Relationship detail UI */}
+      {activeStoredContact && onBackToContacts && (
+        <div className="space-y-4">
+          <ContactDetailView
+            contact={activeStoredContact}
+            contactV2={contactV2}
+            onBack={() => {
+              if (isViewingFromHub) {
+                onBackToContacts();
+              } else {
+                resetFlow();
+              }
+            }}
+            onDelete={onDeleteContact}
+            onUpdate={() => setV2RefreshKey((k) => k + 1)}
+            onContactUpdated={onContactUpdated}
+            onDownloadVCard={() => handleDownloadVCard()}
+            onViewInOrgMap={onViewInOrgMap}
+            companyId={companyIdForContact || undefined}
+          />
+
+          {/* Timeline underneath (as requested) */}
+          {contactV2 && (
+            <Card className="glass">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold">Timeline</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ContactTimelineTab contact={contactV2} onUpdate={() => setV2RefreshKey((k) => k + 1)} />
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
-      {/* Normal Scan UI (only when not in batch mode, not viewing from hub, not showing local detail) */}
-      {!contact && !isViewingFromHub && batchState === "idle" && !isLocalDetail && (
+      {/* Normal Scan UI (only when NOT showing a contact detail view) */}
+      {!activeStoredContact && batchState === "idle" && (
         <Card className="glass">
           <CardHeader className="pb-4">
-            <CardTitle className="text-xl font-semibold">Add a Contact</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Snap a business card or paste an email signature to extract the contact information.
-            </p>
-
+            <CardTitle className="text-xl font-semibold">Add Contact</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
@@ -840,12 +719,10 @@ export function ScanTab({
                     <span className="text-muted-foreground">Event mode</span>
                   </div>
                 </div>
+
                 {eventModeEnabled && currentEventName && (
                   <div className="flex items-center gap-2">
-                    <span
-                      className="text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium"
-                      data-testid="current-event-name"
-                    >
+                    <span className="text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium" data-testid="current-event-name">
                       {currentEventName}
                     </span>
                     <Button
@@ -890,12 +767,7 @@ export function ScanTab({
               </div>
 
               {eventModeEnabled && currentEventName && (
-                <Button
-                  variant="outline"
-                  className="w-full mt-2 gap-2"
-                  onClick={handleStartBatchMode}
-                  data-testid="button-batch-scan"
-                >
+                <Button variant="outline" className="w-full mt-2 gap-2" onClick={handleStartBatchMode} data-testid="button-batch-scan">
                   <Layers className="w-4 h-4" />
                   Batch Scan (Multi-Photo)
                 </Button>
@@ -942,13 +814,7 @@ export function ScanTab({
                 ) : (
                   <div className="relative">
                     <img src={previewImage} alt="Card preview" className="w-full h-48 object-contain rounded-xl bg-muted" data-testid="image-preview" />
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className="absolute top-2 right-2"
-                      onClick={clearImage}
-                      data-testid="button-clear-image"
-                    >
+                    <Button size="icon" variant="secondary" className="absolute top-2 right-2" onClick={clearImage} data-testid="button-clear-image">
                       <X className="w-4 h-4" />
                     </Button>
                   </div>
@@ -999,239 +865,6 @@ export function ScanTab({
             </Tabs>
           </CardContent>
         </Card>
-      )}
-
-      {/* iOS-style Contact Detail View when viewing from hub */}
-      {isViewingFromHub && viewingContact && onBackToContacts && (
-        <ContactDetailView
-          contact={viewingContact}
-          contactV2={contactV2}
-          onBack={onBackToContacts}
-          onDelete={onDeleteContact}
-          onUpdate={() => setV2RefreshKey((k) => k + 1)}
-          onContactUpdated={onContactUpdated}
-          onDownloadVCard={handleDownloadVCard}
-          onViewInOrgMap={onViewInOrgMap}
-          companyId={companyIdForContact}
-        />
-      )}
-
-      {/* Scan result UI for newly scanned contacts */}
-      {contact && !isViewingFromHub && !isLocalDetail && (
-        <div className="space-y-4">
-          <Card className="glass">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  Contact Extracted
-                </CardTitle>
-                <div className="flex items-center gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => setIsEditing(!isEditing)} data-testid="button-toggle-edit">
-                    {isEditing ? "Done" : "Edit"}
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              {isEditing ? (
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Full Name</Label>
-                    <Input
-                      value={editedContact?.fullName || ""}
-                      onChange={(e) => handleFieldChange("fullName", e.target.value)}
-                      placeholder="Full Name"
-                      data-testid="input-edit-name"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Job Title</Label>
-                    <Input
-                      value={editedContact?.jobTitle || ""}
-                      onChange={(e) => handleFieldChange("jobTitle", e.target.value)}
-                      placeholder="Job Title"
-                      data-testid="input-edit-title"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Company</Label>
-                    <Input
-                      value={editedContact?.companyName || ""}
-                      onChange={(e) => handleFieldChange("companyName", e.target.value)}
-                      placeholder="Company Name"
-                      data-testid="input-edit-company"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Email</Label>
-                    <Input
-                      type="email"
-                      value={editedContact?.email || ""}
-                      onChange={(e) => handleFieldChange("email", e.target.value)}
-                      placeholder="email@example.com"
-                      data-testid="input-edit-email"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Phone</Label>
-                    <Input
-                      type="tel"
-                      value={editedContact?.phone || ""}
-                      onChange={(e) => handleFieldChange("phone", e.target.value)}
-                      placeholder="+1 (555) 123-4567"
-                      data-testid="input-edit-phone"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Website</Label>
-                    <Input
-                      type="url"
-                      value={editedContact?.website || ""}
-                      onChange={(e) => handleFieldChange("website", e.target.value)}
-                      placeholder="https://example.com"
-                      data-testid="input-edit-website"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">LinkedIn</Label>
-                    <Input
-                      type="url"
-                      value={editedContact?.linkedinUrl || ""}
-                      onChange={(e) => handleFieldChange("linkedinUrl", e.target.value)}
-                      placeholder="https://linkedin.com/in/username"
-                      data-testid="input-edit-linkedin"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Address</Label>
-                    <Input
-                      value={editedContact?.address || ""}
-                      onChange={(e) => handleFieldChange("address", e.target.value)}
-                      placeholder="123 Main Street, City, State 1234"
-                      data-testid="input-edit-address"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* ✅ SAME CARD AS RELATIONSHIPS TAB */}
-                  {savedContactV1 ? (
-                    <RelationshipContactCard
-                      contact={savedContactV1}
-                      onOpen={() => setLocalDetailContact(savedContactV1)}
-                      showActionsMenu={false}
-                      showMeta={true}
-                    />
-                  ) : (
-                    <div className="text-sm text-muted-foreground">
-                      (Contact saved, but preview record not available yet.)
-                    </div>
-                  )}
-
-                  {/* Keep your existing quick actions row (useful, not “visual identity”) */}
-                  {(currentContact?.phone ||
-                    currentContact?.email ||
-                    currentContact?.linkedinUrl ||
-                    currentContact?.fullName ||
-                    currentContact?.companyName) && (
-                    <div className="flex items-center gap-2 pt-3 mt-3 border-t flex-wrap" data-testid="action-row">
-                      {currentContact?.phone && (
-                        <Button variant="outline" size="sm" asChild className="gap-1.5" data-testid="button-action-call">
-                          <a href={`tel:${currentContact.phone}`}>
-                            <Phone className="w-3.5 h-3.5" />
-                            Call
-                          </a>
-                        </Button>
-                      )}
-                      {currentContact?.email && (
-                        <Button variant="outline" size="sm" asChild className="gap-1.5" data-testid="button-action-email">
-                          <a href={`mailto:${currentContact.email}`}>
-                            <Mail className="w-3.5 h-3.5" />
-                            Email
-                          </a>
-                        </Button>
-                      )}
-                      {currentContact?.linkedinUrl ? (
-                        <Button variant="outline" size="sm" asChild className="gap-1.5" data-testid="button-action-linkedin">
-                          <a href={currentContact.linkedinUrl} target="_blank" rel="noopener noreferrer">
-                            <SiLinkedin className="w-3.5 h-3.5 text-[#0A66C2]" />
-                            LinkedIn
-                          </a>
-                        </Button>
-                      ) : (currentContact?.fullName || currentContact?.companyName) && (
-                        <Button variant="outline" size="sm" asChild className="gap-1.5" data-testid="button-action-search-linkedin">
-                          <a
-                            href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(
-                              [currentContact?.fullName, currentContact?.companyName].filter(Boolean).join(" ")
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <SiLinkedin className="w-3.5 h-3.5 text-muted-foreground" />
-                            <Search className="w-2.5 h-2.5 -ml-0.5" />
-                            Search LinkedIn
-                          </a>
-                        </Button>
-                      )}
-                      {companyIdForContact && onViewInOrgMap && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onViewInOrgMap(companyIdForContact)}
-                          className="gap-1.5"
-                          data-testid="button-action-org-map"
-                        >
-                          <Network className="w-3.5 h-3.5" />
-                          View Org Map
-                          {companyContactCount > 1 && (
-                            <span className="ml-0.5 text-xs text-muted-foreground">({companyContactCount})</span>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-
-              <div className="pt-4 flex flex-col gap-2">
-                <div className="flex gap-2">
-                  <Button onClick={handleDownloadVCard} className="flex-1" data-testid="button-download-vcard">
-                    <Download className="mr-2 h-4 w-4" />
-                    Download vCard
-                  </Button>
-                  {editedContact?.email && (
-                    <HubSpotSyncButton contact={editedContact} contactId={contactV2?.id} onSynced={() => setV2RefreshKey((k) => k + 1)} />
-                  )}
-                </div>
-
-                {editedContact?.companyName && !intelV2 && !intelV2Loading && !intelV2Error && (
-                  <Button variant="outline" onClick={handleFetchIntelV2} className="w-full gap-2" data-testid="button-company-intel">
-                    <Sparkles className="w-4 h-4" />
-                    Company Intel
-                  </Button>
-                )}
-
-                <Button onClick={resetFlow} variant="ghost" className="w-full" data-testid="button-new-scan">
-                  Scan Another Card
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {(intelV2 || intelV2Loading || intelV2Error) && (
-            <CompanyIntelV2Card
-              intel={intelV2}
-              isLoading={intelV2Loading}
-              isBoosting={intelV2Boosting}
-              error={intelV2Error}
-              onRefresh={handleRefreshIntelV2}
-              onBoost={boostIntelV2}
-              companyName={editedContact?.companyName}
-            />
-          )}
-        </div>
       )}
     </div>
   );
