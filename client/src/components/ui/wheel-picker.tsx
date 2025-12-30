@@ -132,11 +132,13 @@ export function WheelPicker({
 
       <div
         ref={containerRef}
-        className="h-full overflow-y-auto scrollbar-hide"
+        className="h-full overflow-y-scroll scrollbar-hide"
         onScroll={handleScroll}
         style={{
           scrollSnapType: "y mandatory",
           WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
+          overscrollBehavior: "contain",
         }}
       >
         <div style={{ height: paddingItems * itemHeight }} />

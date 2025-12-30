@@ -669,13 +669,13 @@ export function ScanTab({
       )}
 
       {/* If we have an active contact (either from hub or scanned) show the SAME Relationship detail UI */}
-      {activeStoredContact && onBackToContacts && (
+      {activeStoredContact && (
         <div className="space-y-4">
           <ContactDetailView
             contact={activeStoredContact}
             contactV2={contactV2}
             onBack={() => {
-              if (isViewingFromHub) {
+              if (isViewingFromHub && onBackToContacts) {
                 onBackToContacts();
               } else {
                 resetFlow();
