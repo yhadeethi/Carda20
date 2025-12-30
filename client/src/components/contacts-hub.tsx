@@ -1,6 +1,6 @@
 /**
  * Contacts Hub with People / Companies Split for Org Intelligence
- * UI refresh (company-first rows, cleaner actions, better spacing) – logic unchanged
+ * UI hardened: no overflow, better hierarchy, cleaner actions
  */
 
 import { useState, useMemo, useEffect } from "react";
@@ -30,13 +30,12 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
+  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
@@ -107,7 +106,6 @@ export function ContactsHub({
     const loadedContacts = loadContacts();
     setContacts(loadedContacts);
 
-    // Auto-generate companies from contacts
     const updatedCompanies = autoGenerateCompaniesFromContacts(loadedContacts);
     setCompanies(updatedCompanies);
   }, [refreshKey]);
@@ -124,14 +122,11 @@ export function ContactsHub({
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
-        (c) =>
-          c.name?.toLowerCase().includes(query) ||
-          c.company?.toLowerCase().includes(query)
+        (c) => c.name?.toLowerCase().includes(query) || c.company?.toLowerCase().includes(query)
       );
     }
 
     result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
     return result;
   }, [contacts, searchQuery, eventFilter]);
 
@@ -141,13 +136,10 @@ export function ContactsHub({
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
-        (c) =>
-          c.name?.toLowerCase().includes(query) ||
-          c.domain?.toLowerCase().includes(query)
+        (c) => c.name?.toLowerCase().includes(query) || c.domain?.toLowerCase().includes(query)
       );
     }
 
-    // Sort by contact count (most contacts first), then by name
     result.sort((a, b) => {
       const countA = getContactCountForCompany(a.id, contacts);
       const countB = getContactCountForCompany(b.id, contacts);
@@ -204,7 +196,7 @@ export function ContactsHub({
     }
   };
 
-  // UI helpers (no business logic changes)
+  // UI helpers (does not change any business logic)
   const isNew = (dateStr: string) => {
     try {
       const d = new Date(dateStr).getTime();
@@ -354,7 +346,7 @@ export function ContactsHub({
       <Card className="glass">
         <CardHeader className="pb-2">
           <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">
-            Network
+            Relationships
           </CardTitle>
         </CardHeader>
 
@@ -365,7 +357,7 @@ export function ContactsHub({
               <TabsList className="w-full grid grid-cols-2 h-11 rounded-2xl">
                 <TabsTrigger value="people" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-people">
                   <User className="w-5 h-5" />
-                  Contacts
+                  People
                 </TabsTrigger>
                 <TabsTrigger value="companies" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-companies">
                   <Building2 className="w-5 h-5" />
@@ -376,7 +368,7 @@ export function ContactsHub({
               <div className="relative mt-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder={activeTab === "people" ? "Search by name, company, title…" : "Search companies…"}
+                  placeholder={activeTab === "people" ? "Search by name, company…" : "Search companies…"}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 h-11 rounded-2xl"
@@ -387,7 +379,7 @@ export function ContactsHub({
 
             {/* People Tab */}
             <TabsContent value="people" className="mt-4 space-y-4">
-              {/* Sub-view filter as “segmented” pills */}
+              {/* Sub-view segmented pills */}
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <button
                   className={`px-3 py-1.5 rounded-full text-sm border transition whitespace-nowrap ${
@@ -487,6 +479,7 @@ export function ContactsHub({
                           className="rounded-2xl border bg-card hover:bg-muted/30 transition shadow-sm cursor-pointer"
                           onClick={() => onSelectContact(contact)}
                           data-testid={`contact-row-${contact.id}`}
+                          style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
                         >
                           <div className="p-4 flex items-start gap-3">
                             {/* Avatar */}
@@ -494,23 +487,25 @@ export function ContactsHub({
                               <User className="w-5 h-5 text-muted-foreground" />
                             </div>
 
+                            {/* Content – must be min-w-0 to allow truncation */}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-3">
+                                {/* Left text stack */}
                                 <div className="min-w-0">
                                   {/* Company-first */}
-                                  <div className="font-semibold truncate" title={displayCompany(contact)}>
+                                  <div className="font-semibold leading-5 truncate" title={displayCompany(contact)}>
                                     {displayCompany(contact)}
                                   </div>
 
                                   {/* Name + title */}
-                                  <div className="text-sm text-muted-foreground truncate mt-0.5" title={displayName(contact)}>
+                                  <div className="text-sm text-muted-foreground mt-0.5 min-w-0 truncate" title={displayName(contact)}>
                                     <span className="font-medium text-foreground">{displayName(contact)}</span>
                                     {contact.title ? <span className="text-muted-foreground"> · {contact.title}</span> : null}
                                   </div>
                                 </div>
 
                                 {/* Actions */}
-                                <div onClick={(e) => e.stopPropagation()}>
+                                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                       <Button
@@ -540,7 +535,7 @@ export function ContactsHub({
                                 </div>
                               </div>
 
-                              {/* Meta row */}
+                              {/* Meta row – wraps safely */}
                               <div className="mt-2 flex items-center gap-2 flex-wrap">
                                 {isNew(contact.createdAt) && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
@@ -555,19 +550,21 @@ export function ContactsHub({
 
                                 {contact.eventName && (
                                   <span
-                                    className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground inline-flex items-center gap-1"
+                                    className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground inline-flex items-center gap-1 max-w-[220px]"
                                     data-testid={`contact-event-${contact.id}`}
                                     title={contact.eventName}
                                   >
-                                    <Tag className="w-3 h-3" />
-                                    {contact.eventName}
+                                    <Tag className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">{contact.eventName}</span>
                                   </span>
                                 )}
 
                                 {(contact.company || contact.title) && (
-                                  <span className="text-xs text-muted-foreground truncate inline-flex items-center gap-1">
-                                    <Building className="w-3 h-3" />
-                                    {[contact.company, contact.title].filter(Boolean).join(" · ")}
+                                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1 min-w-0">
+                                    <Building className="w-3 h-3 shrink-0" />
+                                    <span className="truncate max-w-[260px]">
+                                      {[contact.company, contact.title].filter(Boolean).join(" · ")}
+                                    </span>
                                   </span>
                                 )}
                               </div>

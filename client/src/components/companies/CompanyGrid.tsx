@@ -1,6 +1,6 @@
 /**
  * CompanyGrid - Responsive grid layout for company tiles
- * UI refresh – logic unchanged
+ * UI hardened: mobile 1-col, cleaner empty states, no redundant footer count
  */
 
 import { Building2, Plus } from "lucide-react";
@@ -39,15 +39,11 @@ export function CompanyGrid({
           </div>
           <div className="font-medium">No companies yet</div>
           <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-            Companies are auto-created from your scanned contacts, or you can add one manually.
+            Companies are auto-created from scanned contacts, or add one manually.
           </p>
 
           {onAddCompany && (
-            <Button
-              onClick={onAddCompany}
-              className="gap-2 mt-5 rounded-2xl"
-              data-testid="button-add-company-empty"
-            >
+            <Button onClick={onAddCompany} className="gap-2 mt-5 rounded-2xl" data-testid="button-add-company-empty">
               <Plus className="w-4 h-4" />
               Add Company
             </Button>
@@ -67,7 +63,7 @@ export function CompanyGrid({
           </div>
           <div className="font-medium">No matching companies</div>
           <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-            Try searching by domain (e.g., “acme.com”) or a shorter company name.
+            Try searching by a shorter name or the domain.
           </p>
         </div>
       </div>
@@ -76,9 +72,8 @@ export function CompanyGrid({
 
   return (
     <div className="space-y-4">
-      {/* Grid of company tiles */}
       <div
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
+        className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3"
         data-testid="companies-grid"
       >
         {companies.map((company) => (
@@ -93,8 +88,6 @@ export function CompanyGrid({
           />
         ))}
       </div>
-
-      {/* Removed bottom count – already shown in Companies header in ContactsHub */}
     </div>
   );
 }
