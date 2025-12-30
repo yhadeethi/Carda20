@@ -37,7 +37,7 @@ export interface IStorage {
   getHubspotTokens(userId: number): Promise<HubspotToken | undefined>;
   upsertHubspotTokens(tokens: InsertHubspotToken): Promise<HubspotToken>;
   deleteHubspotTokens(userId: number): Promise<void>;
-}}
+}
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
@@ -201,6 +201,35 @@ export class DatabaseStorage implements IStorage {
       .values(intel)
       .returning();
     return created;
+  }
+
+  async getHubspotTokens(userId: number): Promise<HubspotToken | undefined> {
+    const [token] = await db
+      .select()
+      .from(hubspotTokens)
+      .where(eq(hubspotTokens.userId, userId));
+    return token || undefined;
+  }
+
+  async upsertHubspotTokens(tokens: InsertHubspotToken): Promise<HubspotToken> {
+    const [result] = await db
+      .insert(hubspotTokens)
+      .values(tokens)
+      .onConflictDoUpdate({
+        target: hubspotTokens.userId,
+        set: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async deleteHubspotTokens(userId: number): Promise<void> {
+    await db.delete(hubspotTokens).where(eq(hubspotTokens.userId, userId));
   }
 }
 
