@@ -9,7 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CompanyIntelV2Card } from "@/components/company-intel-v2";
 import { ContactActionsTab } from "@/components/contact-actions-tab";
 import { ContactTimelineTab } from "@/components/contact-timeline-tab";
@@ -17,8 +26,34 @@ import { useIntelV2 } from "@/hooks/use-intel-v2";
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
 import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
 import { generateId as generateTimelineId } from "@/lib/contacts/ids";
-import { getContactCountForCompany, findCompanyByName, extractDomainFromEmail, findCompanyByDomain } from "@/lib/companiesStorage";
-import { Camera, FileText, Loader2, Upload, X, Download, Sparkles, CheckCircle2, User, Building, Briefcase, Mail, Phone, Globe, MapPin, Search, ArrowLeft, Calendar, Trash2, Network, Layers, CloudUpload, Check } from "lucide-react";
+import {
+  getContactCountForCompany,
+  findCompanyByName,
+  extractDomainFromEmail,
+  findCompanyByDomain,
+} from "@/lib/companiesStorage";
+import {
+  Camera,
+  FileText,
+  Loader2,
+  Upload,
+  X,
+  Download,
+  Sparkles,
+  CheckCircle2,
+  User,
+  Building,
+  Briefcase,
+  Mail,
+  Phone,
+  Globe,
+  MapPin,
+  Search,
+  Calendar,
+  Network,
+  Layers,
+  Check,
+} from "lucide-react";
 import { SiLinkedin, SiHubspot } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 import { BatchScanMode } from "@/components/batch-scan-mode";
@@ -30,6 +65,9 @@ import { addTimelineEvent, addReminder } from "@/lib/contacts/storage";
 import { useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import { Bell } from "lucide-react";
+
+// ✅ NEW: shared relationship card used in Relationships tab
+import { RelationshipContactCard } from "@/components/relationship/RelationshipContactCard";
 
 type ScanMode = "scan" | "paste";
 type BatchState = "idle" | "capturing" | "processing" | "reviewing";
@@ -74,10 +112,10 @@ interface HubSpotSyncButtonProps {
 function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonProps) {
   const { toast } = useToast();
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'synced' | 'error'>('idle');
+  const [syncStatus, setSyncStatus] = useState<"idle" | "synced" | "error">("idle");
 
   const { data: hubspotStatus } = useQuery<{ connected: boolean }>({
-    queryKey: ['/api/hubspot/status'],
+    queryKey: ["/api/hubspot/status"],
   });
 
   const handleSync = async () => {
@@ -92,11 +130,11 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
 
     setIsSyncing(true);
     try {
-      const nameParts = (contact.fullName || '').split(' ');
-      const firstname = nameParts[0] || '';
-      const lastname = nameParts.slice(1).join(' ') || '';
+      const nameParts = (contact.fullName || "").split(" ");
+      const firstname = nameParts[0] || "";
+      const lastname = nameParts.slice(1).join(" ") || "";
 
-      const response = await apiRequest('POST', '/api/hubspot/sync', {
+      const response = await apiRequest("POST", "/api/hubspot/sync", {
         email: contact.email,
         firstname,
         lastname,
@@ -106,27 +144,24 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
         website: contact.website,
         address: contact.address,
       });
-      
+
       const result = await response.json();
 
       if (result.success) {
-        setSyncStatus('synced');
+        setSyncStatus("synced");
         toast({
-          title: result.action === 'created' ? "Added to HubSpot" : "Updated in HubSpot",
+          title: result.action === "created" ? "Added to HubSpot" : "Updated in HubSpot",
           description: `Contact ${result.action} successfully`,
         });
-        
+
         if (contactId) {
-          addTimelineEvent(
-            contactId,
-            'hubspot_synced',
-            `Synced to HubSpot (${result.action})`,
-            { hubspotId: result.hubspotId }
-          );
+          addTimelineEvent(contactId, "hubspot_synced", `Synced to HubSpot (${result.action})`, {
+            hubspotId: result.hubspotId,
+          });
           onSynced?.();
         }
       } else {
-        setSyncStatus('error');
+        setSyncStatus("error");
         toast({
           title: "Sync failed",
           description: result.error || "Failed to sync with HubSpot",
@@ -134,7 +169,7 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
         });
       }
     } catch (error: any) {
-      setSyncStatus('error');
+      setSyncStatus("error");
       toast({
         title: "Sync failed",
         description: error.message || "Failed to sync with HubSpot",
@@ -150,7 +185,7 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
 
   return (
     <Button
-      variant={syncStatus === 'synced' ? "default" : "outline"}
+      variant={syncStatus === "synced" ? "default" : "outline"}
       onClick={handleSync}
       disabled={isSyncing}
       className="gap-1.5"
@@ -158,12 +193,12 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
     >
       {isSyncing ? (
         <Loader2 className="w-4 h-4 animate-spin" />
-      ) : syncStatus === 'synced' ? (
+      ) : syncStatus === "synced" ? (
         <Check className="w-4 h-4" />
       ) : (
         <SiHubspot className="w-4 h-4 text-[#FF7A59]" />
       )}
-      {syncStatus === 'synced' ? 'Synced' : 'HubSpot'}
+      {syncStatus === "synced" ? "Synced" : "HubSpot"}
     </Button>
   );
 }
@@ -190,7 +225,7 @@ function QuickReminderChips({ contactId, onUpdate }: QuickReminderChipsProps) {
     onUpdate();
     toast({
       title: "Reminder set",
-      description: `Follow up reminder for ${format(dueDate, 'MMM d')}`,
+      description: `Follow up reminder for ${format(dueDate, "MMM d")}`,
     });
     setTimeout(() => setAddedChip(null), 2000);
   };
@@ -211,9 +246,7 @@ function QuickReminderChips({ contactId, onUpdate }: QuickReminderChipsProps) {
             className="flex-1 gap-1"
             data-testid={`button-reminder-${opt.days}d`}
           >
-            {addedChip === opt.label ? (
-              <Check className="w-3 h-3" />
-            ) : null}
+            {addedChip === opt.label ? <Check className="w-3 h-3" /> : null}
             {opt.label}
           </Button>
         ))}
@@ -236,17 +269,17 @@ export function ScanTab({
 }: ScanTabProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [scanMode, setScanMode] = useState<ScanMode>("scan");
   const [pastedText, setPastedText] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  
+
   const [rawText, setRawText] = useState<string | null>(null);
   const [contact, setContact] = useState<ParsedContact | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContact, setEditedContact] = useState<ParsedContact | null>(null);
-  
+
   const [isCompressing, setIsCompressing] = useState(false);
 
   const [tempEventName, setTempEventName] = useState("");
@@ -254,7 +287,13 @@ export function ScanTab({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
   const [v2RefreshKey, setV2RefreshKey] = useState(0);
-  
+
+  // ✅ NEW: keep the saved V1 contact so we can render the SAME relationship card
+  const [savedContactV1, setSavedContactV1] = useState<StoredContact | null>(null);
+
+  // ✅ NEW: local “detail view” when tapping the relationship card (for scan flow)
+  const [localDetailContact, setLocalDetailContact] = useState<StoredContact | null>(null);
+
   // Batch scan state
   const [batchState, setBatchState] = useState<BatchState>("idle");
   const [batchItems, setBatchItems] = useState<QueuedScan[]>([]);
@@ -269,18 +308,24 @@ export function ScanTab({
     boostIntel: boostIntelV2,
     reset: resetIntelV2,
   } = useIntelV2();
-  
+
   const handleFetchIntelV2 = useCallback(() => {
     if (editedContact) {
       const domain = editedContact.email?.split("@")[1] || editedContact.website || null;
       fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null, editedContact.address || null);
     }
   }, [editedContact, fetchIntelV2]);
-  
+
   const handleRefreshIntelV2 = useCallback(() => {
     if (editedContact) {
       const domain = editedContact.email?.split("@")[1] || editedContact.website || null;
-      fetchIntelV2(editedContact.companyName || null, domain, editedContact.jobTitle || null, editedContact.address || null, true);
+      fetchIntelV2(
+        editedContact.companyName || null,
+        domain,
+        editedContact.jobTitle || null,
+        editedContact.address || null,
+        true
+      );
     }
   }, [editedContact, fetchIntelV2]);
 
@@ -298,10 +343,11 @@ export function ScanTab({
       };
       setContact(parsed);
       setEditedContact(parsed);
-      
+      setSavedContactV1(viewingContact);
+
       // Load V2 contact for Actions/Timeline tabs
       const v2Contacts = loadContactsV2();
-      const v2 = v2Contacts.find(c => c.id === viewingContact.id);
+      const v2 = v2Contacts.find((c) => c.id === viewingContact.id);
       setContactV2(v2 || null);
     }
   }, [viewingContact, v2RefreshKey]);
@@ -338,21 +384,24 @@ export function ScanTab({
         linkedinUrl: parsedContact.linkedinUrl || "",
         address: parsedContact.address || "",
       };
+
       const savedContact = saveContact(contactData, eventModeEnabled ? currentEventName : null);
-      
+
+      // ✅ NEW: keep the saved contact so scan UI can render identical card
+      if (savedContact) {
+        setSavedContactV1(savedContact);
+      }
+
       // Ensure the contact is in V2 storage - merge with existing data if present
       if (savedContact) {
-        // Check if V2 record already exists
         const existingV2Contacts = loadContactsV2();
-        const existingV2 = existingV2Contacts.find(c => c.id === savedContact.id);
-        
+        const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
+
         let v2Contact: ContactV2;
-        
+
         if (existingV2) {
-          // Update existing record - preserve tasks, reminders, notes, and add update event to timeline
           v2Contact = {
             ...existingV2,
-            // Update with latest V1 fields
             name: savedContact.name,
             company: savedContact.company,
             title: savedContact.title,
@@ -363,20 +412,18 @@ export function ScanTab({
             address: savedContact.address,
             eventName: savedContact.eventName,
             companyId: savedContact.companyId,
-            // Keep existing timeline but add update event
             timeline: [
               ...existingV2.timeline,
               {
                 id: generateTimelineId(),
-                type: 'note_updated' as const,
+                type: "note_updated" as const,
                 at: new Date().toISOString(),
-                summary: 'Contact updated via scan',
-              }
+                summary: "Contact updated via scan",
+              },
             ],
             lastTouchedAt: new Date().toISOString(),
           };
         } else {
-          // Create new V2 record with scan_created event
           v2Contact = {
             ...savedContact,
             tasks: [],
@@ -384,26 +431,26 @@ export function ScanTab({
             timeline: [
               {
                 id: generateTimelineId(),
-                type: 'scan_created' as const,
+                type: "scan_created" as const,
                 at: savedContact.createdAt || new Date().toISOString(),
-                summary: 'Contact created via scan',
-              }
+                summary: "Contact created via scan",
+              },
             ],
             lastTouchedAt: savedContact.createdAt,
-            notes: '',
+            notes: "",
           };
         }
-        
+
         upsertContactV2(v2Contact);
         setContactV2(v2Contact);
-        
-        // Auto-fetch Company Intel if company name exists and intel not already loaded
+
+        // Auto-fetch Company Intel
         if (parsedContact.companyName && !intelV2 && !intelV2Loading) {
           const domain = parsedContact.email?.split("@")[1] || parsedContact.website || null;
           fetchIntelV2(parsedContact.companyName, domain, parsedContact.jobTitle || null, parsedContact.address || null);
         }
       }
-      
+
       onContactSaved?.();
     } catch (e) {
       console.error("[ScanTab] Failed to save contact to storage:", e);
@@ -414,7 +461,7 @@ export function ScanTab({
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("image", file);
-      
+
       try {
         const aiRes = await fetch("/api/scan-ai", {
           method: "POST",
@@ -422,7 +469,7 @@ export function ScanTab({
           credentials: "include",
         });
         if (aiRes.ok) {
-          const result = await aiRes.json() as ScanResult;
+          const result = (await aiRes.json()) as ScanResult;
           console.log("[Scan] AI parsing succeeded");
           return result;
         }
@@ -430,7 +477,7 @@ export function ScanTab({
       } catch (aiError) {
         console.log("[Scan] AI endpoint error, falling back:", aiError);
       }
-      
+
       const formData2 = new FormData();
       formData2.append("image", file);
       const res = await fetch("/api/scan", {
@@ -479,7 +526,7 @@ export function ScanTab({
       try {
         const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
         if (aiRes.ok) {
-          const result = await aiRes.json() as ScanResult;
+          const result = (await aiRes.json()) as ScanResult;
           console.log("[Parse] AI parsing succeeded");
           return result;
         }
@@ -487,7 +534,7 @@ export function ScanTab({
       } catch (aiError) {
         console.log("[Parse] AI endpoint error, falling back:", aiError);
       }
-      
+
       const res = await apiRequest("POST", "/api/parse", { text });
       return res.json() as Promise<ScanResult>;
     },
@@ -510,25 +557,24 @@ export function ScanTab({
     },
   });
 
-
   const handleScanCard = async () => {
     if (!selectedFile) return;
-    
+
     try {
       setIsCompressing(true);
       const result = await compressImageForOCR(selectedFile);
-      
+
       if (result.wasCompressed) {
         toast({
           title: "Image optimized",
           description: `Compressed from ${formatFileSize(result.originalSize)} to ${formatFileSize(result.compressedSize)}`,
         });
       }
-      
+
       scanCardMutation.mutate(result.file);
     } catch (error) {
       if (error instanceof CompressionError) {
-        if (error.type === 'still_too_large') {
+        if (error.type === "still_too_large") {
           toast({
             title: "Image too large",
             description: error.message,
@@ -562,7 +608,7 @@ export function ScanTab({
 
   const handleDownloadVCard = async () => {
     if (!editedContact) return;
-    
+
     try {
       const res = await fetch("/api/vcard", {
         method: "POST",
@@ -570,9 +616,9 @@ export function ScanTab({
         body: JSON.stringify(editedContact),
         credentials: "include",
       });
-      
+
       if (!res.ok) throw new Error("Failed to generate vCard");
-      
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -582,7 +628,7 @@ export function ScanTab({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       toast({
         title: "vCard downloaded",
         description: "Contact saved to your device",
@@ -595,7 +641,6 @@ export function ScanTab({
       });
     }
   };
-
 
   const handleFieldChange = (field: keyof ParsedContact, value: string) => {
     if (editedContact) {
@@ -611,21 +656,20 @@ export function ScanTab({
     clearImage();
     resetIntelV2();
     setIsEditing(false);
+    setSavedContactV1(null);
+    setLocalDetailContact(null);
   };
 
   // Determine if input should be visible: event mode on AND (no event name yet OR user clicked Change)
   const shouldShowInput = eventModeEnabled && (isEditingEventName || !currentEventName);
-  
+
   const handleEventModeToggle = (enabled: boolean) => {
     if (enabled) {
-      // Turning ON: enable event mode
       onEventModeChange(true);
-      // If no event name yet, prepare the input
       if (!currentEventName) {
         setTempEventName("");
       }
     } else {
-      // Turning OFF: disable event mode and clear event name
       onEventModeChange(false);
       onEventNameChange(null);
       setTempEventName("");
@@ -637,22 +681,18 @@ export function ScanTab({
     if (tempEventName.trim()) {
       onEventNameChange(tempEventName.trim());
       onEventModeChange(true);
-      setIsEditingEventName(false); // Close edit mode after save
+      setIsEditingEventName(false);
     }
   };
 
   const handleChangeEvent = () => {
-    // Enter edit mode with current event name pre-filled
     setTempEventName(currentEventName || "");
     setIsEditingEventName(true);
   };
-  
+
   const handleCancelEventEdit = () => {
-    // Cancel editing
     setIsEditingEventName(false);
     setTempEventName("");
-    // If there's already an event name, keep event mode on
-    // If there's no event name, turn off event mode entirely
     if (!currentEventName) {
       onEventModeChange(false);
     }
@@ -671,7 +711,7 @@ export function ScanTab({
   const handleBatchProcess = async (items: QueuedScan[]) => {
     setBatchState("processing");
     setBatchItems(items);
-    
+
     await processBatchQueue({
       onComplete: ({ successful, failed }) => {
         const updatedItems = getAllQueueItems();
@@ -705,12 +745,12 @@ export function ScanTab({
   const getCompanyIdForContact = (): string | null => {
     const companyName = currentContact?.companyName;
     const email = currentContact?.email;
-    
+
     if (companyName) {
       const byName = findCompanyByName(companyName);
       if (byName) return byName.id;
     }
-    
+
     if (email) {
       const domain = extractDomainFromEmail(email);
       if (domain) {
@@ -718,18 +758,18 @@ export function ScanTab({
         if (byDomain) return byDomain.id;
       }
     }
-    
+
     return null;
   };
 
   const companyIdForContact = getCompanyIdForContact();
-  const companyContactCount = companyIdForContact 
-    ? getContactCountForCompany(companyIdForContact, loadContacts())
-    : 0;
+  const companyContactCount = companyIdForContact ? getContactCountForCompany(companyIdForContact, loadContacts()) : 0;
+
+  // ✅ If user taps the relationship card in scan flow, show the same detail view locally
+  const isLocalDetail = !!localDetailContact;
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
-
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -757,38 +797,44 @@ export function ScanTab({
 
       {/* Batch Scan Mode */}
       {batchState === "capturing" && currentEventName && (
-        <BatchScanMode
-          eventName={currentEventName}
-          onProcess={handleBatchProcess}
-          onExit={handleExitBatchMode}
-        />
+        <BatchScanMode eventName={currentEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
       )}
 
       {/* Batch Processing / Review */}
       {(batchState === "processing" || batchState === "reviewing") && currentEventName && (
-        <BatchReview
-          items={batchItems}
-          eventName={currentEventName}
-          onComplete={handleBatchComplete}
-          onBack={handleBatchBack}
+        <BatchReview items={batchItems} eventName={currentEventName} onComplete={handleBatchComplete} onBack={handleBatchBack} />
+      )}
+
+      {/* Local Detail (from Scan) */}
+      {isLocalDetail && localDetailContact && (
+        <ContactDetailView
+          contact={localDetailContact}
+          contactV2={contactV2}
+          onBack={() => setLocalDetailContact(null)}
+          onDelete={onDeleteContact}
+          onUpdate={() => setV2RefreshKey((k) => k + 1)}
+          onContactUpdated={onContactUpdated}
+          onDownloadVCard={handleDownloadVCard}
+          onViewInOrgMap={onViewInOrgMap}
+          companyId={companyIdForContact}
         />
       )}
 
-      {/* Normal Scan UI (only when not in batch mode) */}
-      {!contact && !isViewingFromHub && batchState === "idle" && (
+      {/* Normal Scan UI (only when not in batch mode, not viewing from hub, not showing local detail) */}
+      {!contact && !isViewingFromHub && batchState === "idle" && !isLocalDetail && (
         <Card className="glass">
           <CardHeader className="pb-4">
-            <CardTitle className="text-xl font-semibold">Scan Business Card</CardTitle>
+            <CardTitle className="text-xl font-semibold">Add a Contact</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Snap a business card or paste an email signature to extract the contact information.
+            </p>
+
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
-                  <Switch
-                    checked={eventModeEnabled}
-                    onCheckedChange={handleEventModeToggle}
-                    data-testid="switch-event-mode"
-                  />
+                  <Switch checked={eventModeEnabled} onCheckedChange={handleEventModeToggle} data-testid="switch-event-mode" />
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Event mode</span>
@@ -796,7 +842,10 @@ export function ScanTab({
                 </div>
                 {eventModeEnabled && currentEventName && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium" data-testid="current-event-name">
+                    <span
+                      className="text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium"
+                      data-testid="current-event-name"
+                    >
                       {currentEventName}
                     </span>
                     <Button
@@ -811,15 +860,14 @@ export function ScanTab({
                   </div>
                 )}
               </div>
-              
-              {/* Inline event name input - shows when event mode is on but no event name, or when editing */}
-              <div 
+
+              <div
                 className="overflow-hidden transition-all duration-300 ease-out"
                 style={{
-                  maxHeight: shouldShowInput ? '72px' : '0',
+                  maxHeight: shouldShowInput ? "72px" : "0",
                   opacity: shouldShowInput ? 1 : 0,
-                  transform: shouldShowInput ? 'translateY(0)' : 'translateY(-4px)',
-                  pointerEvents: shouldShowInput ? 'auto' : 'none',
+                  transform: shouldShowInput ? "translateY(0)" : "translateY(-4px)",
+                  pointerEvents: shouldShowInput ? "auto" : "none",
                 }}
               >
                 <div className="mt-3 flex gap-2 items-center">
@@ -832,25 +880,15 @@ export function ScanTab({
                     className="flex-1"
                     data-testid="input-event-name"
                   />
-                  <Button 
-                    size="sm" 
-                    onClick={handleEventNameSubmit} 
-                    disabled={!tempEventName.trim()} 
-                    data-testid="button-save-event"
-                  >
+                  <Button size="sm" onClick={handleEventNameSubmit} disabled={!tempEventName.trim()} data-testid="button-save-event">
                     Save
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={handleCancelEventEdit}
-                  >
+                  <Button size="sm" variant="ghost" onClick={handleCancelEventEdit}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
-              
-              {/* Batch Scan Button */}
+
               {eventModeEnabled && currentEventName && (
                 <Button
                   variant="outline"
@@ -886,7 +924,7 @@ export function ScanTab({
                   className="hidden"
                   data-testid="input-file-upload"
                 />
-                
+
                 {!previewImage ? (
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -903,12 +941,7 @@ export function ScanTab({
                   </button>
                 ) : (
                   <div className="relative">
-                    <img
-                      src={previewImage}
-                      alt="Card preview"
-                      className="w-full h-48 object-contain rounded-xl bg-muted"
-                      data-testid="image-preview"
-                    />
+                    <img src={previewImage} alt="Card preview" className="w-full h-48 object-contain rounded-xl bg-muted" data-testid="image-preview" />
                     <Button
                       size="icon"
                       variant="secondary"
@@ -921,12 +954,7 @@ export function ScanTab({
                   </div>
                 )}
 
-                <Button
-                  className="w-full mt-4"
-                  onClick={handleScanCard}
-                  disabled={!selectedFile || isProcessing}
-                  data-testid="button-scan"
-                >
+                <Button className="w-full mt-4" onClick={handleScanCard} disabled={!selectedFile || isProcessing} data-testid="button-scan">
                   {isCompressing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -954,12 +982,7 @@ export function ScanTab({
                   className="min-h-[150px] resize-none"
                   data-testid="input-paste-text"
                 />
-                <Button
-                  className="w-full"
-                  onClick={handleParseText}
-                  disabled={!pastedText.trim() || isProcessing}
-                  data-testid="button-extract"
-                >
+                <Button className="w-full" onClick={handleParseText} disabled={!pastedText.trim() || isProcessing} data-testid="button-extract">
                   {parseTextMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -985,7 +1008,7 @@ export function ScanTab({
           contactV2={contactV2}
           onBack={onBackToContacts}
           onDelete={onDeleteContact}
-          onUpdate={() => setV2RefreshKey(k => k + 1)}
+          onUpdate={() => setV2RefreshKey((k) => k + 1)}
           onContactUpdated={onContactUpdated}
           onDownloadVCard={handleDownloadVCard}
           onViewInOrgMap={onViewInOrgMap}
@@ -993,8 +1016,8 @@ export function ScanTab({
         />
       )}
 
-      {/* Original scan result UI for newly scanned contacts */}
-      {contact && !isViewingFromHub && (
+      {/* Scan result UI for newly scanned contacts */}
+      {contact && !isViewingFromHub && !isLocalDetail && (
         <div className="space-y-4">
           <Card className="glass">
             <CardHeader className="pb-2">
@@ -1004,17 +1027,13 @@ export function ScanTab({
                   Contact Extracted
                 </CardTitle>
                 <div className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setIsEditing(!isEditing)}
-                    data-testid="button-toggle-edit"
-                  >
+                  <Button size="sm" variant="ghost" onClick={() => setIsEditing(!isEditing)} data-testid="button-toggle-edit">
                     {isEditing ? "Done" : "Edit"}
                   </Button>
                 </div>
               </div>
             </CardHeader>
+
             <CardContent className="space-y-4">
               {isEditing ? (
                 <div className="space-y-3">
@@ -1096,91 +1115,30 @@ export function ScanTab({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3 min-w-0">
-                  {currentContact?.fullName && (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="font-medium truncate" data-testid="text-contact-name">{currentContact.fullName}</span>
+                <>
+                  {/* ✅ SAME CARD AS RELATIONSHIPS TAB */}
+                  {savedContactV1 ? (
+                    <RelationshipContactCard
+                      contact={savedContactV1}
+                      onOpen={() => setLocalDetailContact(savedContactV1)}
+                      showActionsMenu={false}
+                      showMeta={true}
+                    />
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      (Contact saved, but preview record not available yet.)
                     </div>
                   )}
-                  {currentContact?.jobTitle && (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Briefcase className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="truncate" data-testid="text-contact-title">{currentContact.jobTitle}</span>
-                    </div>
-                  )}
-                  {currentContact?.companyName && (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Building className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="truncate" data-testid="text-contact-company">{currentContact.companyName}</span>
-                    </div>
-                  )}
-                  {currentContact?.email && (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <a 
-                        href={`mailto:${currentContact.email}`} 
-                        className="text-primary hover:underline text-sm truncate" 
-                        title={currentContact.email}
-                        data-testid="text-contact-email"
-                      >
-                        {currentContact.email}
-                      </a>
-                    </div>
-                  )}
-                  {currentContact?.phone && (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <a href={`tel:${currentContact.phone}`} className="text-primary hover:underline truncate" data-testid="text-contact-phone">
-                        {currentContact.phone}
-                      </a>
-                    </div>
-                  )}
-                  {currentContact?.address && (
-                    <div className="flex items-start gap-3 min-w-0">
-                      <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                      <span 
-                        className="text-sm leading-snug break-words" 
-                        data-testid="text-contact-address"
-                      >
-                        {currentContact.address}
-                      </span>
-                    </div>
-                  )}
-                  {currentContact?.website && (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <a 
-                        href={currentContact.website} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="text-primary hover:underline truncate"
-                        title={currentContact.website}
-                        data-testid="text-contact-website"
-                      >
-                        {currentContact.website.replace(/^https?:\/\//, "")}
-                      </a>
-                    </div>
-                  )}
-                  {currentContact?.linkedinUrl && (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <SiLinkedin className="w-4 h-4 text-[#0A66C2] shrink-0" />
-                      <a href={currentContact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" data-testid="text-contact-linkedin">
-                        LinkedIn Profile
-                      </a>
-                    </div>
-                  )}
-                  
-                  {(currentContact?.phone || currentContact?.email || currentContact?.linkedinUrl || currentContact?.fullName || currentContact?.companyName) && (
+
+                  {/* Keep your existing quick actions row (useful, not “visual identity”) */}
+                  {(currentContact?.phone ||
+                    currentContact?.email ||
+                    currentContact?.linkedinUrl ||
+                    currentContact?.fullName ||
+                    currentContact?.companyName) && (
                     <div className="flex items-center gap-2 pt-3 mt-3 border-t flex-wrap" data-testid="action-row">
                       {currentContact?.phone && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          asChild
-                          className="gap-1.5"
-                          data-testid="button-action-call"
-                        >
+                        <Button variant="outline" size="sm" asChild className="gap-1.5" data-testid="button-action-call">
                           <a href={`tel:${currentContact.phone}`}>
                             <Phone className="w-3.5 h-3.5" />
                             Call
@@ -1188,13 +1146,7 @@ export function ScanTab({
                         </Button>
                       )}
                       {currentContact?.email && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          asChild
-                          className="gap-1.5"
-                          data-testid="button-action-email"
-                        >
+                        <Button variant="outline" size="sm" asChild className="gap-1.5" data-testid="button-action-email">
                           <a href={`mailto:${currentContact.email}`}>
                             <Mail className="w-3.5 h-3.5" />
                             Email
@@ -1202,29 +1154,19 @@ export function ScanTab({
                         </Button>
                       )}
                       {currentContact?.linkedinUrl ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          asChild
-                          className="gap-1.5"
-                          data-testid="button-action-linkedin"
-                        >
+                        <Button variant="outline" size="sm" asChild className="gap-1.5" data-testid="button-action-linkedin">
                           <a href={currentContact.linkedinUrl} target="_blank" rel="noopener noreferrer">
                             <SiLinkedin className="w-3.5 h-3.5 text-[#0A66C2]" />
                             LinkedIn
                           </a>
                         </Button>
                       ) : (currentContact?.fullName || currentContact?.companyName) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          asChild
-                          className="gap-1.5"
-                          data-testid="button-action-search-linkedin"
-                        >
-                          <a 
-                            href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent([currentContact?.fullName, currentContact?.companyName].filter(Boolean).join(' '))}`}
-                            target="_blank" 
+                        <Button variant="outline" size="sm" asChild className="gap-1.5" data-testid="button-action-search-linkedin">
+                          <a
+                            href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(
+                              [currentContact?.fullName, currentContact?.companyName].filter(Boolean).join(" ")
+                            )}`}
+                            target="_blank"
                             rel="noopener noreferrer"
                           >
                             <SiLinkedin className="w-3.5 h-3.5 text-muted-foreground" />
@@ -1244,54 +1186,34 @@ export function ScanTab({
                           <Network className="w-3.5 h-3.5" />
                           View Org Map
                           {companyContactCount > 1 && (
-                            <span className="ml-0.5 text-xs text-muted-foreground">
-                              ({companyContactCount})
-                            </span>
+                            <span className="ml-0.5 text-xs text-muted-foreground">({companyContactCount})</span>
                           )}
                         </Button>
                       )}
                     </div>
                   )}
-                </div>
+                </>
               )}
 
               <div className="pt-4 flex flex-col gap-2">
                 <div className="flex gap-2">
-                  <Button
-                    onClick={handleDownloadVCard}
-                    className="flex-1"
-                    data-testid="button-download-vcard"
-                  >
+                  <Button onClick={handleDownloadVCard} className="flex-1" data-testid="button-download-vcard">
                     <Download className="mr-2 h-4 w-4" />
                     Download vCard
                   </Button>
                   {editedContact?.email && (
-                    <HubSpotSyncButton 
-                      contact={editedContact} 
-                      contactId={contactV2?.id}
-                      onSynced={() => setV2RefreshKey(k => k + 1)}
-                    />
+                    <HubSpotSyncButton contact={editedContact} contactId={contactV2?.id} onSynced={() => setV2RefreshKey((k) => k + 1)} />
                   )}
                 </div>
-                
+
                 {editedContact?.companyName && !intelV2 && !intelV2Loading && !intelV2Error && (
-                  <Button
-                    variant="outline"
-                    onClick={handleFetchIntelV2}
-                    className="w-full gap-2"
-                    data-testid="button-company-intel"
-                  >
+                  <Button variant="outline" onClick={handleFetchIntelV2} className="w-full gap-2" data-testid="button-company-intel">
                     <Sparkles className="w-4 h-4" />
                     Company Intel
                   </Button>
                 )}
-                
-                <Button
-                  onClick={resetFlow}
-                  variant="ghost"
-                  className="w-full"
-                  data-testid="button-new-scan"
-                >
+
+                <Button onClick={resetFlow} variant="ghost" className="w-full" data-testid="button-new-scan">
                   Scan Another Card
                 </Button>
               </div>

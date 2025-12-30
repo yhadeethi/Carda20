@@ -1,6 +1,5 @@
 /**
  * Contacts Hub with People / Companies Split for Org Intelligence
- * UI hardened: no overflow, better hierarchy, cleaner actions
  */
 
 import { useState, useMemo, useEffect } from "react";
@@ -21,22 +20,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerFooter,
-  DrawerClose,
-} from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 
 import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
 import {
@@ -48,24 +33,12 @@ import {
   getContactCountForCompany,
 } from "@/lib/companiesStorage";
 
-import {
-  Search,
-  User,
-  Building,
-  Building2,
-  Calendar,
-  Tag,
-  Users,
-  Plus,
-  Bell,
-  Merge,
-  MoreHorizontal,
-} from "lucide-react";
-
+import { Search, User, Building2, Plus, Bell, Merge, Users } from "lucide-react";
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
-import { format } from "date-fns";
+
+import { RelationshipContactCard } from "@/components/relationship/RelationshipContactCard";
 
 type TabMode = "people" | "companies";
 type PeopleSubView = "all" | "upcoming" | "duplicates";
@@ -101,7 +74,6 @@ export function ContactsHub({
   const [newCompanyCountry, setNewCompanyCountry] = useState("");
   const [newCompanyNotes, setNewCompanyNotes] = useState("");
 
-  // Auto-generate companies from contacts on first load
   useEffect(() => {
     const loadedContacts = loadContacts();
     setContacts(loadedContacts);
@@ -121,9 +93,7 @@ export function ContactsHub({
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (c) => c.name?.toLowerCase().includes(query) || c.company?.toLowerCase().includes(query)
-      );
+      result = result.filter((c) => c.name?.toLowerCase().includes(query) || c.company?.toLowerCase().includes(query));
     }
 
     result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -135,9 +105,7 @@ export function ContactsHub({
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (c) => c.name?.toLowerCase().includes(query) || c.domain?.toLowerCase().includes(query)
-      );
+      result = result.filter((c) => c.name?.toLowerCase().includes(query) || c.domain?.toLowerCase().includes(query));
     }
 
     result.sort((a, b) => {
@@ -188,32 +156,8 @@ export function ContactsHub({
 
   const contactToDelete = deleteConfirmId ? contacts.find((c) => c.id === deleteConfirmId) : null;
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return format(new Date(dateStr), "d MMM yyyy");
-    } catch {
-      return "";
-    }
-  };
-
-  // UI helpers (does not change any business logic)
-  const isNew = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr).getTime();
-      const days = (Date.now() - d) / (1000 * 60 * 60 * 24);
-      return days <= 7;
-    } catch {
-      return false;
-    }
-  };
-
-  const displayCompany = (c: StoredContact) => (c.company?.trim() ? c.company.trim() : "Unknown company");
-  const displayName = (c: StoredContact) =>
-    c.name?.trim() ? c.name.trim() : c.email?.trim() ? c.email.trim() : "Unknown";
-
   return (
     <>
-      {/* Delete dialog */}
       <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -231,7 +175,6 @@ export function ContactsHub({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Add company drawer */}
       <Drawer open={showAddCompany} onOpenChange={setShowAddCompany}>
         <DrawerContent className="max-h-[90vh]">
           <DrawerHeader className="border-b pb-4">
@@ -342,44 +285,43 @@ export function ContactsHub({
         </DrawerContent>
       </Drawer>
 
-      {/* Main */}
       <Card className="glass">
         <CardHeader className="pb-2">
           <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">
             Relationships
           </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            All your scanned contacts in one place. Search by name or company.
+          </p>
         </CardHeader>
+
 
         <CardContent className="space-y-4">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-            {/* Top controls */}
-            <div className="sticky top-0 z-10 bg-background/60 backdrop-blur rounded-2xl">
-              <TabsList className="w-full grid grid-cols-2 h-11 rounded-2xl">
-                <TabsTrigger value="people" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-people">
-                  <User className="w-5 h-5" />
-                  People
-                </TabsTrigger>
-                <TabsTrigger value="companies" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-companies">
-                  <Building2 className="w-5 h-5" />
-                  Companies
-                </TabsTrigger>
-              </TabsList>
+            <TabsList className="w-full grid grid-cols-2 h-12 rounded-2xl">
+              <TabsTrigger value="people" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-people">
+                <User className="w-5 h-5" />
+                People
+              </TabsTrigger>
+              <TabsTrigger value="companies" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-companies">
+                <Building2 className="w-5 h-5" />
+                Companies
+              </TabsTrigger>
+            </TabsList>
 
-              <div className="relative mt-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder={activeTab === "people" ? "Search by name, company…" : "Search companies…"}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-11 rounded-2xl"
-                  data-testid="input-contacts-search"
-                />
-              </div>
+            <div className="relative mt-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder={activeTab === "people" ? "Search by name or company..." : "Search companies..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 rounded-2xl h-11"
+                data-testid="input-contacts-search"
+              />
             </div>
 
             {/* People Tab */}
             <TabsContent value="people" className="mt-4 space-y-4">
-              {/* Sub-view segmented pills */}
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <button
                   className={`px-3 py-1.5 rounded-full text-sm border transition whitespace-nowrap ${
@@ -427,7 +369,6 @@ export function ContactsHub({
                 </button>
               </div>
 
-              {/* Sub-views */}
               {peopleSubView === "upcoming" && (
                 <div className="min-h-[300px]">
                   <UpcomingView
@@ -474,103 +415,12 @@ export function ContactsHub({
                       </div>
                     ) : (
                       filteredContacts.map((contact) => (
-                        <div
+                        <RelationshipContactCard
                           key={contact.id}
-                          className="rounded-2xl border bg-card hover:bg-muted/30 transition shadow-sm cursor-pointer"
-                          onClick={() => onSelectContact(contact)}
-                          data-testid={`contact-row-${contact.id}`}
-                          style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-                        >
-                          <div className="p-4 flex items-start gap-3">
-                            {/* Avatar */}
-                            <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                              <User className="w-5 h-5 text-muted-foreground" />
-                            </div>
-
-                            {/* Content – must be min-w-0 to allow truncation */}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                {/* Left text stack */}
-                                <div className="min-w-0">
-                                  {/* Company-first */}
-                                  <div className="font-semibold leading-5 truncate" title={displayCompany(contact)}>
-                                    {displayCompany(contact)}
-                                  </div>
-
-                                  {/* Name + title */}
-                                  <div className="text-sm text-muted-foreground mt-0.5 min-w-0 truncate" title={displayName(contact)}>
-                                    <span className="font-medium text-foreground">{displayName(contact)}</span>
-                                    {contact.title ? <span className="text-muted-foreground"> · {contact.title}</span> : null}
-                                  </div>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="rounded-xl opacity-70 hover:opacity-100"
-                                        data-testid={`button-contact-actions-${contact.id}`}
-                                      >
-                                        <MoreHorizontal className="w-5 h-5" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem onClick={() => onSelectContact(contact)}>Open</DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        className="text-destructive"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          setDeleteConfirmId(contact.id);
-                                        }}
-                                        data-testid={`button-delete-contact-${contact.id}`}
-                                      >
-                                        Delete
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
-                              </div>
-
-                              {/* Meta row – wraps safely */}
-                              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                {isNew(contact.createdAt) && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                                    New
-                                  </span>
-                                )}
-
-                                <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                                  <Calendar className="w-3 h-3" />
-                                  Scanned {formatDate(contact.createdAt)}
-                                </span>
-
-                                {contact.eventName && (
-                                  <span
-                                    className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground inline-flex items-center gap-1 max-w-[220px]"
-                                    data-testid={`contact-event-${contact.id}`}
-                                    title={contact.eventName}
-                                  >
-                                    <Tag className="w-3 h-3 shrink-0" />
-                                    <span className="truncate">{contact.eventName}</span>
-                                  </span>
-                                )}
-
-                                {(contact.company || contact.title) && (
-                                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1 min-w-0">
-                                    <Building className="w-3 h-3 shrink-0" />
-                                    <span className="truncate max-w-[260px]">
-                                      {[contact.company, contact.title].filter(Boolean).join(" · ")}
-                                    </span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                          contact={contact}
+                          onOpen={() => onSelectContact(contact)}
+                          onDelete={() => setDeleteConfirmId(contact.id)}
+                        />
                       ))
                     )}
                   </div>
@@ -586,10 +436,7 @@ export function ContactsHub({
 
             {/* Companies Tab */}
             <TabsContent value="companies" className="mt-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  {filteredCompanies.length} compan{filteredCompanies.length === 1 ? "y" : "ies"}
-                </div>
+              <div className="flex justify-end">
                 <Button
                   size="sm"
                   variant="outline"
