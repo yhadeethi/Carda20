@@ -298,24 +298,29 @@ export function ContactsHub({
 
         <CardContent className="space-y-4">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-            <TabsList className="w-full flex items-center rounded-full bg-muted p-1 h-11">
+            {/*
+              Apple-style segmented control.
+              Fixes the "Companies" label/icon clipping by:
+              - preventing icon shrink
+              - allowing text to truncate (ellipsis) instead of being cut off
+              - ensuring triggers can shrink with min-w-0
+            */}
+            <TabsList className="w-full grid grid-cols-2 rounded-full bg-muted p-1 h-11">
               <TabsTrigger
                 value="people"
-                className="flex-1 min-w-0 rounded-full px-4 text-sm font-semibold gap-2 data-[state=active]:shadow-sm"
+                className="flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-medium min-w-0"
                 data-testid="tab-people"
-                title="People"
               >
                 <User className="w-4 h-4 shrink-0" />
-                <span className="truncate">People</span>
+                <span className="min-w-0 truncate">People</span>
               </TabsTrigger>
               <TabsTrigger
                 value="companies"
-                className="flex-1 min-w-0 rounded-full px-4 text-sm font-semibold gap-2 data-[state=active]:shadow-sm"
+                className="flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-medium min-w-0"
                 data-testid="tab-companies"
-                title="Companies"
               >
                 <Building2 className="w-4 h-4 shrink-0" />
-                <span className="truncate">Companies</span>
+                <span className="min-w-0 truncate">Companies</span>
               </TabsTrigger>
             </TabsList>
 
