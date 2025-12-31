@@ -714,70 +714,6 @@ export function ScanTab({
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <div className="py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <Switch checked={eventModeEnabled} onCheckedChange={handleEventModeToggle} data-testid="switch-event-mode" />
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Event mode</span>
-                  </div>
-                </div>
-
-                {eventModeEnabled && currentEventName && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium" data-testid="current-event-name">
-                      {currentEventName}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto py-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={handleChangeEvent}
-                      data-testid="button-change-event"
-                    >
-                      Change
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <div
-                className="overflow-hidden transition-all duration-300 ease-out"
-                style={{
-                  maxHeight: shouldShowInput ? "72px" : "0",
-                  opacity: shouldShowInput ? 1 : 0,
-                  transform: shouldShowInput ? "translateY(0)" : "translateY(-4px)",
-                  pointerEvents: shouldShowInput ? "auto" : "none",
-                }}
-              >
-                <div className="mt-3 flex gap-2 items-center">
-                  <Input
-                    placeholder="e.g. All-Energy 2025"
-                    value={tempEventName}
-                    onChange={(e) => setTempEventName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
-                    autoFocus={shouldShowInput}
-                    className="flex-1"
-                    data-testid="input-event-name"
-                  />
-                  <Button size="sm" onClick={handleEventNameSubmit} disabled={!tempEventName.trim()} data-testid="button-save-event">
-                    Save
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={handleCancelEventEdit}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {eventModeEnabled && currentEventName && (
-                <Button variant="outline" className="w-full mt-2 gap-2" onClick={handleStartBatchMode} data-testid="button-batch-scan">
-                  <Layers className="w-4 h-4" />
-                  Batch Scan (Multi-Photo)
-                </Button>
-              )}
-            </div>
-
             <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="scan" className="gap-2" data-testid="mode-scan">
@@ -867,6 +803,70 @@ export function ScanTab({
                 </Button>
               </TabsContent>
             </Tabs>
+
+            <div className="py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <Switch checked={eventModeEnabled} onCheckedChange={handleEventModeToggle} data-testid="switch-event-mode" />
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Event mode</span>
+                  </div>
+                </div>
+
+                {eventModeEnabled && currentEventName && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium" data-testid="current-event-name">
+                      {currentEventName}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto py-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={handleChangeEvent}
+                      data-testid="button-change-event"
+                    >
+                      Change
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="overflow-hidden transition-all duration-300 ease-out"
+                style={{
+                  maxHeight: shouldShowInput ? "72px" : "0",
+                  opacity: shouldShowInput ? 1 : 0,
+                  transform: shouldShowInput ? "translateY(0)" : "translateY(-4px)",
+                  pointerEvents: shouldShowInput ? "auto" : "none",
+                }}
+              >
+                <div className="mt-3 flex gap-2 items-center">
+                  <Input
+                    placeholder="e.g. All-Energy 2025"
+                    value={tempEventName}
+                    onChange={(e) => setTempEventName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
+                    autoFocus={shouldShowInput}
+                    className="flex-1"
+                    data-testid="input-event-name"
+                  />
+                  <Button size="sm" onClick={handleEventNameSubmit} disabled={!tempEventName.trim()} data-testid="button-save-event">
+                    Save
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={handleCancelEventEdit}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {eventModeEnabled && currentEventName && (
+                <Button variant="outline" className="w-full mt-2 gap-2" onClick={handleStartBatchMode} data-testid="button-batch-scan">
+                  <Layers className="w-4 h-4" />
+                  Batch Scan (Multi-Photo)
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
