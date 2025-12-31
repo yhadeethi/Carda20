@@ -224,6 +224,7 @@ export function ScanTab({
   const [isCompressing, setIsCompressing] = useState(false);
 
   const [tempEventName, setTempEventName] = useState("");
+  const [pendingEventName, setPendingEventName] = useState<string | null>(null);
   const [isEditingEventName, setIsEditingEventName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -284,7 +285,9 @@ export function ScanTab({
         address: parsedContact.address || "",
       };
 
-      const savedContact = saveContact(contactData, eventModeEnabled ? currentEventName : null);
+      const eventNameToUse = eventModeEnabled ? (currentEventName || pendingEventName) : null;
+
+      const savedContact = saveContact(contactData, eventNameToUse);
       if (!savedContact) return null;
 
       const existingV2Contacts = loadContactsV2();
@@ -539,24 +542,40 @@ export function ScanTab({
   // Event mode inline input
   const shouldShowInput = eventModeEnabled && (isEditingEventName || !currentEventName);
 
+  useEffect(() => {
+    if (currentEventName && pendingEventName) setPendingEventName(null);
+  }, [currentEventName, pendingEventName]);
+
   const handleEventModeToggle = (enabled: boolean) => {
+    const existingEventName = currentEventName || pendingEventName;
+
     if (enabled) {
       onEventModeChange(true);
-      if (!currentEventName) setTempEventName("");
+      if (!existingEventName) setTempEventName("");
+
+      // When an event is already selected, enabling event mode jumps straight into batch capture.
+      if (existingEventName) setBatchState("capturing");
     } else {
       onEventModeChange(false);
       onEventNameChange(null);
       setTempEventName("");
       setIsEditingEventName(false);
+      setPendingEventName(null);
+      setBatchState("idle");
+      clearBatchSession();
     }
   };
 
   const handleEventNameSubmit = () => {
-    if (tempEventName.trim()) {
-      onEventNameChange(tempEventName.trim());
-      onEventModeChange(true);
-      setIsEditingEventName(false);
-    }
+    const name = tempEventName.trim();
+    if (!name) return;
+
+    // Use a local pending value so batch mode can start immediately (before parent state propagates).
+    setPendingEventName(name);
+    onEventNameChange(name);
+    onEventModeChange(true);
+    setIsEditingEventName(false);
+    setBatchState("capturing");
   };
 
   const handleChangeEvent = () => {
@@ -567,7 +586,10 @@ export function ScanTab({
   const handleCancelEventEdit = () => {
     setIsEditingEventName(false);
     setTempEventName("");
-    if (!currentEventName) onEventModeChange(false);
+    if (!currentEventName) {
+      onEventModeChange(false);
+      setPendingEventName(null);
+    }
   };
 
   // Batch scan handlers
@@ -629,6 +651,8 @@ export function ScanTab({
   const activeStoredContact = viewingContact || scannedStoredContact;
   const isViewingFromHub = !!viewingContact;
 
+  const effectiveEventName = currentEventName || pendingEventName;
+
   // Notify parent when showing/hiding a contact (for hiding bottom nav)
   useEffect(() => {
     onShowingContactChange?.(!!activeStoredContact);
@@ -671,13 +695,13 @@ export function ScanTab({
       </AlertDialog>
 
       {/* Batch Scan Mode */}
-      {batchState === "capturing" && currentEventName && (
-        <BatchScanMode eventName={currentEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
+      {batchState === "capturing" && effectiveEventName && (
+        <BatchScanMode eventName={effectiveEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
       )}
 
       {/* Batch Processing / Review */}
-      {(batchState === "processing" || batchState === "reviewing") && currentEventName && (
-        <BatchReview items={batchItems} eventName={currentEventName} onComplete={handleBatchComplete} onBack={handleBatchBack} />
+      {(batchState === "processing" || batchState === "reviewing") && effectiveEventName && (
+        <BatchReview items={batchItems} eventName={effectiveEventName} onComplete={handleBatchComplete} onBack={handleBatchBack} />
       )}
 
       {/* If we have an active contact (either from hub or scanned) show the SAME Relationship detail UI */}
@@ -715,16 +739,116 @@ export function ScanTab({
 
           <CardContent className="space-y-4">
             <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="scan" className="gap-2" data-testid="mode-scan">
-                  <Camera className="w-4 h-4" />
+              <TabsList className="w-full grid grid-cols-2 h-12 rounded-2xl">
+                <TabsTrigger value="scan" className="gap-2 text-base font-medium rounded-xl" data-testid="mode-scan">
+                  <Camera className="w-5 h-5" />
                   Scan Card
                 </TabsTrigger>
-                <TabsTrigger value="paste" className="gap-2" data-testid="mode-paste">
-                  <FileText className="w-4 h-4" />
+
+                <TabsTrigger value="paste" className="gap-2 text-base font-medium rounded-xl" data-testid="mode-paste">
+                  <FileText className="w-5 h-5" />
                   Paste Text
                 </TabsTrigger>
               </TabsList>
+
+              {scanMode === "scan" && (
+                <div className="mt-4 p-4 rounded-2xl border bg-muted/30" data-testid="event-mode-row">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-3 min-w-[240px]">
+                      <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+                        <Calendar className="w-5 h-5 text-primary" />
+                      </div>
+
+                      <div className="leading-tight">
+                        <div className="font-medium">Event mode</div>
+                        <div className="text-sm text-muted-foreground">
+                          Enable batch scan and tag contacts to an event
+                        </div>
+                      </div>
+                    </div>
+
+                    <Switch
+                      checked={eventModeEnabled}
+                      onCheckedChange={handleEventModeToggle}
+                      data-testid="switch-event-mode"
+                    />
+                  </div>
+
+                  {eventModeEnabled && effectiveEventName && (
+                    <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
+                      <span
+                        className="text-sm bg-primary/10 text-primary px-3 py-1 rounded-full font-medium"
+                        data-testid="current-event-name"
+                      >
+                        {effectiveEventName}
+                      </span>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-2xl px-3"
+                        onClick={handleChangeEvent}
+                        data-testid="button-change-event"
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  )}
+
+                  <div
+                    className="overflow-hidden transition-all duration-300 ease-out"
+                    style={{
+                      maxHeight: shouldShowInput ? "72px" : "0",
+                      opacity: shouldShowInput ? 1 : 0,
+                      transform: shouldShowInput ? "translateY(0)" : "translateY(-4px)",
+                      pointerEvents: shouldShowInput ? "auto" : "none",
+                    }}
+                  >
+                    <div className="mt-3 flex gap-2 items-center">
+                      <Input
+                        placeholder="e.g. All-Energy 2025"
+                        value={tempEventName}
+                        onChange={(e) => setTempEventName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
+                        autoFocus={shouldShowInput}
+                        className="flex-1 rounded-2xl h-11"
+                        data-testid="input-event-name"
+                      />
+
+                      <Button
+                        onClick={handleEventNameSubmit}
+                        disabled={!tempEventName.trim()}
+                        className="rounded-2xl h-11 px-4"
+                        data-testid="button-save-event"
+                      >
+                        Save
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="rounded-2xl h-11 w-11"
+                        onClick={handleCancelEventEdit}
+                        data-testid="button-cancel-event-edit"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {eventModeEnabled && effectiveEventName && (
+                    <Button
+                      variant="outline"
+                      className="w-full mt-3 gap-2 rounded-2xl h-11"
+                      onClick={handleStartBatchMode}
+                      data-testid="button-batch-scan"
+                    >
+                      <Layers className="w-4 h-4" />
+                      Batch Scan (Multi-Photo)
+                    </Button>
+                  )}
+                </div>
+              )}
 
               <TabsContent value="scan" className="mt-4">
                 <input
@@ -803,70 +927,6 @@ export function ScanTab({
                 </Button>
               </TabsContent>
             </Tabs>
-
-            <div className="py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <Switch checked={eventModeEnabled} onCheckedChange={handleEventModeToggle} data-testid="switch-event-mode" />
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Event mode</span>
-                  </div>
-                </div>
-
-                {eventModeEnabled && currentEventName && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium" data-testid="current-event-name">
-                      {currentEventName}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto py-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={handleChangeEvent}
-                      data-testid="button-change-event"
-                    >
-                      Change
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <div
-                className="overflow-hidden transition-all duration-300 ease-out"
-                style={{
-                  maxHeight: shouldShowInput ? "72px" : "0",
-                  opacity: shouldShowInput ? 1 : 0,
-                  transform: shouldShowInput ? "translateY(0)" : "translateY(-4px)",
-                  pointerEvents: shouldShowInput ? "auto" : "none",
-                }}
-              >
-                <div className="mt-3 flex gap-2 items-center">
-                  <Input
-                    placeholder="e.g. All-Energy 2025"
-                    value={tempEventName}
-                    onChange={(e) => setTempEventName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
-                    autoFocus={shouldShowInput}
-                    className="flex-1"
-                    data-testid="input-event-name"
-                  />
-                  <Button size="sm" onClick={handleEventNameSubmit} disabled={!tempEventName.trim()} data-testid="button-save-event">
-                    Save
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={handleCancelEventEdit}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {eventModeEnabled && currentEventName && (
-                <Button variant="outline" className="w-full mt-2 gap-2" onClick={handleStartBatchMode} data-testid="button-batch-scan">
-                  <Layers className="w-4 h-4" />
-                  Batch Scan (Multi-Photo)
-                </Button>
-              )}
-            </div>
           </CardContent>
         </Card>
       )}

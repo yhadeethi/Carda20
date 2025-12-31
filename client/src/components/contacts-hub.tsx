@@ -298,14 +298,24 @@ export function ContactsHub({
 
         <CardContent className="space-y-4">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-            <TabsList className="w-full grid grid-cols-2 h-12 rounded-2xl">
-              <TabsTrigger value="people" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-people">
-                <User className="w-5 h-5" />
-                People
+            <TabsList className="w-full flex items-center rounded-full bg-muted p-1 h-11">
+              <TabsTrigger
+                value="people"
+                className="flex-1 min-w-0 rounded-full px-4 text-sm font-semibold gap-2 data-[state=active]:shadow-sm"
+                data-testid="tab-people"
+                title="People"
+              >
+                <User className="w-4 h-4 shrink-0" />
+                <span className="truncate">People</span>
               </TabsTrigger>
-              <TabsTrigger value="companies" className="gap-2 text-base font-medium rounded-xl" data-testid="tab-companies">
-                <Building2 className="w-5 h-5" />
-                Companies
+              <TabsTrigger
+                value="companies"
+                className="flex-1 min-w-0 rounded-full px-4 text-sm font-semibold gap-2 data-[state=active]:shadow-sm"
+                data-testid="tab-companies"
+                title="Companies"
+              >
+                <Building2 className="w-4 h-4 shrink-0" />
+                <span className="truncate">Companies</span>
               </TabsTrigger>
             </TabsList>
 

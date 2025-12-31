@@ -257,18 +257,18 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="w-full grid grid-cols-3">
-          <TabsTrigger value="contacts" className="gap-1.5 text-xs" data-testid="tab-people">
-            <Users className="w-4 h-4" />
-            <span>People</span>
+        <TabsList className="w-full flex items-center rounded-full bg-muted p-1 h-10">
+          <TabsTrigger value="contacts" className="flex-1 min-w-0 rounded-full px-3 text-xs font-semibold gap-1.5 data-[state=active]:shadow-sm" data-testid="tab-people" title="People">
+            <Users className="w-4 h-4 shrink-0" />
+            <span className="truncate">People</span>
           </TabsTrigger>
-          <TabsTrigger value="orgmap" className="gap-1.5 text-xs" data-testid="tab-org">
-            <Network className="w-4 h-4" />
-            <span>Org</span>
+          <TabsTrigger value="orgmap" className="flex-1 min-w-0 rounded-full px-3 text-xs font-semibold gap-1.5 data-[state=active]:shadow-sm" data-testid="tab-org" title="Org">
+            <Network className="w-4 h-4 shrink-0" />
+            <span className="truncate">Org</span>
           </TabsTrigger>
-          <TabsTrigger value="notes" className="gap-1.5 text-xs" data-testid="tab-notes">
-            <StickyNote className="w-4 h-4" />
-            <span>Notes</span>
+          <TabsTrigger value="notes" className="flex-1 min-w-0 rounded-full px-3 text-xs font-semibold gap-1.5 data-[state=active]:shadow-sm" data-testid="tab-notes" title="Notes">
+            <StickyNote className="w-4 h-4 shrink-0" />
+            <span className="truncate">Notes</span>
           </TabsTrigger>
         </TabsList>
 
