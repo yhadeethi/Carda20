@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -707,7 +708,11 @@ export function ScanTab({
         <Card className="glass">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl font-semibold">Add Contact</CardTitle>
+            <CardDescription>
+              Scan a business card or paste an email signature to create a contact in seconds.
+            </CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-4">
             <div className="py-2 px-3 rounded-lg bg-muted/50" data-testid="event-mode-row">
               <div className="flex items-center justify-between gap-3 flex-wrap">
