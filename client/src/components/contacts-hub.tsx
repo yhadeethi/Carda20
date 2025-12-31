@@ -305,22 +305,30 @@ export function ContactsHub({
               - allowing text to truncate (ellipsis) instead of being cut off
               - ensuring triggers can shrink with min-w-0
             */}
-            <TabsList className="w-full grid grid-cols-2 rounded-full bg-muted p-1 h-11">
+            <TabsList className="w-full grid grid-cols-2 rounded-full bg-muted p-1 h-12">
               <TabsTrigger
                 value="people"
-                className="flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-medium min-w-0"
+                className="w-full rounded-full px-3 h-10 py-0 text-sm font-medium min-w-0"
                 data-testid="tab-people"
               >
-                <User className="w-4 h-4 shrink-0" />
-                <span className="min-w-0 truncate">People</span>
+                {/*
+                  iOS Safari + grid/flex combos can clip long labels unless the text has a real width constraint.
+                  This wrapper forces full-width layout so `truncate` can do its job (ellipsis) instead of hard clipping.
+                */}
+                <span className="flex items-center justify-center gap-2 w-full min-w-0">
+                  <User className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0 truncate">People</span>
+                </span>
               </TabsTrigger>
               <TabsTrigger
                 value="companies"
-                className="flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-medium min-w-0"
+                className="w-full rounded-full px-3 h-10 py-0 text-sm font-medium min-w-0"
                 data-testid="tab-companies"
               >
-                <Building2 className="w-4 h-4 shrink-0" />
-                <span className="min-w-0 truncate">Companies</span>
+                <span className="flex items-center justify-center gap-2 w-full min-w-0">
+                  <Building2 className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0 truncate">Companies</span>
+                </span>
               </TabsTrigger>
             </TabsList>
 
