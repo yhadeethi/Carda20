@@ -114,16 +114,15 @@ function sanitizePhone(p?: string | null): string | null {
 }
 
 function openMailto(to: string, subject: string | undefined, body: string) {
-  const qs = new URLSearchParams();
-  if (subject) qs.set("subject", subject);
-  qs.set("body", body);
-  window.location.href = `mailto:${encodeURIComponent(to)}?${qs.toString()}`;
+  let href = `mailto:${encodeURIComponent(to)}?`;
+  const params: string[] = [];
+  if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+  params.push(`body=${encodeURIComponent(body)}`);
+  window.location.href = href + params.join("&");
 }
 
 function openSms(phone: string, body: string) {
-  const qs = new URLSearchParams();
-  qs.set("body", body);
-  window.location.href = `sms:${encodeURIComponent(phone)}?&${qs.toString()}`;
+  window.location.href = `sms:${encodeURIComponent(phone)}?&body=${encodeURIComponent(body)}`;
 }
 
 function useKeyboardInset(active: boolean) {

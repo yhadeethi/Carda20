@@ -10,6 +10,7 @@ import { generateIntelV2 } from "./intelV2Service";
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
+import OpenAI from "openai";
 
 async function getCurrentUserId(req: Request): Promise<number> {
   const authId = (req.user as any)?.claims?.sub;
@@ -457,6 +458,121 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
     } catch (error) {
       console.error("Error scanning contact with AI:", error);
       res.status(500).send("Failed to scan contact with AI");
+    }
+  });
+
+  // AI-powered follow-up message generation
+  const followupSchema = z.object({
+    contact: z.object({
+      name: z.string(),
+      company: z.string().optional(),
+      title: z.string().optional(),
+      email: z.string().optional(),
+    }),
+    request: z.object({
+      mode: z.enum(['email_followup', 'linkedin_message', 'meeting_intro']),
+      tone: z.enum(['friendly', 'direct', 'warm', 'formal']),
+      goal: z.string().optional(),
+      context: z.string().optional(),
+      length: z.enum(['short', 'medium']),
+    }),
+  });
+
+  app.post("/api/followup", async (req: Request, res: Response) => {
+    try {
+      if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
+        return res.status(503).json({ error: "AI service not configured" });
+      }
+
+      const parsed = followupSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.errors });
+      }
+
+      const { contact, request: followupRequest } = parsed.data;
+      const { mode, tone, goal, context, length } = followupRequest;
+
+      const modeDescriptions: Record<string, string> = {
+        email_followup: "a professional follow-up email",
+        linkedin_message: "a LinkedIn direct message (concise, networking-focused)",
+        meeting_intro: "an email requesting a meeting",
+      };
+
+      const toneDescriptions: Record<string, string> = {
+        friendly: "friendly and approachable",
+        direct: "direct and to the point",
+        warm: "warm and personable",
+        formal: "formal and professional",
+      };
+
+      const lengthGuide = length === 'short' 
+        ? "Keep it very brief - 2-3 sentences max." 
+        : "Keep it concise but complete - around 4-6 sentences.";
+
+      const prompt = `Generate ${modeDescriptions[mode]} for the following contact:
+
+Name: ${contact.name}
+${contact.company ? `Company: ${contact.company}` : ''}
+${contact.title ? `Title: ${contact.title}` : ''}
+
+Requirements:
+- Tone: ${toneDescriptions[tone]}
+- ${lengthGuide}
+${goal ? `- Main objective/goal: "${goal}" - IMPORTANT: Naturally incorporate this goal into a well-formed sentence. Do NOT just insert it verbatim.` : ''}
+${context ? `- Context/how we met: ${context}` : ''}
+
+Return a JSON object with these fields:
+{
+  "subject": "email subject line (omit for LinkedIn messages)",
+  "body": "the complete message body",
+  "bullets": ["key point 1", "key point 2"] // 2-3 key points summarizing the message
+}
+
+Important guidelines:
+- Start with an appropriate greeting based on the tone
+- If a goal is provided, work it naturally into the message as a complete, professional sentence
+- Reference the context if provided
+- Include a clear call-to-action
+- End with an appropriate sign-off (but don't include a signature name)
+- For LinkedIn, skip the subject line entirely
+
+Return ONLY valid JSON, no markdown or explanation.`;
+
+      const openai = new OpenAI({
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+      });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        console.error("[Followup] Empty response from AI");
+        return res.status(500).json({ error: "Empty AI response" });
+      }
+
+      // Parse the JSON response
+      const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      const result = JSON.parse(cleanedContent);
+
+      // Ensure required fields
+      if (!result.body) {
+        return res.status(500).json({ error: "Invalid AI response structure" });
+      }
+
+      res.json({
+        subject: result.subject || null,
+        body: result.body,
+        bullets: result.bullets || [],
+      });
+    } catch (error) {
+      console.error("[Followup] Error generating follow-up:", error);
+      res.status(500).json({ error: "Failed to generate follow-up" });
     }
   });
 
