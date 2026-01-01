@@ -34,29 +34,12 @@ import {
   getContactCountForCompany,
 } from "@/lib/companiesStorage";
 
-import { Search, User, Building2, Plus, Bell, Merge, Users } from "lucide-react";
+import { Search, Plus, Bell, Merge, Users } from "lucide-react";
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
 
 import { RelationshipContactCard } from "@/components/relationship/RelationshipContactCard";
-
-
-
-function SegmentedThumb() {
-  const reduceMotion = useReducedMotion();
-  return (
-    <motion.span
-      layoutId="contacts-hub-segment-thumb"
-      transition={
-        reduceMotion
-          ? { duration: 0 }
-          : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
-      }
-      className="pointer-events-none absolute inset-0 rounded-full bg-background shadow-sm"
-    />
-  );
-}
 
 type TabMode = "people" | "companies";
 type PeopleSubView = "all" | "upcoming" | "duplicates";
@@ -77,6 +60,7 @@ export function ContactsHub({
   onSelectCompany,
 }: ContactsHubProps) {
   const [activeTab, setActiveTab] = useState<TabMode>("people");
+  const reduceMotion = useReducedMotion();
   const [peopleSubView, setPeopleSubView] = useState<PeopleSubView>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [eventFilter, setEventFilter] = useState<string>("all");
@@ -317,28 +301,33 @@ export function ContactsHub({
         <CardContent className="space-y-4">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
             <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
+              <motion.span
+                className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-background shadow-sm"
+                animate={{ x: activeTab === "people" ? "0%" : "100%" }}
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
+                }
+              />
+
               <TabsTrigger
                 value="people"
-                className="relative flex-1 min-w-0 h-12 rounded-full bg-transparent px-3 sm:px-4 text-[15px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+                className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
                 data-testid="tab-people"
               >
-                {activeTab === "people" && <SegmentedThumb />}
-                <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
-                  <User className="w-5 h-5 shrink-0" />
+                <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
                   <span className="min-w-0 truncate">People</span>
                 </span>
               </TabsTrigger>
 
               <TabsTrigger
                 value="companies"
-                className="relative flex-1 min-w-0 h-12 rounded-full bg-transparent px-3 sm:px-4 text-[15px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+                className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
                 data-testid="tab-companies"
               >
-                {activeTab === "companies" && <SegmentedThumb />}
-                <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
-                  <Building2 className="w-5 h-5 shrink-0" />
-                  <span className="min-w-0 truncate sm:hidden">Company</span>
-                  <span className="min-w-0 truncate hidden sm:inline">Companies</span>
+                <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
+                  <span className="min-w-0 truncate">Companies</span>
                 </span>
               </TabsTrigger>
             </TabsList>
