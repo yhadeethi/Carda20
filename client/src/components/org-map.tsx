@@ -3,8 +3,11 @@
  * Features:
  * - Hierarchy-first view (collapsible tree list)
  * - Optional diagram view via modal
- * - No more Influence feature
  * - Minimal, clean interface
+ *
+ * IMPORTANT:
+ * This version writes org changes via V2 storage (updateContactV2),
+ * which also mirrors to V1 (compat) so the rest of the UI stays consistent.
  */
 
 import { useState, useCallback, useRef, useMemo } from "react";
@@ -26,20 +29,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Users,
-  GitBranch,
-  Maximize2,
-  X,
-} from "lucide-react";
-import {
-  StoredContact,
-  updateContact,
-  Department,
-  DEFAULT_ORG,
-  clearAllReportingLines,
-  restoreReportingLines,
-} from "@/lib/contactsStorage";
+import { Users, GitBranch, Maximize2, X } from "lucide-react";
+import { StoredContact, Department, DEFAULT_ORG } from "@/lib/contactsStorage";
+import { updateContactV2 } from "@/lib/contacts/storage";
 import { useToast } from "@/hooks/use-toast";
 import { OrgChartCanvas } from "@/components/org-chart-canvas";
 import { HierarchyList } from "@/components/hierarchy-list";
@@ -56,53 +48,59 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [showQuickEdit, setShowQuickEdit] = useState(false);
   const [focusMode, setFocusMode] = useState(true);
-  const [relayoutKey, setRelayoutKey] = useState(0);
+  const [relayoutKey] = useState(0);
   const canvasRef = useRef<{ fitView: () => void; zoomIn: () => void; zoomOut: () => void } | null>(null);
   const { toast } = useToast();
 
   // Check if setting managerId as sourceId's manager would create a cycle
-  const wouldCreateCycle = useCallback((sourceId: string, managerId: string): boolean => {
-    const visited = new Set<string>();
-    const check = (currentId: string): boolean => {
-      if (currentId === sourceId) return true;
-      if (visited.has(currentId)) return false;
-      visited.add(currentId);
-      
-      const contact = contacts.find(c => c.id === currentId);
-      if (contact?.org?.reportsToId) {
-        return check(contact.org.reportsToId);
-      }
-      return false;
-    };
-    return check(managerId);
-  }, [contacts]);
+  const wouldCreateCycle = useCallback(
+    (sourceId: string, managerId: string): boolean => {
+      const visited = new Set<string>();
+      const check = (currentId: string): boolean => {
+        if (currentId === sourceId) return true;
+        if (visited.has(currentId)) return false;
+        visited.add(currentId);
+
+        const contact = contacts.find((c) => c.id === currentId);
+        if (contact?.org?.reportsToId) {
+          return check(contact.org.reportsToId);
+        }
+        return false;
+      };
+      return check(managerId);
+    },
+    [contacts]
+  );
 
   // Handle setting manager from drag-drop connection in diagram
-  const handleSetManager = useCallback((sourceId: string, managerId: string) => {
-    if (sourceId === managerId) return;
-    
-    if (wouldCreateCycle(sourceId, managerId)) {
-      toast({
-        title: "Cannot create reporting loop",
-        description: "This would create a circular reporting structure.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const contact = contacts.find(c => c.id === sourceId);
-    if (contact) {
-      const currentOrg = contact.org || { ...DEFAULT_ORG };
-      updateContact(sourceId, { org: { ...currentOrg, reportsToId: managerId } });
-      onContactUpdate();
-      
-      const manager = contacts.find(c => c.id === managerId);
-      toast({
-        title: "Reporting line set",
-        description: `${contact.name} now reports to ${manager?.name || 'Unknown'}`,
-      });
-    }
-  }, [contacts, wouldCreateCycle, onContactUpdate, toast]);
+  const handleSetManager = useCallback(
+    (sourceId: string, managerId: string) => {
+      if (sourceId === managerId) return;
+
+      if (wouldCreateCycle(sourceId, managerId)) {
+        toast({
+          title: "Cannot create reporting loop",
+          description: "This would create a circular reporting structure.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const contact = contacts.find((c) => c.id === sourceId);
+      if (contact) {
+        const currentOrg = contact.org || { ...DEFAULT_ORG };
+        updateContactV2(sourceId, { org: { ...currentOrg, reportsToId: managerId } });
+        onContactUpdate();
+
+        const manager = contacts.find((c) => c.id === managerId);
+        toast({
+          title: "Reporting line set",
+          description: `${contact.name} now reports to ${manager?.name || "Unknown"}`,
+        });
+      }
+    },
+    [contacts, wouldCreateCycle, onContactUpdate, toast]
+  );
 
   const handleNodeClick = useCallback((contact: StoredContact) => {
     setSelectedContact(contact);
@@ -113,18 +111,23 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
   const managerOptions = useMemo(() => {
     if (!selectedContact) return [] as StoredContact[];
-    return companyContacts.filter(c => c.id !== selectedContact.id);
+    return companyContacts.filter((c) => c.id !== selectedContact.id);
   }, [companyContacts, selectedContact]);
 
-  const handleUpdateOrg = useCallback((patch: Partial<NonNullable<StoredContact["org"]>>) => {
-    if (!selectedContact) return;
-    const currentOrg = selectedContact.org || { ...DEFAULT_ORG };
-    updateContact(selectedContact.id, { org: { ...currentOrg, ...patch } });
-    onContactUpdate();
-    // refresh local selected contact
-    const refreshed = contacts.find(c => c.id === selectedContact.id);
-    if (refreshed) setSelectedContact(refreshed);
-  }, [selectedContact, contacts, onContactUpdate]);
+  const handleUpdateOrg = useCallback(
+    (patch: Partial<NonNullable<StoredContact["org"]>>) => {
+      if (!selectedContact) return;
+      const currentOrg = selectedContact.org || { ...DEFAULT_ORG };
+
+      updateContactV2(selectedContact.id, { org: { ...currentOrg, ...patch } });
+      onContactUpdate();
+
+      // Refresh local selected contact from latest props
+      const refreshed = contacts.find((c) => c.id === selectedContact.id);
+      if (refreshed) setSelectedContact(refreshed);
+    },
+    [selectedContact, contacts, onContactUpdate]
+  );
 
   const handleFitView = useCallback(() => {
     canvasRef.current?.fitView();
@@ -141,7 +144,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     );
   }
 
-  const hasReportingLines = contacts.some(c => c.org?.reportsToId);
+  const hasReportingLines = contacts.some((c) => c.org?.reportsToId);
 
   return (
     <div className="flex flex-col h-full">
@@ -152,7 +155,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
           {hasReportingLines && (
             <>
               <span>·</span>
-              <span>{contacts.filter(c => c.org?.reportsToId).length} lines</span>
+              <span>{contacts.filter((c) => c.org?.reportsToId).length} lines</span>
             </>
           )}
         </div>
@@ -171,11 +174,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
       {/* Hierarchy List - Main View */}
       <div className="flex-1 min-h-0 rounded-xl bg-card border overflow-hidden">
         <div className="h-full overflow-y-auto p-2">
-          <HierarchyList
-            contacts={contacts}
-            onContactUpdate={onContactUpdate}
-            onSelectContact={onSelectContact}
-          />
+          <HierarchyList contacts={contacts} onContactUpdate={onContactUpdate} onSelectContact={onSelectContact} />
         </div>
       </div>
 
@@ -183,9 +182,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
       <Drawer open={showQuickEdit} onOpenChange={setShowQuickEdit}>
         <DrawerContent className="max-h-[85vh]">
           <DrawerHeader className="border-b">
-            <DrawerTitle className="text-base font-semibold">
-              {selectedContact?.name || 'Edit relationship'}
-            </DrawerTitle>
+            <DrawerTitle className="text-base font-semibold">{selectedContact?.name || "Edit relationship"}</DrawerTitle>
           </DrawerHeader>
 
           <div className="p-4 space-y-4">
@@ -193,16 +190,20 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Department</Label>
                 <Select
-                  value={selectedContact?.org?.department || 'UNKNOWN'}
+                  value={selectedContact?.org?.department || "UNKNOWN"}
                   onValueChange={(v) => handleUpdateOrg({ department: v as Department })}
                 >
                   <SelectTrigger className="h-11">
                     <SelectValue placeholder="Department" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(['EXEC','LEGAL','PROJECT_DELIVERY','SALES','FINANCE','OPS','UNKNOWN'] as Department[]).map((d) => (
-                      <SelectItem key={d} value={d}>{d.replace('_',' ')}</SelectItem>
-                    ))}
+                    {(["EXEC", "LEGAL", "PROJECT_DELIVERY", "SALES", "FINANCE", "OPS", "UNKNOWN"] as Department[]).map(
+                      (d) => (
+                        <SelectItem key={d} value={d}>
+                          {d.replace("_", " ")}
+                        </SelectItem>
+                      )
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -210,8 +211,8 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Reports to</Label>
                 <Select
-                  value={selectedContact?.org?.reportsToId || 'none'}
-                  onValueChange={(v) => handleUpdateOrg({ reportsToId: v === 'none' ? null : v })}
+                  value={selectedContact?.org?.reportsToId || "none"}
+                  onValueChange={(v) => handleUpdateOrg({ reportsToId: v === "none" ? null : v })}
                 >
                   <SelectTrigger className="h-11">
                     <SelectValue placeholder="None" />
@@ -219,7 +220,9 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {managerOptions.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>{m.name || m.email || 'Unknown'}</SelectItem>
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name || m.email || "Unknown"}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -243,7 +246,9 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
           <DrawerFooter className="border-t">
             <DrawerClose asChild>
-              <Button variant="ghost" className="w-full">Close</Button>
+              <Button variant="ghost" className="w-full">
+                Close
+              </Button>
             </DrawerClose>
           </DrawerFooter>
         </DrawerContent>
@@ -263,19 +268,14 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               </div>
               <div className="flex items-center gap-2">
                 <Button
-                  variant={focusMode ? 'default' : 'outline'}
+                  variant={focusMode ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFocusMode((v) => !v)}
                   data-testid="button-diagram-focus"
                 >
                   Focus
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleFitView}
-                  data-testid="button-diagram-fit"
-                >
+                <Button variant="outline" size="sm" onClick={handleFitView} data-testid="button-diagram-fit">
                   Fit View
                 </Button>
                 <Button
@@ -289,7 +289,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               </div>
             </div>
 
-            {/* Diagram Canvas - Clean background, no grid */}
+            {/* Diagram Canvas */}
             <div className="flex-1 min-h-0 bg-gradient-to-br from-slate-50 to-white dark:from-gray-900 dark:to-gray-950">
               {hasReportingLines || contacts.length > 0 ? (
                 <OrgChartCanvas
@@ -299,7 +299,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   onNodeClick={handleNodeClick}
                   onSetManager={handleSetManager}
                   editMode={true}
-                  focusId={focusMode ? (selectedContact?.id || null) : null}
+                  focusId={focusMode ? selectedContact?.id || null : null}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
