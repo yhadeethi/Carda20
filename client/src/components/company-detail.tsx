@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -81,6 +82,22 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
 };
 
 const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
+
+
+function CompanyTabsThumb() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <motion.span
+      layoutId="company-detail-segment-thumb"
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
+      }
+      className="pointer-events-none absolute inset-0 rounded-full bg-background shadow-sm"
+    />
+  );
+}
 
 // Company Header with Logo using shared CompanyAvatar
 function CompanyHeader({ company, contactCount, contacts }: { company: Company; contactCount: number; contacts: StoredContact[] }) {
@@ -257,18 +274,41 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="w-full flex items-center rounded-full bg-muted p-1 h-10">
-          <TabsTrigger value="contacts" className="flex-1 min-w-0 rounded-full px-3 text-xs font-semibold gap-1.5 data-[state=active]:shadow-sm" data-testid="tab-people" title="People">
-            <Users className="w-4 h-4 shrink-0" />
-            <span className="truncate">People</span>
+        <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
+          <TabsTrigger
+            value="contacts"
+            className="relative flex-1 min-w-0 h-12 rounded-full bg-transparent px-2 sm:px-4 text-[14px] sm:text-[15px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+            data-testid="tab-people"
+          >
+            {activeTab === "contacts" && <CompanyTabsThumb />}
+            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
+              <Users className="w-4 h-4 shrink-0" />
+              <span className="min-w-0 truncate">People</span>
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="orgmap" className="flex-1 min-w-0 rounded-full px-3 text-xs font-semibold gap-1.5 data-[state=active]:shadow-sm" data-testid="tab-org" title="Org">
-            <Network className="w-4 h-4 shrink-0" />
-            <span className="truncate">Org</span>
+
+          <TabsTrigger
+            value="orgmap"
+            className="relative flex-1 min-w-0 h-12 rounded-full bg-transparent px-2 sm:px-4 text-[14px] sm:text-[15px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+            data-testid="tab-org"
+          >
+            {activeTab === "orgmap" && <CompanyTabsThumb />}
+            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
+              <Network className="w-4 h-4 shrink-0" />
+              <span className="min-w-0 truncate">Org</span>
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="notes" className="flex-1 min-w-0 rounded-full px-3 text-xs font-semibold gap-1.5 data-[state=active]:shadow-sm" data-testid="tab-notes" title="Notes">
-            <StickyNote className="w-4 h-4 shrink-0" />
-            <span className="truncate">Notes</span>
+
+          <TabsTrigger
+            value="notes"
+            className="relative flex-1 min-w-0 h-12 rounded-full bg-transparent px-2 sm:px-4 text-[14px] sm:text-[15px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+            data-testid="tab-notes"
+          >
+            {activeTab === "notes" && <CompanyTabsThumb />}
+            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
+              <StickyNote className="w-4 h-4 shrink-0" />
+              <span className="min-w-0 truncate">Notes</span>
+            </span>
           </TabsTrigger>
         </TabsList>
 

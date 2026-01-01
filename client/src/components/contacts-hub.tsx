@@ -3,6 +3,7 @@
  */
 
 import { useState, useMemo, useEffect } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,23 @@ import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
 
 import { RelationshipContactCard } from "@/components/relationship/RelationshipContactCard";
+
+
+
+function SegmentedThumb() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <motion.span
+      layoutId="contacts-hub-segment-thumb"
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
+      }
+      className="pointer-events-none absolute inset-0 rounded-full bg-background shadow-sm"
+    />
+  );
+}
 
 type TabMode = "people" | "companies";
 type PeopleSubView = "all" | "upcoming" | "duplicates";
@@ -298,36 +316,29 @@ export function ContactsHub({
 
         <CardContent className="space-y-4">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-            {/*
-              Apple-style segmented control.
-              Fixes the "Companies" label/icon clipping by:
-              - preventing icon shrink
-              - allowing text to truncate (ellipsis) instead of being cut off
-              - ensuring triggers can shrink with min-w-0
-            */}
-            <TabsList className="w-full grid grid-cols-2 rounded-full bg-muted p-1 h-12">
+            <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
               <TabsTrigger
                 value="people"
-                className="w-full rounded-full px-3 h-10 py-0 text-sm font-medium min-w-0"
+                className="relative flex-1 min-w-0 h-12 rounded-full bg-transparent px-3 sm:px-4 text-[15px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
                 data-testid="tab-people"
               >
-                {/*
-                  iOS Safari + grid/flex combos can clip long labels unless the text has a real width constraint.
-                  This wrapper forces full-width layout so `truncate` can do its job (ellipsis) instead of hard clipping.
-                */}
-                <span className="flex items-center justify-center gap-2 w-full min-w-0">
-                  <User className="w-4 h-4 shrink-0" />
+                {activeTab === "people" && <SegmentedThumb />}
+                <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
+                  <User className="w-5 h-5 shrink-0" />
                   <span className="min-w-0 truncate">People</span>
                 </span>
               </TabsTrigger>
+
               <TabsTrigger
                 value="companies"
-                className="w-full rounded-full px-3 h-10 py-0 text-sm font-medium min-w-0"
+                className="relative flex-1 min-w-0 h-12 rounded-full bg-transparent px-3 sm:px-4 text-[15px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
                 data-testid="tab-companies"
               >
-                <span className="flex items-center justify-center gap-2 w-full min-w-0">
-                  <Building2 className="w-4 h-4 shrink-0" />
-                  <span className="min-w-0 truncate">Companies</span>
+                {activeTab === "companies" && <SegmentedThumb />}
+                <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
+                  <Building2 className="w-5 h-5 shrink-0" />
+                  <span className="min-w-0 truncate sm:hidden">Company</span>
+                  <span className="min-w-0 truncate hidden sm:inline">Companies</span>
                 </span>
               </TabsTrigger>
             </TabsList>
