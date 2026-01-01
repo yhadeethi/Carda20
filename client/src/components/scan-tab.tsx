@@ -225,6 +225,7 @@ export function ScanTab({
 
   const [tempEventName, setTempEventName] = useState("");
   const [isEditingEventName, setIsEditingEventName] = useState(false);
+  const [pendingEventName, setPendingEventName] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
