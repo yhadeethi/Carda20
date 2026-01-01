@@ -31,6 +31,50 @@ function getHubSpotRedirectUri(req: Request): string {
 import { buildHubSpotAuthUrl, connectHubSpotForUser, disconnectHubSpotForUser, isHubSpotConnected, syncContactToHubSpot } from "./hubspotService";
 import crypto from "crypto";
 
+// Contact org schema for API
+const contactOrgInputSchema = z.object({
+  department: z.enum(['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN']).optional(),
+  reportsToId: z.string().nullable().optional(),
+  role: z.enum(['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN']).optional(),
+  influence: z.enum(['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN']).optional(),
+  relationshipStrength: z.enum(['CLOSE', 'NORMAL', 'CASUAL', 'UNKNOWN']).optional(),
+});
+
+// Task schema
+const contactTaskInputSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  done: z.boolean(),
+  createdAt: z.string(),
+  dueAt: z.string().optional(),
+  completedAt: z.string().optional(),
+});
+
+// Reminder schema
+const contactReminderInputSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  remindAt: z.string(),
+  done: z.boolean(),
+  createdAt: z.string(),
+  doneAt: z.string().optional(),
+});
+
+// Timeline event schema
+const contactTimelineEventInputSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  at: z.string(),
+  summary: z.string(),
+  meta: z.record(z.unknown()).optional(),
+});
+
+// Merge meta schema
+const contactMergeMetaInputSchema = z.object({
+  mergedFromIds: z.array(z.string()).optional(),
+  mergedAt: z.string().optional(),
+});
+
 const contactInputSchema = z.object({
   fullName: z.string().nullable().optional(),
   companyName: z.string().nullable().optional(),
@@ -39,8 +83,19 @@ const contactInputSchema = z.object({
   phone: z.string().nullable().optional(),
   website: z.string().nullable().optional(),
   linkedinUrl: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  eventName: z.string().nullable().optional(),
   rawText: z.string().nullable().optional(),
   companyDomain: z.string().nullable().optional(),
+  dbCompanyId: z.number().nullable().optional(),
+  localCompanyId: z.string().nullable().optional(),
+  org: contactOrgInputSchema.nullable().optional(),
+  tasks: z.array(contactTaskInputSchema).optional(),
+  reminders: z.array(contactReminderInputSchema).optional(),
+  timeline: z.array(contactTimelineEventInputSchema).optional(),
+  notes: z.string().nullable().optional(),
+  mergeMeta: contactMergeMetaInputSchema.nullable().optional(),
+  lastTouchedAt: z.string().nullable().optional(),
 });
 
 const upload = multer({
@@ -177,7 +232,12 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid contact data", errors: parsed.error.errors });
       }
-      const contact = await storage.updateContact(contactId, parsed.data);
+      // Convert string dates to Date objects for storage
+      const updateData: Record<string, unknown> = { ...parsed.data };
+      if (typeof updateData.lastTouchedAt === 'string') {
+        updateData.lastTouchedAt = new Date(updateData.lastTouchedAt);
+      }
+      const contact = await storage.updateContact(contactId, updateData);
       res.json(contact);
     } catch (error) {
       console.error("Error updating contact:", error);

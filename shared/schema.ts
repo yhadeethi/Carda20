@@ -74,11 +74,11 @@ export const hubspotTokens = pgTable(
 
 // Org Intelligence types for contact organization
 export interface ContactOrgData {
-  department: 'EXEC' | 'LEGAL' | 'PROJECT_DELIVERY' | 'SALES' | 'FINANCE' | 'OPS' | 'UNKNOWN';
-  reportsToId: string | null;
-  role: 'CHAMPION' | 'NEUTRAL' | 'BLOCKER' | 'UNKNOWN';
-  influence: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
-  relationshipStrength: 'CLOSE' | 'NORMAL' | 'CASUAL' | 'UNKNOWN';
+  department?: 'EXEC' | 'LEGAL' | 'PROJECT_DELIVERY' | 'SALES' | 'FINANCE' | 'OPS' | 'UNKNOWN';
+  reportsToId?: string | null;
+  role?: 'CHAMPION' | 'NEUTRAL' | 'BLOCKER' | 'UNKNOWN';
+  influence?: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+  relationshipStrength?: 'CLOSE' | 'NORMAL' | 'CASUAL' | 'UNKNOWN';
 }
 
 // Task for contact follow-up
