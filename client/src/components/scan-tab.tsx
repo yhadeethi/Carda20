@@ -209,14 +209,12 @@ export function ScanTab({
 }: ScanTabProps) {
   const { toast } = useToast();
   const reduceMotion = useReducedMotion();
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const libraryInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [scanMode, setScanMode] = useState<ScanMode>("scan");
   const [pastedText, setPastedText] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [showUploadChoice, setShowUploadChoice] = useState(false);
 
   const [rawText, setRawText] = useState<string | null>(null);
 
@@ -257,22 +255,10 @@ export function ScanTab({
     }
   };
 
-  
-const openCameraPicker = () => {
-  setShowUploadChoice(false);
-  requestAnimationFrame(() => cameraInputRef.current?.click());
-};
-
-const openLibraryPicker = () => {
-  setShowUploadChoice(false);
-  requestAnimationFrame(() => libraryInputRef.current?.click());
-};
-
 const clearImage = () => {
     setSelectedFile(null);
     setPreviewImage(null);
-    if (cameraInputRef.current) cameraInputRef.current.value = "";
-    if (libraryInputRef.current) libraryInputRef.current.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const resetFlow = () => {
@@ -298,7 +284,7 @@ const clearImage = () => {
         address: parsedContact.address || "",
       };
 
-      const savedContact = saveContact(contactData, eventModeEnabled ? currentEventName : null);
+      const savedContact = saveContact(contactData, eventModeEnabled ? effectiveEventName : null);
       if (!savedContact) return null;
 
       const existingV2Contacts = loadContactsV2();
@@ -551,37 +537,61 @@ const clearImage = () => {
   };
 
   // Event mode inline input
-  const shouldShowInput = scanMode === "scan" && eventModeEnabled && (isEditingEventName || !currentEventName);
+  const effectiveEventName = currentEventName || pendingEventName;
+  const shouldShowInput = scanMode === "scan" && eventModeEnabled && (isEditingEventName || !effectiveEventName);
 
   const handleEventModeToggle = (enabled: boolean) => {
     if (enabled) {
       onEventModeChange(true);
-      if (!currentEventName) setTempEventName("");
+
+      // If an event is already set, jump straight into batch capture.
+      if (effectiveEventName) {
+        setBatchState("capturing");
+        return;
+      }
+
+      // Otherwise prompt for an event name.
+      setTempEventName("");
+      setIsEditingEventName(true);
     } else {
       onEventModeChange(false);
       onEventNameChange(null);
+      setPendingEventName(null);
       setTempEventName("");
       setIsEditingEventName(false);
+      setBatchState("idle");
+      clearBatchSession();
     }
   };
 
   const handleEventNameSubmit = () => {
-    if (tempEventName.trim()) {
-      onEventNameChange(tempEventName.trim());
-      onEventModeChange(true);
-      setIsEditingEventName(false);
-    }
+    const name = tempEventName.trim();
+    if (!name) return;
+
+    setPendingEventName(name);
+    onEventNameChange(name);
+    onEventModeChange(true);
+    setIsEditingEventName(false);
+
+    // Start batch capture immediately after naming the event.
+    setBatchState("capturing");
   };
 
   const handleChangeEvent = () => {
-    setTempEventName(currentEventName || "");
+    setBatchState("idle");
+    setTempEventName(effectiveEventName || "");
     setIsEditingEventName(true);
   };
 
   const handleCancelEventEdit = () => {
     setIsEditingEventName(false);
     setTempEventName("");
-    if (!currentEventName) onEventModeChange(false);
+
+    // If no event is set yet, turning off event mode keeps things predictable.
+    if (!effectiveEventName) {
+      onEventModeChange(false);
+      setPendingEventName(null);
+    }
   };
 
   // Batch scan handlers
@@ -658,24 +668,6 @@ const clearImage = () => {
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
-<AlertDialog open={showUploadChoice} onOpenChange={setShowUploadChoice}>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Add business card photo</AlertDialogTitle>
-      <AlertDialogDescription>Choose how you want to add the photo.</AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
-      <AlertDialogCancel data-testid="button-upload-cancel">Cancel</AlertDialogCancel>
-      <AlertDialogAction onClick={openLibraryPicker} data-testid="button-upload-library">
-        Library
-      </AlertDialogAction>
-      <AlertDialogAction onClick={openCameraPicker} data-testid="button-upload-camera">
-        Camera
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
-
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -702,13 +694,13 @@ const clearImage = () => {
       </AlertDialog>
 
       {/* Batch Scan Mode */}
-      {batchState === "capturing" && currentEventName && (
-        <BatchScanMode eventName={currentEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
+      {batchState === "capturing" && effectiveEventName && (
+        <BatchScanMode eventName={effectiveEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
       )}
 
       {/* Batch Processing / Review */}
-      {(batchState === "processing" || batchState === "reviewing") && currentEventName && (
-        <BatchReview items={batchItems} eventName={currentEventName} onComplete={handleBatchComplete} onBack={handleBatchBack} />
+      {(batchState === "processing" || batchState === "reviewing") && effectiveEventName && (
+        <BatchReview items={batchItems} eventName={effectiveEventName} onComplete={handleBatchComplete} onBack={handleBatchBack} />
       )}
 
       {/* If we have an active contact (either from hub or scanned) show the SAME Relationship detail UI */}
@@ -737,9 +729,13 @@ const clearImage = () => {
       {/* Normal Scan UI (only when NOT showing a contact detail view) */}
       {!activeStoredContact && batchState === "idle" && (
         <Card className="glass">
-<CardContent className="space-y-4 pt-4">
+              <CardContent className="space-y-4 pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Scan a business card or paste an email signature to create a contact in seconds.
+                </p>
 
-            <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
+                <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
+
               <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
   <motion.span
     className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-background shadow-sm"
@@ -781,8 +777,8 @@ const clearImage = () => {
       <div className="min-w-0">
         <div className="text-sm font-medium leading-tight">Event mode</div>
         <div className="text-xs text-muted-foreground truncate">
-          {eventModeEnabled && (currentEventName || pendingEventName)
-            ? (currentEventName || pendingEventName)
+          {eventModeEnabled && effectiveEventName
+            ? effectiveEventName
             : "Batch scan + tag an event"}
         </div>
       </div>
@@ -827,7 +823,7 @@ const clearImage = () => {
       </div>
     )}
 
-    {eventModeEnabled && (currentEventName || pendingEventName) && !shouldShowInput && (
+    {eventModeEnabled && effectiveEventName && !shouldShowInput && (
       <div className="flex justify-end">
         <Button
           variant="ghost"
@@ -846,27 +842,16 @@ const clearImage = () => {
 
               <TabsContent value="scan" className="mt-4">
                 <input
-  ref={cameraInputRef}
-  type="file"
-  accept="image/*"
-  capture="environment"
-  onChange={handleImageSelect}
-  className="hidden"
-  data-testid="input-file-upload-camera"
-/>
-
-<input
-  ref={libraryInputRef}
-  type="file"
-  accept="image/*"
-  onChange={handleImageSelect}
-  className="hidden"
-  data-testid="input-file-upload-library"
-/>
-
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                  data-testid="input-file-upload"
+                />
                 {!previewImage ? (
                   <button
-                    onClick={() => setShowUploadChoice(true)}
+                    onClick={() => fileInputRef.current?.click()}
                     className="w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-xl flex flex-col items-center justify-center gap-3 hover-elevate transition-smooth"
                     data-testid="button-upload-zone"
                   >
