@@ -425,7 +425,7 @@ export function ContactsHub({
                     </Select>
                   )}
 
-                  <div className="max-h-[65vh] overflow-y-auto space-y-3 pr-1" data-testid="contacts-list">
+                  <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1" data-testid="contacts-list">
                     {filteredContacts.length === 0 ? (
                       <div className="text-center py-10 text-muted-foreground" data-testid="contacts-empty">
                         {contacts.length === 0 ? (
@@ -470,7 +470,7 @@ export function ContactsHub({
                 </Button>
               </div>
 
-              <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="companies-list">
+              <div className="max-h-[50vh] overflow-y-auto pr-1" data-testid="companies-list">
                 <CompanyGrid
                   companies={filteredCompanies}
                   getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
