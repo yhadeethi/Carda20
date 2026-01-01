@@ -208,6 +208,153 @@ export function useContacts() {
     return Array.from(events).sort();
   };
 
+  interface LocalContactWithV2Fields extends StoredContact {
+    tasks?: unknown[];
+    reminders?: unknown[];
+    timeline?: unknown[];
+    notes?: string;
+    mergeMeta?: unknown;
+    lastTouchedAt?: string;
+    rawText?: string;
+  }
+
+  const getAllLocalContacts = (): LocalContactWithV2Fields[] => {
+    const v1Contacts: LocalContactWithV2Fields[] = loadLocalContacts();
+    
+    let v2Contacts: LocalContactWithV2Fields[] = [];
+    try {
+      const rawV2 = localStorage.getItem("carda_contacts_v2");
+      if (rawV2) {
+        const parsed = JSON.parse(rawV2);
+        if (Array.isArray(parsed)) {
+          v2Contacts = parsed.map((c: Record<string, unknown>) => ({
+            id: String(c.id || ""),
+            createdAt: String(c.createdAt || new Date().toISOString()),
+            name: String(c.name || ""),
+            company: String(c.company || ""),
+            title: String(c.title || ""),
+            email: String(c.email || ""),
+            phone: String(c.phone || ""),
+            website: String(c.website || ""),
+            linkedinUrl: String(c.linkedinUrl || ""),
+            address: String(c.address || ""),
+            eventName: c.eventName ? String(c.eventName) : null,
+            companyId: c.companyId ? String(c.companyId) : null,
+            org: (c.org as StoredContact['org']) || defaultOrg,
+            tasks: Array.isArray(c.tasks) ? c.tasks : undefined,
+            reminders: Array.isArray(c.reminders) ? c.reminders : undefined,
+            timeline: Array.isArray(c.timeline) ? c.timeline : undefined,
+            notes: typeof c.notes === 'string' ? c.notes : undefined,
+            mergeMeta: c.mergeMeta || undefined,
+            lastTouchedAt: typeof c.lastTouchedAt === 'string' ? c.lastTouchedAt : undefined,
+            rawText: typeof c.rawText === 'string' ? c.rawText : undefined,
+          }));
+        }
+      }
+    } catch (e) {
+      console.error("[useContacts] Failed to load v2 contacts:", e);
+    }
+    
+    const v1Ids = new Set(v1Contacts.map(c => c.id));
+    const uniqueV2 = v2Contacts.filter(c => !v1Ids.has(c.id));
+    
+    return [...v1Contacts, ...uniqueV2];
+  };
+
+  const getLocalContacts = (): StoredContact[] => {
+    return getAllLocalContacts();
+  };
+
+  const migrateLocalContactsToCloud = async (): Promise<{ 
+    imported: number; 
+    failed: number; 
+    successIds: string[];
+    failedContacts: LocalContactWithV2Fields[];
+  }> => {
+    const localContacts = getAllLocalContacts();
+    
+    if (!isAuthenticated) {
+      return { imported: 0, failed: 0, successIds: [], failedContacts: localContacts };
+    }
+
+    let imported = 0;
+    let failed = 0;
+    const successIds: string[] = [];
+    const failedContacts: LocalContactWithV2Fields[] = [];
+
+    for (const localContact of localContacts) {
+      try {
+        const dbContact: Record<string, unknown> = {
+          fullName: localContact.name || null,
+          companyName: localContact.company || null,
+          jobTitle: localContact.title || null,
+          email: localContact.email || null,
+          phone: localContact.phone || null,
+          website: localContact.website || null,
+          linkedinUrl: localContact.linkedinUrl || null,
+          address: localContact.address || null,
+          eventName: localContact.eventName || null,
+          org: localContact.org || null,
+        };
+        
+        if (localContact.tasks) dbContact.tasks = localContact.tasks;
+        if (localContact.reminders) dbContact.reminders = localContact.reminders;
+        if (localContact.timeline) dbContact.timeline = localContact.timeline;
+        if (localContact.notes) dbContact.notes = localContact.notes;
+        if (localContact.mergeMeta) dbContact.mergeMeta = localContact.mergeMeta;
+        if (localContact.lastTouchedAt) dbContact.lastTouchedAt = localContact.lastTouchedAt;
+        if (localContact.rawText) dbContact.rawText = localContact.rawText;
+        
+        await apiRequest("POST", "/api/contacts", dbContact);
+        imported++;
+        successIds.push(localContact.id);
+      } catch (e) {
+        console.error("[useContacts] Failed to migrate contact:", localContact.name, e);
+        failed++;
+        failedContacts.push(localContact);
+      }
+    }
+
+    if (imported > 0) {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+    }
+
+    return { imported, failed, successIds, failedContacts };
+  };
+
+  const removeLocalContactsByIds = (ids: string[]): void => {
+    try {
+      const keyV1 = "carda_contacts_v1";
+      const storedV1 = localStorage.getItem(keyV1);
+      if (storedV1) {
+        const contactsV1 = JSON.parse(storedV1) as StoredContact[];
+        const filteredV1 = contactsV1.filter(c => !ids.includes(c.id));
+        localStorage.setItem(keyV1, JSON.stringify(filteredV1));
+      }
+      
+      const keyV2 = "carda_contacts_v2";
+      const storedV2 = localStorage.getItem(keyV2);
+      if (storedV2) {
+        const contactsV2 = JSON.parse(storedV2);
+        if (Array.isArray(contactsV2)) {
+          const filteredV2 = contactsV2.filter((c: { id: string }) => !ids.includes(c.id));
+          localStorage.setItem(keyV2, JSON.stringify(filteredV2));
+        }
+      }
+    } catch (e) {
+      console.error("[useContacts] Failed to remove local contacts:", e);
+    }
+  };
+
+  const clearLocalContacts = (): void => {
+    try {
+      localStorage.removeItem("carda_contacts_v1");
+      localStorage.removeItem("carda_contacts_v2");
+    } catch (e) {
+      console.error("[useContacts] Failed to clear local contacts:", e);
+    }
+  };
+
   return {
     contacts,
     isLoading: isAuthenticated ? isLoading : false,
@@ -220,6 +367,10 @@ export function useContacts() {
     deleteContactById,
     findExistingContact,
     getUniqueEventNames,
+    getLocalContacts,
+    migrateLocalContactsToCloud,
+    removeLocalContactsByIds,
+    clearLocalContacts,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,

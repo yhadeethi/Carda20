@@ -35,7 +35,8 @@ import {
   getContactCountForCompany,
 } from "@/lib/companiesStorage";
 
-import { Search, Plus, Bell, Merge, Users } from "lucide-react";
+import { Search, Plus, Bell, Merge, Users, CloudUpload, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
@@ -65,10 +66,24 @@ export function ContactsHub({
   const [peopleSubView, setPeopleSubView] = useState<PeopleSubView>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [eventFilter, setEventFilter] = useState<string>("all");
-  const { contacts: hookContacts, isLoading, deleteContactById, refetch, getUniqueEventNames: hookGetEventNames } = useContacts();
+  const { 
+    contacts: hookContacts, 
+    isLoading, 
+    isAuthenticated,
+    deleteContactById, 
+    refetch, 
+    getUniqueEventNames: hookGetEventNames,
+    getLocalContacts,
+    migrateLocalContactsToCloud,
+    removeLocalContactsByIds,
+  } = useContacts();
   const [contacts, setContacts] = useState<StoredContact[]>([]);
   const [companies, setCompanies] = useState<Company[]>(() => getCompanies());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [showMigrationBanner, setShowMigrationBanner] = useState(false);
+  const [localContactsCount, setLocalContactsCount] = useState(0);
+  const { toast } = useToast();
 
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -85,6 +100,61 @@ export function ContactsHub({
       setCompanies(updatedCompanies);
     }
   }, [hookContacts, isLoading, refreshKey]);
+
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      const localContacts = getLocalContacts();
+      const localCount = localContacts.length;
+      if (localCount > 0) {
+        setLocalContactsCount(localCount);
+        setShowMigrationBanner(true);
+      } else {
+        setShowMigrationBanner(false);
+        setLocalContactsCount(0);
+      }
+    }
+  }, [isAuthenticated, isLoading, getLocalContacts]);
+
+  const handleMigration = async () => {
+    setIsMigrating(true);
+    try {
+      const result = await migrateLocalContactsToCloud();
+      
+      if (result.successIds.length > 0) {
+        removeLocalContactsByIds(result.successIds);
+      }
+      
+      if (result.imported > 0 && result.failed === 0) {
+        toast({
+          title: "Migration complete",
+          description: `Successfully imported ${result.imported} contact${result.imported > 1 ? 's' : ''} to the cloud.`,
+        });
+        setShowMigrationBanner(false);
+        setLocalContactsCount(0);
+      } else if (result.failed > 0 && result.imported === 0) {
+        toast({
+          title: "Migration failed",
+          description: `Failed to import contacts. Please try again.`,
+          variant: "destructive",
+        });
+      } else if (result.imported > 0 && result.failed > 0) {
+        toast({
+          title: "Partial import",
+          description: `Imported ${result.imported}, but ${result.failed} failed. Click Import to retry remaining contacts.`,
+          variant: "destructive",
+        });
+        setLocalContactsCount(result.failed);
+      }
+    } catch (e) {
+      toast({
+        title: "Migration error",
+        description: "An error occurred during migration. Your local contacts are preserved.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   const eventNames = useMemo(() => hookGetEventNames(), [contacts]);
 
@@ -288,6 +358,37 @@ export function ContactsHub({
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
+      {showMigrationBanner && localContactsCount > 0 && (
+        <Card className="mb-4 border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center justify-between gap-4 p-4">
+            <div className="flex items-center gap-3">
+              <CloudUpload className="w-5 h-5 text-primary shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Sync your contacts to the cloud</p>
+                <p className="text-xs text-muted-foreground">
+                  We found {localContactsCount} contact{localContactsCount > 1 ? 's' : ''} on this device. Import them to access from any device.
+                </p>
+              </div>
+            </div>
+            <Button 
+              size="sm" 
+              onClick={handleMigration} 
+              disabled={isMigrating}
+              data-testid="button-migrate-contacts"
+            >
+              {isMigrating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                "Import"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="glass">
         <CardHeader className="pb-2">
