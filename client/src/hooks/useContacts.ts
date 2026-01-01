@@ -1,13 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { apiRequest } from "@/lib/queryClient";
-import type { StoredContact, ContactOrg } from "@/lib/contactsStorage";
+import type { StoredContact, ContactOrg, TimelineEvent } from "@/lib/contactsStorage";
 import { 
   loadContacts as loadLocalContacts, 
   saveContact as saveLocalContact,
   updateContact as updateLocalContact,
   deleteContact as deleteLocalContact 
 } from "@/lib/contactsStorage";
+
+function generateTimelineId(): string {
+  return `tl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
 
 // Database contact type matching the server schema
 export interface DbContact {
@@ -58,6 +62,9 @@ function dbContactToStoredContact(contact: DbContact): StoredContact {
     eventName: contact.eventName || null,
     companyId: contact.companyId ? String(contact.companyId) : null,
     org: contact.org || defaultOrg,
+    timeline: (contact.timeline as TimelineEvent[]) || [],
+    notes: contact.notes || undefined,
+    lastTouchedAt: contact.lastTouchedAt || undefined,
   };
 }
 
@@ -74,6 +81,9 @@ function storedContactToDbContact(contact: Partial<StoredContact>): Record<strin
   if (contact.address !== undefined) result.address = contact.address || null;
   if (contact.eventName !== undefined) result.eventName = contact.eventName || null;
   if (contact.org !== undefined) result.org = contact.org || null;
+  if (contact.timeline !== undefined) result.timeline = contact.timeline || [];
+  if (contact.notes !== undefined) result.notes = contact.notes || null;
+  if (contact.lastTouchedAt !== undefined) result.lastTouchedAt = contact.lastTouchedAt || null;
   
   return result;
 }
@@ -151,17 +161,42 @@ export function useContacts() {
 
     try {
       const existing = findExistingContact(contactData.email, contactData.name, contactData.company);
+      const now = new Date().toISOString();
       
       if (existing) {
+        // Add an update timeline event
+        const existingTimeline = existing.timeline || [];
+        const updateEvent: TimelineEvent = {
+          id: generateTimelineId(),
+          type: "contact_updated",
+          at: now,
+          summary: "Contact updated via scan",
+        };
+        
         const updated = await updateMutation.mutateAsync({
           id: existing.id,
-          updates: { ...contactData, eventName: eventName ?? existing.eventName },
+          updates: { 
+            ...contactData, 
+            eventName: eventName ?? existing.eventName,
+            timeline: [updateEvent, ...existingTimeline],
+            lastTouchedAt: now,
+          },
         });
         return dbContactToStoredContact(updated);
       } else {
+        // Create with a scan_created timeline event
+        const scanCreatedEvent: TimelineEvent = {
+          id: generateTimelineId(),
+          type: "scan_created",
+          at: now,
+          summary: "Contact created via scan",
+        };
+        
         const created = await createMutation.mutateAsync({
           ...contactData,
           eventName,
+          timeline: [scanCreatedEvent],
+          lastTouchedAt: now,
         });
         return dbContactToStoredContact(created);
       }

@@ -117,11 +117,10 @@ export default function HomePage() {
     setActiveTab("contacts");
   };
 
-  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'notes' = 'contacts') => {
+  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'notes' = 'orgmap') => {
     setSelectedCompanyId(companyId);
     setCompanyDetailTab(initialTab);
     setViewMode("company-detail");
-    setActiveTab("contacts");
   };
 
   const handleBackToCompanies = () => {

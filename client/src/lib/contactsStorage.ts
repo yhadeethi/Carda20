@@ -21,6 +21,15 @@ export interface ContactOrg {
   relationshipStrength: RelationshipStrength;
 }
 
+// Timeline event types
+export interface TimelineEvent {
+  id: string;
+  type: string;
+  at: string;
+  summary: string;
+  meta?: Record<string, unknown>;
+}
+
 export interface StoredContact {
   id: string;
   createdAt: string;
@@ -41,6 +50,12 @@ export interface StoredContact {
   managerContactId?: string | null;
   // Org Intelligence v2: structured org data
   org?: ContactOrg;
+  // Timeline events (optional - for cloud storage)
+  timeline?: TimelineEvent[];
+  // Notes (optional)
+  notes?: string;
+  // Last touched timestamp
+  lastTouchedAt?: string;
 }
 
 // Default org values for new/migrated contacts

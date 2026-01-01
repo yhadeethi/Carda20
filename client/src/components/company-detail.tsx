@@ -60,6 +60,7 @@ import {
   batchUpdateContacts,
   revertAutoGroup,
 } from "@/lib/contactsStorage";
+import { useContacts } from "@/hooks/useContacts";
 import { useToast } from "@/hooks/use-toast";
 import { OrgMap } from "@/components/org-map";
 import { CompanyAvatar } from "@/components/companies/CompanyAvatar";
@@ -113,8 +114,6 @@ function CompanyHeader({ company, contactCount, contacts }: { company: Company; 
 
 export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab = 'orgmap' }: CompanyDetailProps) {
   const [company, setCompany] = useState<Company | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [contacts, setContacts] = useState<StoredContact[]>([]);
   const [activeTab, setActiveTab] = useState(initialTab);
   const reduceMotion = useReducedMotion();
   const tabIndex = activeTab === "contacts" ? 0 : activeTab === "orgmap" ? 1 : 2;
@@ -125,46 +124,41 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const [undoState, setUndoState] = useState<Map<string, Department> | null>(null);
   const [quickEditContact, setQuickEditContact] = useState<StoredContact | null>(null);
   const { toast } = useToast();
+  
+  // Use hook for contacts - handles both authenticated and local storage
+  const { contacts: allContacts, isLoading: contactsLoading, refetch: refetchContacts } = useContacts();
 
-  // Load company and contacts
+  // Update activeTab when initialTab changes (e.g., navigating to a different company)
   useEffect(() => {
-    setIsLoading(true);
+    setActiveTab(initialTab);
+  }, [initialTab, companyId]);
+
+  // Load company data
+  useEffect(() => {
     const loadedCompany = getCompanyById(companyId);
     setCompany(loadedCompany || null);
     setNotes(loadedCompany?.notes || "");
-    
-    // Load all contacts and filter by company
-    const allContacts = loadContacts();
-    if (loadedCompany) {
-      const companyContacts = allContacts.filter((c) => {
-        if (c.companyId === companyId) return true;
-        if (c.company && normalizeCompanyName(c.company).toLowerCase() === normalizeCompanyName(loadedCompany.name).toLowerCase()) return true;
-        if (loadedCompany.domain) {
-          const contactDomain = extractDomainFromEmail(c.email);
-          if (contactDomain === loadedCompany.domain.toLowerCase()) return true;
-        }
-        return false;
-      });
-      setContacts(companyContacts);
-    }
-    setIsLoading(false);
   }, [companyId]);
 
+  // Filter contacts by company - derived from hook data
+  const contacts = useMemo(() => {
+    if (!company) return [];
+    return allContacts.filter((c) => {
+      if (c.companyId === companyId) return true;
+      if (c.company && normalizeCompanyName(c.company).toLowerCase() === normalizeCompanyName(company.name).toLowerCase()) return true;
+      if (company.domain) {
+        const contactDomain = extractDomainFromEmail(c.email);
+        if (contactDomain === company.domain.toLowerCase()) return true;
+      }
+      return false;
+    });
+  }, [allContacts, company, companyId]);
+
+  const isLoading = contactsLoading || !company;
+
   const refreshContacts = useCallback(() => {
-    const allContacts = loadContacts();
-    if (company) {
-      const companyContacts = allContacts.filter((c) => {
-        if (c.companyId === companyId) return true;
-        if (c.company && normalizeCompanyName(c.company).toLowerCase() === normalizeCompanyName(company.name).toLowerCase()) return true;
-        if (company.domain) {
-          const contactDomain = extractDomainFromEmail(c.email);
-          if (contactDomain === company.domain.toLowerCase()) return true;
-        }
-        return false;
-      });
-      setContacts(companyContacts);
-    }
-  }, [company, companyId]);
+    refetchContacts();
+  }, [refetchContacts]);
 
   // Filter contacts by department
   const filteredContacts = useMemo(() => {
