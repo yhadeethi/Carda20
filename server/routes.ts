@@ -167,8 +167,24 @@ export async function registerRoutes(
         return res.json(null);
       }
       const authId = req.user.claims.sub;
-      const user = await storage.getUserByAuthId(authId);
-      res.json(user);
+      const claims = req.user.claims;
+      
+      // Try to get existing user
+      let user = await storage.getUserByAuthId(authId);
+      
+      // If user is authenticated but doesn't exist in DB, upsert them
+      if (!user && claims) {
+        console.log("[/api/auth/user] User authenticated but not in DB, upserting:", authId);
+        user = await storage.upsertUser({
+          authId: claims.sub,
+          email: claims.email || null,
+          firstName: claims.first_name || null,
+          lastName: claims.last_name || null,
+          profileImageUrl: claims.profile_image_url || null,
+        });
+      }
+      
+      res.json(user || null);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.json(null);
