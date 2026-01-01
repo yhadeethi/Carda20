@@ -155,15 +155,20 @@ export function useContacts() {
     contactData: Omit<StoredContact, "id" | "createdAt" | "eventName">,
     eventName: string | null
   ): Promise<StoredContact | null> => {
+    console.log("[useContacts] saveOrUpdateContact called, isAuthenticated:", isAuthenticated);
+    
     if (!isAuthenticated) {
+      console.log("[useContacts] Not authenticated, using local storage");
       return saveLocalContact(contactData, eventName);
     }
 
     try {
+      console.log("[useContacts] Authenticated, saving to server. Contact data:", contactData);
       const existing = findExistingContact(contactData.email, contactData.name, contactData.company);
       const now = new Date().toISOString();
       
       if (existing) {
+        console.log("[useContacts] Updating existing contact:", existing.id);
         // Add an update timeline event - only send the new event, backend will merge
         const updateEvent: TimelineEvent = {
           id: generateTimelineId(),
@@ -181,8 +186,10 @@ export function useContacts() {
             lastTouchedAt: now,
           },
         });
+        console.log("[useContacts] Contact updated successfully:", updated);
         return dbContactToStoredContact(updated);
       } else {
+        console.log("[useContacts] Creating new contact");
         // Create with a scan_created timeline event
         const scanCreatedEvent: TimelineEvent = {
           id: generateTimelineId(),
@@ -197,6 +204,7 @@ export function useContacts() {
           timeline: [scanCreatedEvent],
           lastTouchedAt: now,
         });
+        console.log("[useContacts] Contact created successfully:", created);
         return dbContactToStoredContact(created);
       }
     } catch (e) {

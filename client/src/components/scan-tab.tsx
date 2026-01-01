@@ -276,6 +276,7 @@ const clearImage = () => {
 
   const saveContactToStorage = async (parsedContact: ParsedContact): Promise<StoredContact | null> => {
     try {
+      console.log("[ScanTab] saveContactToStorage called with:", parsedContact);
       const contactData = {
         name: parsedContact.fullName || "",
         company: parsedContact.companyName || "",
@@ -287,8 +288,13 @@ const clearImage = () => {
         address: parsedContact.address || "",
       };
 
+      console.log("[ScanTab] Calling saveOrUpdateContact with:", contactData, "eventName:", eventModeEnabled ? effectiveEventName : null);
       const savedContact = await saveOrUpdateContact(contactData, eventModeEnabled ? effectiveEventName : null);
-      if (!savedContact) return null;
+      console.log("[ScanTab] saveOrUpdateContact returned:", savedContact);
+      if (!savedContact) {
+        console.error("[ScanTab] saveOrUpdateContact returned null");
+        return null;
+      }
 
       // For authenticated users, contacts are stored in the database
       // Only use local V2 storage for non-authenticated users

@@ -192,20 +192,27 @@ export async function registerRoutes(
   });
 
   app.post("/api/contacts", isAuthenticated, async (req: any, res: Response) => {
+    console.log("[POST /api/contacts] Request received, body:", JSON.stringify(req.body).substring(0, 500));
     try {
       const authId = req.user.claims.sub;
+      console.log("[POST /api/contacts] AuthId:", authId);
       const user = await storage.getUserByAuthId(authId);
       if (!user) {
+        console.log("[POST /api/contacts] User not found for authId:", authId);
         return res.status(404).json({ message: "User not found" });
       }
+      console.log("[POST /api/contacts] User found:", user.id);
       const parsed = contactInputSchema.safeParse(req.body);
       if (!parsed.success) {
+        console.log("[POST /api/contacts] Validation failed:", parsed.error.errors);
         return res.status(400).json({ message: "Invalid contact data", errors: parsed.error.errors });
       }
+      console.log("[POST /api/contacts] Creating contact with data:", JSON.stringify(parsed.data).substring(0, 500));
       const contact = await storage.createContact({
         userId: user.id,
         ...parsed.data,
       });
+      console.log("[POST /api/contacts] Contact created:", contact.id);
       res.json(contact);
     } catch (error) {
       console.error("Error creating contact:", error);
