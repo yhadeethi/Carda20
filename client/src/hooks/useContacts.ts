@@ -261,6 +261,36 @@ export function useContacts() {
              typeof event.summary === 'string';
     };
 
+    const validDepartments = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
+    const validRoles = ['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN'];
+    const validInfluence = ['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN'];
+    const validRelationship = ['CLOSE', 'NORMAL', 'CASUAL', 'UNKNOWN'];
+
+    const sanitizeOrg = (org: unknown): Record<string, unknown> | null => {
+      if (!org || typeof org !== 'object') return null;
+      const o = org as Record<string, unknown>;
+      
+      const sanitized: Record<string, unknown> = {};
+      
+      if (typeof o.department === 'string' && validDepartments.includes(o.department)) {
+        sanitized.department = o.department;
+      }
+      if (typeof o.role === 'string' && validRoles.includes(o.role)) {
+        sanitized.role = o.role;
+      }
+      if (typeof o.influence === 'string' && validInfluence.includes(o.influence)) {
+        sanitized.influence = o.influence;
+      }
+      if (typeof o.relationshipStrength === 'string' && validRelationship.includes(o.relationshipStrength)) {
+        sanitized.relationshipStrength = o.relationshipStrength;
+      }
+      if (o.reportsToId !== undefined) {
+        sanitized.reportsToId = o.reportsToId === null ? null : String(o.reportsToId);
+      }
+      
+      return Object.keys(sanitized).length > 0 ? sanitized : null;
+    };
+
     let imported = 0;
     let failed = 0;
     const successIds: string[] = [];
@@ -271,6 +301,7 @@ export function useContacts() {
         const validTasks = (localContact.tasks || []).filter(isValidTask);
         const validReminders = (localContact.reminders || []).filter(isValidReminder);
         const validTimeline = (localContact.timeline || []).filter(isValidTimelineEvent);
+        const sanitizedOrg = sanitizeOrg(localContact.org);
 
         const dbContact: Record<string, unknown> = {
           fullName: localContact.name || null,
@@ -282,12 +313,14 @@ export function useContacts() {
           linkedinUrl: localContact.linkedinUrl || null,
           address: localContact.address || null,
           eventName: localContact.eventName || null,
-          org: localContact.org || null,
           notes: localContact.notes || null,
           lastTouchedAt: localContact.lastTouchedAt || null,
           localCompanyId: localContact.companyId || null,
         };
         
+        if (sanitizedOrg) {
+          dbContact.org = sanitizedOrg;
+        }
         if (validTasks.length > 0) {
           dbContact.tasks = validTasks;
         }
@@ -301,7 +334,21 @@ export function useContacts() {
           dbContact.mergeMeta = localContact.mergeMeta;
         }
         
-        await apiRequest("POST", "/api/contacts", dbContact);
+        console.log("[useContacts] Migrating contact:", localContact.name, dbContact);
+        
+        const response = await fetch("/api/contacts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(dbContact),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error("[useContacts] Server rejected contact:", localContact.name, response.status, errorData);
+          throw new Error(`Server error: ${response.status}`);
+        }
+        
         imported++;
         successIds.push(localContact.id);
       } catch (e) {
