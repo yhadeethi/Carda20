@@ -248,6 +248,30 @@ export async function registerRoutes(
         updateData.timeline = [...eventsToAdd, ...existingTimeline];
       }
       
+      // Merge tasks - union of existing + new, with new overwriting matching IDs
+      if (updateData.tasks !== undefined && Array.isArray(updateData.tasks)) {
+        const existingTasks = (existing.tasks as unknown[]) || [];
+        const newTasks = updateData.tasks as unknown[];
+        const mergedTasksMap = new Map<string, unknown>();
+        // Start with existing tasks (server truth)
+        existingTasks.forEach((t: any) => mergedTasksMap.set(t.id, t));
+        // New tasks overwrite or add
+        newTasks.forEach((t: any) => mergedTasksMap.set(t.id, t));
+        updateData.tasks = Array.from(mergedTasksMap.values());
+      }
+      
+      // Merge reminders - union of existing + new, with new overwriting matching IDs
+      if (updateData.reminders !== undefined && Array.isArray(updateData.reminders)) {
+        const existingReminders = (existing.reminders as unknown[]) || [];
+        const newReminders = updateData.reminders as unknown[];
+        const mergedRemindersMap = new Map<string, unknown>();
+        // Start with existing reminders (server truth)
+        existingReminders.forEach((r: any) => mergedRemindersMap.set(r.id, r));
+        // New reminders overwrite or add
+        newReminders.forEach((r: any) => mergedRemindersMap.set(r.id, r));
+        updateData.reminders = Array.from(mergedRemindersMap.values());
+      }
+      
       const contact = await storage.updateContact(contactId, updateData);
       res.json(contact);
     } catch (error) {
