@@ -238,14 +238,14 @@ export async function registerRoutes(
         updateData.lastTouchedAt = new Date(updateData.lastTouchedAt);
       }
       
-      // Merge timeline events instead of replacing - append new events to existing
+      // Merge timeline events instead of replacing - prepend new events to existing (newest first)
       if (updateData.timeline !== undefined && Array.isArray(updateData.timeline)) {
         const existingTimeline = (existing.timeline as unknown[]) || [];
         const newTimeline = updateData.timeline as unknown[];
         // Get existing event IDs to avoid duplicates
         const existingIds = new Set(existingTimeline.map((e: any) => e.id));
         const eventsToAdd = newTimeline.filter((e: any) => !existingIds.has(e.id));
-        updateData.timeline = [...existingTimeline, ...eventsToAdd];
+        updateData.timeline = [...eventsToAdd, ...existingTimeline];
       }
       
       const contact = await storage.updateContact(contactId, updateData);

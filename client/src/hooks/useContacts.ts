@@ -164,8 +164,7 @@ export function useContacts() {
       const now = new Date().toISOString();
       
       if (existing) {
-        // Add an update timeline event
-        const existingTimeline = existing.timeline || [];
+        // Add an update timeline event - only send the new event, backend will merge
         const updateEvent: TimelineEvent = {
           id: generateTimelineId(),
           type: "contact_updated",
@@ -178,7 +177,7 @@ export function useContacts() {
           updates: { 
             ...contactData, 
             eventName: eventName ?? existing.eventName,
-            timeline: [updateEvent, ...existingTimeline],
+            timeline: [updateEvent],
             lastTouchedAt: now,
           },
         });
