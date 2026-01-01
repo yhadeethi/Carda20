@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { ContactTimelineTab } from "@/components/contact-timeline-tab";
-import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
+import { StoredContact, loadContacts } from "@/lib/contactsStorage";
+import { useContacts } from "@/hooks/useContacts";
 import {
   loadContactsV2,
   ContactV2,
@@ -209,6 +210,7 @@ export function ScanTab({
 }: ScanTabProps) {
   const { toast } = useToast();
   const reduceMotion = useReducedMotion();
+  const { saveOrUpdateContact, isAuthenticated, refetch: refetchContacts } = useContacts();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [scanMode, setScanMode] = useState<ScanMode>("scan");
@@ -272,7 +274,7 @@ const clearImage = () => {
     setBatchItems([]);
   };
 
-  const saveContactToStorage = (parsedContact: ParsedContact): StoredContact | null => {
+  const saveContactToStorage = async (parsedContact: ParsedContact): Promise<StoredContact | null> => {
     try {
       const contactData = {
         name: parsedContact.fullName || "",
@@ -285,58 +287,65 @@ const clearImage = () => {
         address: parsedContact.address || "",
       };
 
-      const savedContact = saveContact(contactData, eventModeEnabled ? effectiveEventName : null);
+      const savedContact = await saveOrUpdateContact(contactData, eventModeEnabled ? effectiveEventName : null);
       if (!savedContact) return null;
 
-      const existingV2Contacts = loadContactsV2();
-      const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
+      // For authenticated users, contacts are stored in the database
+      // Only use local V2 storage for non-authenticated users
+      if (!isAuthenticated) {
+        const existingV2Contacts = loadContactsV2();
+        const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
 
-      let v2Contact: ContactV2;
+        let v2Contact: ContactV2;
 
-      if (existingV2) {
-        v2Contact = {
-          ...existingV2,
-          name: savedContact.name,
-          company: savedContact.company,
-          title: savedContact.title,
-          email: savedContact.email,
-          phone: savedContact.phone,
-          website: savedContact.website,
-          linkedinUrl: savedContact.linkedinUrl,
-          address: savedContact.address,
-          eventName: savedContact.eventName,
-          companyId: savedContact.companyId,
-          timeline: [
-            ...existingV2.timeline,
-            {
-              id: generateTimelineId(),
-              type: "contact_updated" as const,
-              at: new Date().toISOString(),
-              summary: "Contact updated via scan",
-            },
-          ],
-          lastTouchedAt: new Date().toISOString(),
-        };
+        if (existingV2) {
+          v2Contact = {
+            ...existingV2,
+            name: savedContact.name,
+            company: savedContact.company,
+            title: savedContact.title,
+            email: savedContact.email,
+            phone: savedContact.phone,
+            website: savedContact.website,
+            linkedinUrl: savedContact.linkedinUrl,
+            address: savedContact.address,
+            eventName: savedContact.eventName,
+            companyId: savedContact.companyId,
+            timeline: [
+              ...existingV2.timeline,
+              {
+                id: generateTimelineId(),
+                type: "contact_updated" as const,
+                at: new Date().toISOString(),
+                summary: "Contact updated via scan",
+              },
+            ],
+            lastTouchedAt: new Date().toISOString(),
+          };
+        } else {
+          v2Contact = {
+            ...savedContact,
+            tasks: [],
+            reminders: [],
+            timeline: [
+              {
+                id: generateTimelineId(),
+                type: "scan_created" as const,
+                at: savedContact.createdAt || new Date().toISOString(),
+                summary: "Contact created via scan",
+              },
+            ],
+            lastTouchedAt: savedContact.createdAt,
+            notes: "",
+          };
+        }
+
+        upsertContactV2(v2Contact);
+        setContactV2(v2Contact);
       } else {
-        v2Contact = {
-          ...savedContact,
-          tasks: [],
-          reminders: [],
-          timeline: [
-            {
-              id: generateTimelineId(),
-              type: "scan_created" as const,
-              at: savedContact.createdAt || new Date().toISOString(),
-              summary: "Contact created via scan",
-            },
-          ],
-          lastTouchedAt: savedContact.createdAt,
-          notes: "",
-        };
+        // For authenticated users, refetch to get fresh data from server
+        refetchContacts();
       }
-
-      upsertContactV2(v2Contact);
-      setContactV2(v2Contact);
 
       onContactSaved?.();
 
@@ -379,7 +388,7 @@ const clearImage = () => {
       }
       return (await res.json()) as ScanResult;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.error) {
         toast({
           title: "OCR Warning",
@@ -391,7 +400,7 @@ const clearImage = () => {
 
       setRawText(data.rawText);
 
-      const saved = saveContactToStorage(data.contact);
+      const saved = await saveContactToStorage(data.contact);
       if (saved) {
         setScannedStoredContact(saved);
         toast({
@@ -425,10 +434,10 @@ const clearImage = () => {
       const res = await apiRequest("POST", "/api/parse", { text });
       return (await res.json()) as ScanResult;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setRawText(data.rawText);
 
-      const saved = saveContactToStorage(data.contact);
+      const saved = await saveContactToStorage(data.contact);
       if (saved) {
         setScannedStoredContact(saved);
         toast({

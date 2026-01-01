@@ -222,7 +222,7 @@ export class DatabaseStorage implements IStorage {
   async createCompanyIntel(intel: InsertCompanyIntel): Promise<CompanyIntel> {
     const [created] = await db
       .insert(companyIntel)
-      .values([intel])
+      .values(intel)
       .returning();
     return created;
   }

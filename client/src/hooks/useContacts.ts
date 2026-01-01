@@ -1,8 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { apiRequest } from "@/lib/queryClient";
-import type { StoredContact } from "@/lib/contactsStorage";
+import type { StoredContact, ContactOrg } from "@/lib/contactsStorage";
+import { 
+  loadContacts as loadLocalContacts, 
+  saveContact as saveLocalContact,
+  updateContact as updateLocalContact,
+  deleteContact as deleteLocalContact 
+} from "@/lib/contactsStorage";
 
+// Database contact type matching the server schema
 export interface DbContact {
   id: number;
   userId: number;
@@ -17,7 +24,24 @@ export interface DbContact {
   companyDomain: string | null;
   companyId: number | null;
   createdAt: string | null;
+  address: string | null;
+  eventName: string | null;
+  org: ContactOrg | null;
+  tasks: unknown[] | null;
+  reminders: unknown[] | null;
+  timeline: unknown[] | null;
+  notes: string | null;
+  mergeMeta: unknown | null;
+  lastTouchedAt: string | null;
 }
+
+const defaultOrg: StoredContact['org'] = {
+  department: 'UNKNOWN',
+  reportsToId: null,
+  role: 'UNKNOWN',
+  influence: 'UNKNOWN',
+  relationshipStrength: 'UNKNOWN',
+};
 
 function dbContactToStoredContact(contact: DbContact): StoredContact {
   return {
@@ -30,29 +54,28 @@ function dbContactToStoredContact(contact: DbContact): StoredContact {
     phone: contact.phone || "",
     website: contact.website || "",
     linkedinUrl: contact.linkedinUrl || "",
-    address: "",
-    eventName: null,
+    address: contact.address || "",
+    eventName: contact.eventName || null,
     companyId: contact.companyId ? String(contact.companyId) : null,
-    org: {
-      department: 'UNKNOWN',
-      reportsToId: null,
-      role: 'UNKNOWN',
-      influence: 'UNKNOWN',
-      relationshipStrength: 'UNKNOWN',
-    },
+    org: contact.org || defaultOrg,
   };
 }
 
-function storedContactToDbContact(contact: Partial<StoredContact>) {
-  return {
-    fullName: contact.name || null,
-    companyName: contact.company || null,
-    jobTitle: contact.title || null,
-    email: contact.email || null,
-    phone: contact.phone || null,
-    website: contact.website || null,
-    linkedinUrl: contact.linkedinUrl || null,
-  };
+function storedContactToDbContact(contact: Partial<StoredContact>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  
+  if (contact.name !== undefined) result.fullName = contact.name || null;
+  if (contact.company !== undefined) result.companyName = contact.company || null;
+  if (contact.title !== undefined) result.jobTitle = contact.title || null;
+  if (contact.email !== undefined) result.email = contact.email || null;
+  if (contact.phone !== undefined) result.phone = contact.phone || null;
+  if (contact.website !== undefined) result.website = contact.website || null;
+  if (contact.linkedinUrl !== undefined) result.linkedinUrl = contact.linkedinUrl || null;
+  if (contact.address !== undefined) result.address = contact.address || null;
+  if (contact.eventName !== undefined) result.eventName = contact.eventName || null;
+  if (contact.org !== undefined) result.org = contact.org || null;
+  
+  return result;
 }
 
 export function useContacts() {
@@ -64,7 +87,9 @@ export function useContacts() {
     enabled: isAuthenticated,
   });
 
-  const contacts: StoredContact[] = rawData.map(dbContactToStoredContact);
+  const contacts: StoredContact[] = isAuthenticated 
+    ? rawData.map(dbContactToStoredContact)
+    : loadLocalContacts();
 
   const createMutation = useMutation({
     mutationFn: async (contact: Partial<StoredContact>) => {
@@ -98,14 +123,106 @@ export function useContacts() {
     },
   });
 
+  const findExistingContact = (email: string, name: string, company: string): StoredContact | null => {
+    if (email) {
+      const byEmail = contacts.find((c) => c.email && c.email.toLowerCase() === email.toLowerCase());
+      if (byEmail) return byEmail;
+    }
+    if (name && company) {
+      const byNameCompany = contacts.find(
+        (c) =>
+          c.name &&
+          c.company &&
+          c.name.toLowerCase() === name.toLowerCase() &&
+          c.company.toLowerCase() === company.toLowerCase()
+      );
+      if (byNameCompany) return byNameCompany;
+    }
+    return null;
+  };
+
+  const saveOrUpdateContact = async (
+    contactData: Omit<StoredContact, "id" | "createdAt" | "eventName">,
+    eventName: string | null
+  ): Promise<StoredContact | null> => {
+    if (!isAuthenticated) {
+      return saveLocalContact(contactData, eventName);
+    }
+
+    try {
+      const existing = findExistingContact(contactData.email, contactData.name, contactData.company);
+      
+      if (existing) {
+        const updated = await updateMutation.mutateAsync({
+          id: existing.id,
+          updates: { ...contactData, eventName: eventName ?? existing.eventName },
+        });
+        return dbContactToStoredContact(updated);
+      } else {
+        const created = await createMutation.mutateAsync({
+          ...contactData,
+          eventName,
+        });
+        return dbContactToStoredContact(created);
+      }
+    } catch (e) {
+      console.error("[useContacts] Failed to save contact:", e);
+      return null;
+    }
+  };
+
+  const updateContactById = async (id: string, updates: Partial<StoredContact>): Promise<StoredContact | null> => {
+    if (!isAuthenticated) {
+      return updateLocalContact(id, updates);
+    }
+
+    try {
+      const updated = await updateMutation.mutateAsync({ id, updates });
+      return dbContactToStoredContact(updated);
+    } catch (e) {
+      console.error("[useContacts] Failed to update contact:", e);
+      return null;
+    }
+  };
+
+  const deleteContactById = async (id: string): Promise<boolean> => {
+    if (!isAuthenticated) {
+      deleteLocalContact(id);
+      return true;
+    }
+
+    try {
+      await deleteMutation.mutateAsync(id);
+      return true;
+    } catch (e) {
+      console.error("[useContacts] Failed to delete contact:", e);
+      return false;
+    }
+  };
+
+  const getUniqueEventNames = (): string[] => {
+    const events = new Set<string>();
+    contacts.forEach((c) => {
+      if (c.eventName) events.add(c.eventName);
+    });
+    return Array.from(events).sort();
+  };
+
   return {
     contacts,
-    isLoading,
+    isLoading: isAuthenticated ? isLoading : false,
+    isAuthenticated,
     createContact: createMutation.mutateAsync,
     updateContact: updateMutation.mutateAsync,
     deleteContact: deleteMutation.mutateAsync,
+    saveOrUpdateContact,
+    updateContactById,
+    deleteContactById,
+    findExistingContact,
+    getUniqueEventNames,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    refetch: () => queryClient.invalidateQueries({ queryKey: ["/api/contacts"] }),
   };
 }

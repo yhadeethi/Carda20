@@ -18,7 +18,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreditCard, Moon, Sun, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw } from "lucide-react";
-import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
+import { StoredContact } from "@/lib/contactsStorage";
+import { useContacts } from "@/hooks/useContacts";
 import { motion, AnimatePresence } from "framer-motion";
 
 type TabMode = "scan" | "contacts" | "events";
@@ -52,6 +53,7 @@ export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
   const { isHidden, isCompact } = useScrollDirectionNav();
   const { user } = useAuth();
+  const { contacts, deleteContactById, refetch: refetchContacts } = useContacts();
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
 
@@ -139,21 +141,23 @@ export default function HomePage() {
     setSelectedContact(null);
   };
 
-  const handleDeleteContact = useCallback((id: string) => {
-    deleteContact(id);
+  const handleDeleteContact = useCallback(async (id: string) => {
+    await deleteContactById(id);
+    refetchContacts();
     refreshContacts();
     setSelectedContact(null);
     setViewMode("contacts");
     setActiveTab("contacts");
-  }, [refreshContacts]);
+  }, [deleteContactById, refetchContacts, refreshContacts]);
 
   const handleContactUpdated = useCallback((contactId: string) => {
-    const freshContact = loadContacts().find(c => c.id === contactId);
+    const freshContact = contacts.find(c => c.id === contactId);
     if (freshContact) {
       setSelectedContact(freshContact);
     }
+    refetchContacts();
     refreshContacts();
-  }, [refreshContacts]);
+  }, [contacts, refetchContacts, refreshContacts]);
 
   const tabs = [
     { id: "scan" as TabMode, label: "Scan", icon: Camera },
