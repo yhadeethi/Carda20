@@ -233,6 +233,34 @@ export function useContacts() {
       return { imported: 0, failed: 0, successIds: [], failedContacts: localContacts };
     }
 
+    const isValidTask = (t: unknown): boolean => {
+      if (!t || typeof t !== 'object') return false;
+      const task = t as Record<string, unknown>;
+      return typeof task.id === 'string' && 
+             typeof task.title === 'string' && 
+             typeof task.done === 'boolean' &&
+             typeof task.createdAt === 'string';
+    };
+
+    const isValidReminder = (r: unknown): boolean => {
+      if (!r || typeof r !== 'object') return false;
+      const reminder = r as Record<string, unknown>;
+      return typeof reminder.id === 'string' && 
+             typeof reminder.label === 'string' && 
+             typeof reminder.remindAt === 'string' &&
+             typeof reminder.done === 'boolean' &&
+             typeof reminder.createdAt === 'string';
+    };
+
+    const isValidTimelineEvent = (e: unknown): boolean => {
+      if (!e || typeof e !== 'object') return false;
+      const event = e as Record<string, unknown>;
+      return typeof event.id === 'string' && 
+             typeof event.type === 'string' && 
+             typeof event.at === 'string' &&
+             typeof event.summary === 'string';
+    };
+
     let imported = 0;
     let failed = 0;
     const successIds: string[] = [];
@@ -240,6 +268,10 @@ export function useContacts() {
 
     for (const localContact of localContacts) {
       try {
+        const validTasks = (localContact.tasks || []).filter(isValidTask);
+        const validReminders = (localContact.reminders || []).filter(isValidReminder);
+        const validTimeline = (localContact.timeline || []).filter(isValidTimelineEvent);
+
         const dbContact: Record<string, unknown> = {
           fullName: localContact.name || null,
           companyName: localContact.company || null,
@@ -251,14 +283,20 @@ export function useContacts() {
           address: localContact.address || null,
           eventName: localContact.eventName || null,
           org: localContact.org || null,
-          tasks: localContact.tasks || [],
-          reminders: localContact.reminders || [],
-          timeline: localContact.timeline || [],
           notes: localContact.notes || null,
           lastTouchedAt: localContact.lastTouchedAt || null,
           localCompanyId: localContact.companyId || null,
         };
         
+        if (validTasks.length > 0) {
+          dbContact.tasks = validTasks;
+        }
+        if (validReminders.length > 0) {
+          dbContact.reminders = validReminders;
+        }
+        if (validTimeline.length > 0) {
+          dbContact.timeline = validTimeline;
+        }
         if (localContact.mergeMeta) {
           dbContact.mergeMeta = localContact.mergeMeta;
         }
