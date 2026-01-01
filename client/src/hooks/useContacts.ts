@@ -8,11 +8,6 @@ import {
   updateContact as updateLocalContact,
   deleteContact as deleteLocalContact 
 } from "@/lib/contactsStorage";
-import { 
-  loadContactsV2, 
-  saveContactsV2,
-  type ContactV2 
-} from "@/lib/contacts/storage";
 
 // Database contact type matching the server schema
 export interface DbContact {
@@ -213,178 +208,6 @@ export function useContacts() {
     return Array.from(events).sort();
   };
 
-  const getAllLocalContacts = (): ContactV2[] => {
-    return loadContactsV2();
-  };
-
-  const getLocalContacts = (): StoredContact[] => {
-    return getAllLocalContacts();
-  };
-
-  const migrateLocalContactsToCloud = async (): Promise<{ 
-    imported: number; 
-    failed: number; 
-    successIds: string[];
-    failedContacts: ContactV2[];
-  }> => {
-    const localContacts = getAllLocalContacts();
-    
-    if (!isAuthenticated) {
-      return { imported: 0, failed: 0, successIds: [], failedContacts: localContacts };
-    }
-
-    const isValidTask = (t: unknown): boolean => {
-      if (!t || typeof t !== 'object') return false;
-      const task = t as Record<string, unknown>;
-      return typeof task.id === 'string' && 
-             typeof task.title === 'string' && 
-             typeof task.done === 'boolean' &&
-             typeof task.createdAt === 'string';
-    };
-
-    const isValidReminder = (r: unknown): boolean => {
-      if (!r || typeof r !== 'object') return false;
-      const reminder = r as Record<string, unknown>;
-      return typeof reminder.id === 'string' && 
-             typeof reminder.label === 'string' && 
-             typeof reminder.remindAt === 'string' &&
-             typeof reminder.done === 'boolean' &&
-             typeof reminder.createdAt === 'string';
-    };
-
-    const isValidTimelineEvent = (e: unknown): boolean => {
-      if (!e || typeof e !== 'object') return false;
-      const event = e as Record<string, unknown>;
-      return typeof event.id === 'string' && 
-             typeof event.type === 'string' && 
-             typeof event.at === 'string' &&
-             typeof event.summary === 'string';
-    };
-
-    const validDepartments = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
-    const validRoles = ['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN'];
-    const validInfluence = ['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN'];
-    const validRelationship = ['CLOSE', 'NORMAL', 'CASUAL', 'UNKNOWN'];
-
-    const sanitizeOrg = (org: unknown): Record<string, unknown> | null => {
-      if (!org || typeof org !== 'object') return null;
-      const o = org as Record<string, unknown>;
-      
-      const sanitized: Record<string, unknown> = {};
-      
-      if (typeof o.department === 'string' && validDepartments.includes(o.department)) {
-        sanitized.department = o.department;
-      }
-      if (typeof o.role === 'string' && validRoles.includes(o.role)) {
-        sanitized.role = o.role;
-      }
-      if (typeof o.influence === 'string' && validInfluence.includes(o.influence)) {
-        sanitized.influence = o.influence;
-      }
-      if (typeof o.relationshipStrength === 'string' && validRelationship.includes(o.relationshipStrength)) {
-        sanitized.relationshipStrength = o.relationshipStrength;
-      }
-      if (o.reportsToId !== undefined) {
-        sanitized.reportsToId = o.reportsToId === null ? null : String(o.reportsToId);
-      }
-      
-      return Object.keys(sanitized).length > 0 ? sanitized : null;
-    };
-
-    let imported = 0;
-    let failed = 0;
-    const successIds: string[] = [];
-    const failedContacts: ContactV2[] = [];
-
-    for (const localContact of localContacts) {
-      try {
-        const validTasks = (localContact.tasks || []).filter(isValidTask);
-        const validReminders = (localContact.reminders || []).filter(isValidReminder);
-        const validTimeline = (localContact.timeline || []).filter(isValidTimelineEvent);
-        const sanitizedOrg = sanitizeOrg(localContact.org);
-
-        const dbContact: Record<string, unknown> = {
-          fullName: localContact.name || null,
-          companyName: localContact.company || null,
-          jobTitle: localContact.title || null,
-          email: localContact.email || null,
-          phone: localContact.phone || null,
-          website: localContact.website || null,
-          linkedinUrl: localContact.linkedinUrl || null,
-          address: localContact.address || null,
-          eventName: localContact.eventName || null,
-          notes: localContact.notes || null,
-          lastTouchedAt: localContact.lastTouchedAt || null,
-          localCompanyId: localContact.companyId || null,
-        };
-        
-        if (sanitizedOrg) {
-          dbContact.org = sanitizedOrg;
-        }
-        if (validTasks.length > 0) {
-          dbContact.tasks = validTasks;
-        }
-        if (validReminders.length > 0) {
-          dbContact.reminders = validReminders;
-        }
-        if (validTimeline.length > 0) {
-          dbContact.timeline = validTimeline;
-        }
-        if (localContact.mergeMeta) {
-          dbContact.mergeMeta = localContact.mergeMeta;
-        }
-        
-        console.log("[useContacts] Migrating contact:", localContact.name, dbContact);
-        
-        const response = await fetch("/api/contacts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(dbContact),
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error("[useContacts] Server rejected contact:", localContact.name, response.status, errorData);
-          throw new Error(`Server error: ${response.status}`);
-        }
-        
-        imported++;
-        successIds.push(localContact.id);
-      } catch (e) {
-        console.error("[useContacts] Failed to migrate contact:", localContact.name, e);
-        failed++;
-        failedContacts.push(localContact);
-      }
-    }
-
-    if (imported > 0) {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-    }
-
-    return { imported, failed, successIds, failedContacts };
-  };
-
-  const removeLocalContactsByIds = (ids: string[]): void => {
-    try {
-      const idsSet = new Set(ids);
-      
-      const allV2Contacts = loadContactsV2();
-      const remainingContacts = allV2Contacts.filter(c => !idsSet.has(c.id));
-      saveContactsV2(remainingContacts);
-    } catch (e) {
-      console.error("[useContacts] Failed to remove local contacts:", e);
-    }
-  };
-
-  const clearLocalContacts = (): void => {
-    try {
-      saveContactsV2([]);
-    } catch (e) {
-      console.error("[useContacts] Failed to clear local contacts:", e);
-    }
-  };
-
   return {
     contacts,
     isLoading: isAuthenticated ? isLoading : false,
@@ -397,10 +220,6 @@ export function useContacts() {
     deleteContactById,
     findExistingContact,
     getUniqueEventNames,
-    getLocalContacts,
-    migrateLocalContactsToCloud,
-    removeLocalContactsByIds,
-    clearLocalContacts,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
