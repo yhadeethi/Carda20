@@ -155,9 +155,25 @@ export function useContacts() {
     contactData: Omit<StoredContact, "id" | "createdAt" | "eventName">,
     eventName: string | null
   ): Promise<StoredContact | null> => {
-    console.log("[useContacts] saveOrUpdateContact called, isAuthenticated:", isAuthenticated);
+    // Always check fresh auth status before saving
+    let currentlyAuthenticated = isAuthenticated;
     
-    if (!isAuthenticated) {
+    // Double-check auth by fetching user directly if we think we're not authenticated
+    if (!currentlyAuthenticated) {
+      try {
+        const authRes = await fetch('/api/auth/user', { credentials: 'include' });
+        if (authRes.ok) {
+          const user = await authRes.json();
+          currentlyAuthenticated = !!user;
+        }
+      } catch {
+        currentlyAuthenticated = false;
+      }
+    }
+    
+    console.log("[useContacts] saveOrUpdateContact called, isAuthenticated:", isAuthenticated, "currentlyAuthenticated:", currentlyAuthenticated);
+    
+    if (!currentlyAuthenticated) {
       console.log("[useContacts] Not authenticated, using local storage");
       return saveLocalContact(contactData, eventName);
     }
