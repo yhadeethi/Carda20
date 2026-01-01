@@ -8,6 +8,11 @@ import {
   updateContact as updateLocalContact,
   deleteContact as deleteLocalContact 
 } from "@/lib/contactsStorage";
+import { 
+  loadContactsV2, 
+  saveContactsV2,
+  type ContactV2 
+} from "@/lib/contacts/storage";
 
 // Database contact type matching the server schema
 export interface DbContact {
@@ -208,57 +213,8 @@ export function useContacts() {
     return Array.from(events).sort();
   };
 
-  interface LocalContactWithV2Fields extends StoredContact {
-    tasks?: unknown[];
-    reminders?: unknown[];
-    timeline?: unknown[];
-    notes?: string;
-    mergeMeta?: unknown;
-    lastTouchedAt?: string;
-    rawText?: string;
-  }
-
-  const getAllLocalContacts = (): LocalContactWithV2Fields[] => {
-    const v1Contacts: LocalContactWithV2Fields[] = loadLocalContacts();
-    
-    let v2Contacts: LocalContactWithV2Fields[] = [];
-    try {
-      const rawV2 = localStorage.getItem("carda_contacts_v2");
-      if (rawV2) {
-        const parsed = JSON.parse(rawV2);
-        if (Array.isArray(parsed)) {
-          v2Contacts = parsed.map((c: Record<string, unknown>) => ({
-            id: String(c.id || ""),
-            createdAt: String(c.createdAt || new Date().toISOString()),
-            name: String(c.name || ""),
-            company: String(c.company || ""),
-            title: String(c.title || ""),
-            email: String(c.email || ""),
-            phone: String(c.phone || ""),
-            website: String(c.website || ""),
-            linkedinUrl: String(c.linkedinUrl || ""),
-            address: String(c.address || ""),
-            eventName: c.eventName ? String(c.eventName) : null,
-            companyId: c.companyId ? String(c.companyId) : null,
-            org: (c.org as StoredContact['org']) || defaultOrg,
-            tasks: Array.isArray(c.tasks) ? c.tasks : undefined,
-            reminders: Array.isArray(c.reminders) ? c.reminders : undefined,
-            timeline: Array.isArray(c.timeline) ? c.timeline : undefined,
-            notes: typeof c.notes === 'string' ? c.notes : undefined,
-            mergeMeta: c.mergeMeta || undefined,
-            lastTouchedAt: typeof c.lastTouchedAt === 'string' ? c.lastTouchedAt : undefined,
-            rawText: typeof c.rawText === 'string' ? c.rawText : undefined,
-          }));
-        }
-      }
-    } catch (e) {
-      console.error("[useContacts] Failed to load v2 contacts:", e);
-    }
-    
-    const v1Ids = new Set(v1Contacts.map(c => c.id));
-    const uniqueV2 = v2Contacts.filter(c => !v1Ids.has(c.id));
-    
-    return [...v1Contacts, ...uniqueV2];
+  const getAllLocalContacts = (): ContactV2[] => {
+    return loadContactsV2();
   };
 
   const getLocalContacts = (): StoredContact[] => {
@@ -269,7 +225,7 @@ export function useContacts() {
     imported: number; 
     failed: number; 
     successIds: string[];
-    failedContacts: LocalContactWithV2Fields[];
+    failedContacts: ContactV2[];
   }> => {
     const localContacts = getAllLocalContacts();
     
@@ -280,7 +236,7 @@ export function useContacts() {
     let imported = 0;
     let failed = 0;
     const successIds: string[] = [];
-    const failedContacts: LocalContactWithV2Fields[] = [];
+    const failedContacts: ContactV2[] = [];
 
     for (const localContact of localContacts) {
       try {
@@ -295,15 +251,17 @@ export function useContacts() {
           address: localContact.address || null,
           eventName: localContact.eventName || null,
           org: localContact.org || null,
+          tasks: localContact.tasks || [],
+          reminders: localContact.reminders || [],
+          timeline: localContact.timeline || [],
+          notes: localContact.notes || null,
+          lastTouchedAt: localContact.lastTouchedAt || null,
+          localCompanyId: localContact.companyId || null,
         };
         
-        if (localContact.tasks) dbContact.tasks = localContact.tasks;
-        if (localContact.reminders) dbContact.reminders = localContact.reminders;
-        if (localContact.timeline) dbContact.timeline = localContact.timeline;
-        if (localContact.notes) dbContact.notes = localContact.notes;
-        if (localContact.mergeMeta) dbContact.mergeMeta = localContact.mergeMeta;
-        if (localContact.lastTouchedAt) dbContact.lastTouchedAt = localContact.lastTouchedAt;
-        if (localContact.rawText) dbContact.rawText = localContact.rawText;
+        if (localContact.mergeMeta) {
+          dbContact.mergeMeta = localContact.mergeMeta;
+        }
         
         await apiRequest("POST", "/api/contacts", dbContact);
         imported++;
@@ -324,23 +282,11 @@ export function useContacts() {
 
   const removeLocalContactsByIds = (ids: string[]): void => {
     try {
-      const keyV1 = "carda_contacts_v1";
-      const storedV1 = localStorage.getItem(keyV1);
-      if (storedV1) {
-        const contactsV1 = JSON.parse(storedV1) as StoredContact[];
-        const filteredV1 = contactsV1.filter(c => !ids.includes(c.id));
-        localStorage.setItem(keyV1, JSON.stringify(filteredV1));
-      }
+      const idsSet = new Set(ids);
       
-      const keyV2 = "carda_contacts_v2";
-      const storedV2 = localStorage.getItem(keyV2);
-      if (storedV2) {
-        const contactsV2 = JSON.parse(storedV2);
-        if (Array.isArray(contactsV2)) {
-          const filteredV2 = contactsV2.filter((c: { id: string }) => !ids.includes(c.id));
-          localStorage.setItem(keyV2, JSON.stringify(filteredV2));
-        }
-      }
+      const allV2Contacts = loadContactsV2();
+      const remainingContacts = allV2Contacts.filter(c => !idsSet.has(c.id));
+      saveContactsV2(remainingContacts);
     } catch (e) {
       console.error("[useContacts] Failed to remove local contacts:", e);
     }
@@ -348,8 +294,7 @@ export function useContacts() {
 
   const clearLocalContacts = (): void => {
     try {
-      localStorage.removeItem("carda_contacts_v1");
-      localStorage.removeItem("carda_contacts_v2");
+      saveContactsV2([]);
     } catch (e) {
       console.error("[useContacts] Failed to clear local contacts:", e);
     }
