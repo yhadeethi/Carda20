@@ -155,37 +155,34 @@ export function useContacts() {
     contactData: Omit<StoredContact, "id" | "createdAt" | "eventName">,
     eventName: string | null
   ): Promise<StoredContact | null> => {
-    // Always check fresh auth status before saving
-    let currentlyAuthenticated = isAuthenticated;
+    // Always check fresh auth status before saving by fetching user directly
+    let currentlyAuthenticated = false;
     
-    // Double-check auth by fetching user directly if we think we're not authenticated
-    if (!currentlyAuthenticated) {
-      try {
-        const authRes = await fetch('/api/auth/user', { credentials: 'include' });
-        if (authRes.ok) {
-          const user = await authRes.json();
-          currentlyAuthenticated = !!user;
-        }
-      } catch {
-        currentlyAuthenticated = false;
+    try {
+      const authRes = await fetch('/api/auth/user', { credentials: 'include' });
+      if (authRes.ok) {
+        const user = await authRes.json();
+        currentlyAuthenticated = !!user;
       }
+    } catch {
+      currentlyAuthenticated = false;
     }
     
-    console.log("[useContacts] saveOrUpdateContact called, isAuthenticated:", isAuthenticated, "currentlyAuthenticated:", currentlyAuthenticated);
+    console.log("[useContacts] saveOrUpdateContact called, hook isAuthenticated:", isAuthenticated, "fresh check:", currentlyAuthenticated);
     
     if (!currentlyAuthenticated) {
       console.log("[useContacts] Not authenticated, using local storage");
       return saveLocalContact(contactData, eventName);
     }
 
+    // Use direct fetch instead of mutations to avoid stale closure issues
     try {
-      console.log("[useContacts] Authenticated, saving to server. Contact data:", contactData);
+      console.log("[useContacts] Authenticated, saving to server via direct fetch. Contact data:", contactData);
       const existing = findExistingContact(contactData.email, contactData.name, contactData.company);
       const now = new Date().toISOString();
       
       if (existing) {
         console.log("[useContacts] Updating existing contact:", existing.id);
-        // Add an update timeline event - only send the new event, backend will merge
         const updateEvent: TimelineEvent = {
           id: generateTimelineId(),
           type: "contact_updated",
@@ -193,20 +190,32 @@ export function useContacts() {
           summary: "Contact updated via scan",
         };
         
-        const updated = await updateMutation.mutateAsync({
-          id: existing.id,
-          updates: { 
-            ...contactData, 
-            eventName: eventName ?? existing.eventName,
-            timeline: [updateEvent],
-            lastTouchedAt: now,
-          },
+        const dbContact = storedContactToDbContact({
+          ...contactData, 
+          eventName: eventName ?? existing.eventName,
+          timeline: [updateEvent],
+          lastTouchedAt: now,
         });
+        
+        const res = await fetch(`/api/contacts/${existing.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(dbContact),
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("[useContacts] PATCH failed:", res.status, errorText);
+          throw new Error(`Failed to update contact: ${res.status} ${errorText}`);
+        }
+        
+        const updated = await res.json();
         console.log("[useContacts] Contact updated successfully:", updated);
+        queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
         return dbContactToStoredContact(updated);
       } else {
         console.log("[useContacts] Creating new contact");
-        // Create with a scan_created timeline event
         const scanCreatedEvent: TimelineEvent = {
           id: generateTimelineId(),
           type: "scan_created",
@@ -214,13 +223,29 @@ export function useContacts() {
           summary: "Contact created via scan",
         };
         
-        const created = await createMutation.mutateAsync({
+        const dbContact = storedContactToDbContact({
           ...contactData,
           eventName,
           timeline: [scanCreatedEvent],
           lastTouchedAt: now,
         });
+        
+        const res = await fetch('/api/contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(dbContact),
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("[useContacts] POST failed:", res.status, errorText);
+          throw new Error(`Failed to create contact: ${res.status} ${errorText}`);
+        }
+        
+        const created = await res.json();
         console.log("[useContacts] Contact created successfully:", created);
+        queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
         return dbContactToStoredContact(created);
       }
     } catch (e) {
