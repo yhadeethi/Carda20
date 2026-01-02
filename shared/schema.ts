@@ -72,57 +72,9 @@ export const hubspotTokens = pgTable(
 );
 
 
-// Org Intelligence types for contact organization
-export interface ContactOrgData {
-  department?: 'EXEC' | 'LEGAL' | 'PROJECT_DELIVERY' | 'SALES' | 'FINANCE' | 'OPS' | 'UNKNOWN';
-  reportsToId?: string | null;
-  role?: 'CHAMPION' | 'NEUTRAL' | 'BLOCKER' | 'UNKNOWN';
-  influence?: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
-  relationshipStrength?: 'CLOSE' | 'NORMAL' | 'CASUAL' | 'UNKNOWN';
-}
-
-// Task for contact follow-up
-export interface ContactTaskData {
-  id: string;
-  title: string;
-  done: boolean;
-  createdAt: string;
-  dueAt?: string;
-  completedAt?: string;
-}
-
-// Reminder for contact
-export interface ContactReminderData {
-  id: string;
-  label: string;
-  remindAt: string;
-  done: boolean;
-  createdAt: string;
-  doneAt?: string;
-}
-
-// Timeline event for contact
-export interface ContactTimelineEventData {
-  id: string;
-  type: string;
-  at: string;
-  summary: string;
-  meta?: Record<string, unknown>;
-}
-
-// Merge metadata
-export interface ContactMergeMetaData {
-  mergedFromIds?: string[];
-  mergedAt?: string;
-}
-
 export const contacts = pgTable("contacts", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  
-  // User ownership
   userId: integer("user_id").notNull().references(() => users.id),
-  
-  // Basic contact info
   fullName: text("full_name"),
   companyName: text("company_name"),
   jobTitle: text("job_title"),
@@ -130,38 +82,11 @@ export const contacts = pgTable("contacts", {
   phone: text("phone"),
   website: text("website"),
   linkedinUrl: text("linkedin_url"),
-  address: text("address"),
-  
-  // Event/source tracking
-  eventName: text("event_name"),
   rawText: text("raw_text"),
-  
-  // Company linking
   companyDomain: text("company_domain"),
-  dbCompanyId: integer("db_company_id").references(() => companies.id),
-  localCompanyId: text("local_company_id"),
-  
-  // Org Intelligence (JSON)
-  org: jsonb("org").$type<ContactOrgData>(),
-  
-  // Tasks, reminders, timeline (JSON arrays)
-  tasks: jsonb("tasks").$type<ContactTaskData[]>().default([]),
-  reminders: jsonb("reminders").$type<ContactReminderData[]>().default([]),
-  timeline: jsonb("timeline").$type<ContactTimelineEventData[]>().default([]),
-  
-  // Notes
-  notes: text("notes"),
-  
-  // Merge metadata
-  mergeMeta: jsonb("merge_meta").$type<ContactMergeMetaData>(),
-  
-  // Timestamps
+  companyId: integer("company_id").references(() => companies.id),
   createdAt: timestamp("created_at").defaultNow(),
-  lastTouchedAt: timestamp("last_touched_at").defaultNow(),
-}, (table) => [
-  index("contacts_user_idx").on(table.userId),
-  index("contacts_email_idx").on(table.email),
-]);
+});
 
 // Company Intel table - stores cached AI-generated intel
 export const companyIntel = pgTable("company_intel", {
@@ -218,7 +143,7 @@ export const contactsRelations = relations(contacts, ({ one }) => ({
     references: [users.id],
   }),
   company: one(companies, {
-    fields: [contacts.dbCompanyId],
+    fields: [contacts.companyId],
     references: [companies.id],
   }),
 }));
@@ -236,79 +161,25 @@ export const companyIntelRelations = relations(companyIntel, ({ one }) => ({
 }));
 
 // Zod schemas for validation
-export const insertUserSchema = createInsertSchema(users);
-
-// Contact org schema
-export const contactOrgSchema = z.object({
-  department: z.enum(['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN']).optional(),
-  reportsToId: z.string().nullable().optional(),
-  role: z.enum(['CHAMPION', 'NEUTRAL', 'BLOCKER', 'UNKNOWN']).optional(),
-  influence: z.enum(['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN']).optional(),
-  relationshipStrength: z.enum(['CLOSE', 'NORMAL', 'CASUAL', 'UNKNOWN']).optional(),
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
-// Contact task schema
-export const contactTaskSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  done: z.boolean(),
-  createdAt: z.string(),
-  dueAt: z.string().optional(),
-  completedAt: z.string().optional(),
+export const insertContactSchema = createInsertSchema(contacts).omit({
+  id: true,
+  createdAt: true,
 });
 
-// Contact reminder schema
-export const contactReminderSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  remindAt: z.string(),
-  done: z.boolean(),
-  createdAt: z.string(),
-  doneAt: z.string().optional(),
+export const insertCompanySchema = createInsertSchema(companies).omit({
+  id: true,
 });
 
-// Contact timeline event schema
-export const contactTimelineEventSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  at: z.string(),
-  summary: z.string(),
-  meta: z.record(z.unknown()).optional(),
+export const insertCompanyIntelSchema = createInsertSchema(companyIntel).omit({
+  id: true,
+  createdAt: true,
 });
-
-// Contact merge meta schema
-export const contactMergeMetaSchema = z.object({
-  mergedFromIds: z.array(z.string()).optional(),
-  mergedAt: z.string().optional(),
-});
-
-export const insertContactSchema = z.object({
-  userId: z.number(),
-  fullName: z.string().nullable().optional(),
-  companyName: z.string().nullable().optional(),
-  jobTitle: z.string().nullable().optional(),
-  email: z.string().nullable().optional(),
-  phone: z.string().nullable().optional(),
-  website: z.string().nullable().optional(),
-  linkedinUrl: z.string().nullable().optional(),
-  address: z.string().nullable().optional(),
-  eventName: z.string().nullable().optional(),
-  rawText: z.string().nullable().optional(),
-  companyDomain: z.string().nullable().optional(),
-  dbCompanyId: z.number().nullable().optional(),
-  localCompanyId: z.string().nullable().optional(),
-  org: contactOrgSchema.nullable().optional(),
-  tasks: z.array(contactTaskSchema).optional().default([]),
-  reminders: z.array(contactReminderSchema).optional().default([]),
-  timeline: z.array(contactTimelineEventSchema).optional().default([]),
-  notes: z.string().nullable().optional(),
-  mergeMeta: contactMergeMetaSchema.nullable().optional(),
-  lastTouchedAt: z.string().or(z.date()).nullable().optional(),
-});
-
-export const insertCompanySchema = createInsertSchema(companies);
-
-export const insertCompanyIntelSchema = createInsertSchema(companyIntel);
 
 // Upsert user type for Replit Auth
 export type UpsertUser = {

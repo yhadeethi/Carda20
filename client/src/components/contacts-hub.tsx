@@ -24,8 +24,7 @@ import {
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-import { StoredContact, loadContacts as loadLocalContacts, getUniqueEventNames } from "@/lib/contactsStorage";
-import { useContacts } from "@/hooks/useContacts";
+import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
 import {
   Company,
   getCompanies,
@@ -65,8 +64,7 @@ export function ContactsHub({
   const [peopleSubView, setPeopleSubView] = useState<PeopleSubView>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [eventFilter, setEventFilter] = useState<string>("all");
-  const { contacts: hookContacts, isLoading, deleteContactById, refetch, getUniqueEventNames: hookGetEventNames } = useContacts();
-  const [contacts, setContacts] = useState<StoredContact[]>([]);
+  const [contacts, setContacts] = useState<StoredContact[]>(() => loadContacts());
   const [companies, setCompanies] = useState<Company[]>(() => getCompanies());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -79,14 +77,14 @@ export function ContactsHub({
   const [newCompanyNotes, setNewCompanyNotes] = useState("");
 
   useEffect(() => {
-    if (hookContacts.length > 0 || !isLoading) {
-      setContacts(hookContacts);
-      const updatedCompanies = autoGenerateCompaniesFromContacts(hookContacts);
-      setCompanies(updatedCompanies);
-    }
-  }, [hookContacts, isLoading, refreshKey]);
+    const loadedContacts = loadContacts();
+    setContacts(loadedContacts);
 
-  const eventNames = useMemo(() => hookGetEventNames(), [contacts]);
+    const updatedCompanies = autoGenerateCompaniesFromContacts(loadedContacts);
+    setCompanies(updatedCompanies);
+  }, [refreshKey]);
+
+  const eventNames = useMemo(() => getUniqueEventNames(), [contacts]);
 
   const filteredContacts = useMemo(() => {
     let result = [...contacts];
@@ -122,10 +120,10 @@ export function ContactsHub({
     return result;
   }, [companies, searchQuery, contacts]);
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (deleteConfirmId) {
-      await deleteContactById(deleteConfirmId);
-      refetch();
+      deleteContact(deleteConfirmId);
+      setContacts(loadContacts());
       setDeleteConfirmId(null);
       onContactDeleted?.();
     }
@@ -405,7 +403,7 @@ export function ContactsHub({
 
               {peopleSubView === "duplicates" && (
                 <div className="min-h-[300px]">
-                  <DuplicatesView onRefresh={() => refetch()} />
+                  <DuplicatesView onRefresh={() => setContacts(loadContacts())} />
                 </div>
               )}
 

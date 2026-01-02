@@ -18,8 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreditCard, Moon, Sun, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw } from "lucide-react";
-import { StoredContact } from "@/lib/contactsStorage";
-import { useContacts } from "@/hooks/useContacts";
+import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 import { motion, AnimatePresence } from "framer-motion";
 
 type TabMode = "scan" | "contacts" | "events";
@@ -53,7 +52,6 @@ export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
   const { isHidden, isCompact } = useScrollDirectionNav();
   const { user } = useAuth();
-  const { contacts, deleteContactById, refetch: refetchContacts } = useContacts();
   const [activeTab, setActiveTab] = useState<TabMode>("scan");
   const [viewMode, setViewMode] = useState<ViewMode>("scan");
 
@@ -117,10 +115,11 @@ export default function HomePage() {
     setActiveTab("contacts");
   };
 
-  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'notes' = 'orgmap') => {
+  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'notes' = 'contacts') => {
     setSelectedCompanyId(companyId);
     setCompanyDetailTab(initialTab);
     setViewMode("company-detail");
+    setActiveTab("contacts");
   };
 
   const handleBackToCompanies = () => {
@@ -140,23 +139,21 @@ export default function HomePage() {
     setSelectedContact(null);
   };
 
-  const handleDeleteContact = useCallback(async (id: string) => {
-    await deleteContactById(id);
-    refetchContacts();
+  const handleDeleteContact = useCallback((id: string) => {
+    deleteContact(id);
     refreshContacts();
     setSelectedContact(null);
     setViewMode("contacts");
     setActiveTab("contacts");
-  }, [deleteContactById, refetchContacts, refreshContacts]);
+  }, [refreshContacts]);
 
   const handleContactUpdated = useCallback((contactId: string) => {
-    const freshContact = contacts.find(c => c.id === contactId);
+    const freshContact = loadContacts().find(c => c.id === contactId);
     if (freshContact) {
       setSelectedContact(freshContact);
     }
-    refetchContacts();
     refreshContacts();
-  }, [contacts, refetchContacts, refreshContacts]);
+  }, [refreshContacts]);
 
   const tabs = [
     { id: "scan" as TabMode, label: "Scan", icon: Camera },

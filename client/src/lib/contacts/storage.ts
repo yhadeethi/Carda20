@@ -19,12 +19,6 @@ import {
   saveContacts as saveContactsV1,
   updateContact as updateContactV1
 } from '../contactsStorage';
-import {
-  syncTimelineEventToServer,
-  syncNotesToServer,
-  syncRemindersToServer,
-  syncTasksToServer,
-} from './serverSync';
 
 const STORAGE_KEY_V2 = "carda_contacts_v2";
 const MERGE_HISTORY_KEY = "carda_merges_v1";
@@ -245,9 +239,6 @@ export function addTimelineEvent(
     lastTouchedAt: new Date().toISOString() 
   });
 
-  // Also sync to server for authenticated users (fire and forget)
-  syncTimelineEventToServer(contactId, event).catch(() => {});
-
   return event;
 }
 
@@ -276,9 +267,6 @@ export function addTask(contactId: string, title: string, dueAt?: string): Conta
     lastTouchedAt: new Date().toISOString() 
   });
 
-  // Sync tasks to server for authenticated users
-  syncTasksToServer(contactId, tasks).catch(() => {});
-
   // Add timeline event
   addTimelineEvent(contactId, 'task_added', `Task added: ${title}`);
 
@@ -302,9 +290,6 @@ export function completeTask(contactId: string, taskId: string): boolean {
     tasks, 
     lastTouchedAt: new Date().toISOString() 
   });
-
-  // Sync tasks to server for authenticated users
-  syncTasksToServer(contactId, tasks).catch(() => {});
 
   addTimelineEvent(contactId, 'task_done', `Task completed: ${task.title}`);
 
@@ -346,9 +331,6 @@ export function addReminder(contactId: string, label: string, remindAt: string):
     lastTouchedAt: new Date().toISOString() 
   });
 
-  // Sync reminders to server for authenticated users
-  syncRemindersToServer(contactId, reminders).catch(() => {});
-
   addTimelineEvent(contactId, 'reminder_set', `Reminder set: ${label}`, { remindAt });
 
   return reminder;
@@ -371,9 +353,6 @@ export function completeReminder(contactId: string, reminderId: string): boolean
     reminders, 
     lastTouchedAt: new Date().toISOString() 
   });
-
-  // Sync reminders to server for authenticated users
-  syncRemindersToServer(contactId, reminders).catch(() => {});
 
   addTimelineEvent(contactId, 'reminder_done', `Reminder done: ${reminder.label}`);
 
@@ -445,9 +424,6 @@ export function addNote(contactId: string, noteText: string): boolean {
     notes: newNotes,
     lastTouchedAt: new Date().toISOString() 
   });
-
-  // Sync notes to server for authenticated users
-  syncNotesToServer(contactId, newNotes).catch(() => {});
 
   addTimelineEvent(contactId, 'note_added', noteText.slice(0, 100), { fullNote: noteText });
 

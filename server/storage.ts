@@ -21,8 +21,8 @@ export interface IStorage {
   
   getContact(id: number): Promise<Contact | undefined>;
   getContactsByUserId(userId: number, limit?: number): Promise<Contact[]>;
-  createContact(contact: Partial<InsertContact> & { userId: number }): Promise<Contact>;
-  updateContact(id: number, updates: Record<string, unknown>): Promise<Contact | undefined>;
+  createContact(contact: InsertContact): Promise<Contact>;
+  updateContact(id: number, updates: Partial<Contact>): Promise<Contact | undefined>;
   deleteContact(id: number): Promise<boolean>;
   findDuplicateContact(userId: number, email: string, companyName: string): Promise<Contact | undefined>;
   
@@ -115,42 +115,18 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async createContact(contact: Partial<InsertContact> & { userId: number }): Promise<Contact> {
-    const contactData = {
-      userId: contact.userId,
-      fullName: contact.fullName ?? null,
-      companyName: contact.companyName ?? null,
-      jobTitle: contact.jobTitle ?? null,
-      email: contact.email ?? null,
-      phone: contact.phone ?? null,
-      website: contact.website ?? null,
-      linkedinUrl: contact.linkedinUrl ?? null,
-      address: contact.address ?? null,
-      eventName: contact.eventName ?? null,
-      rawText: contact.rawText ?? null,
-      companyDomain: contact.companyDomain ?? null,
-      dbCompanyId: contact.dbCompanyId ?? null,
-      localCompanyId: contact.localCompanyId ?? null,
-      org: contact.org ?? null,
-      tasks: contact.tasks ?? [],
-      reminders: contact.reminders ?? [],
-      timeline: contact.timeline ?? [],
-      notes: contact.notes ?? null,
-      mergeMeta: contact.mergeMeta ?? null,
-      lastTouchedAt: contact.lastTouchedAt ? new Date(contact.lastTouchedAt) : new Date(),
-    };
-    
+  async createContact(contact: InsertContact): Promise<Contact> {
     const [created] = await db
       .insert(contacts)
-      .values([contactData])
+      .values(contact)
       .returning();
     return created;
   }
 
-  async updateContact(id: number, updates: Record<string, unknown>): Promise<Contact | undefined> {
+  async updateContact(id: number, updates: Partial<Contact>): Promise<Contact | undefined> {
     const [contact] = await db
       .update(contacts)
-      .set(updates as Partial<Contact>)
+      .set(updates)
       .where(eq(contacts.id, id))
       .returning();
     return contact || undefined;

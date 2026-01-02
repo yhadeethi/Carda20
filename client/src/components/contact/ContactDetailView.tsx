@@ -238,17 +238,9 @@ export function ContactDetailView({
   );
 
   const timelineItems: TimelineItem[] = useMemo(() => {
-    // Merge timeline from both server data (contact.timeline) and local data (contactV2?.timeline)
-    // Server data (contact.timeline) is the source of truth for authenticated users
-    const serverTimeline = contact.timeline || [];
-    const localTimeline = contactV2?.timeline || [];
-    
-    // Use a Map to deduplicate by event ID, preferring server data
-    const timelineMap = new Map<string, TimelineItem>();
-    
-    // Add local timeline first (will be overwritten by server data if same ID)
-    localTimeline.forEach((t) => {
-      timelineMap.set(t.id, {
+    if (!contactV2?.timeline) return [];
+    return contactV2.timeline
+      .map((t) => ({
         id: t.id,
         type: t.type,
         title: t.summary,
@@ -257,26 +249,9 @@ export function ContactDetailView({
             ? ((t.meta as any).bodyPreview as string | undefined)
             : undefined,
         at: t.at,
-      });
-    });
-    
-    // Add server timeline (overwrites duplicates from local)
-    serverTimeline.forEach((t) => {
-      timelineMap.set(t.id, {
-        id: t.id,
-        type: t.type as TimelineItem["type"],
-        title: t.summary,
-        detail:
-          typeof t.meta === "object" && t.meta !== null
-            ? ((t.meta as any).bodyPreview as string | undefined)
-            : undefined,
-        at: t.at,
-      });
-    });
-    
-    return Array.from(timelineMap.values())
+      }))
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  }, [contact.timeline, contactV2]);
+  }, [contactV2]);
 
   const companyNameForIntel = useMemo(() => {
     const c = (editedFields.company || contact.company || "").trim();

@@ -6,6 +6,7 @@ import { extractTextFromImage, initializeOCR } from "./ocrService";
 import { parseContact, ParsedContact, splitAuAddress } from "./parseService";
 import { getOrCreateCompanyIntel } from "./intelService";
 import { generateIntelV2 } from "./intelV2Service";
+// CompanyIntelV2 and HeadcountRange removed - Apollo boost disabled
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
@@ -27,58 +28,8 @@ function getHubSpotRedirectUri(req: Request): string {
   return `${proto}://${host}/api/hubspot/callback`;
 }
 
-import {
-  buildHubSpotAuthUrl,
-  connectHubSpotForUser,
-  disconnectHubSpotForUser,
-  isHubSpotConnected,
-  syncContactToHubSpot,
-} from "./hubspotService";
+import { buildHubSpotAuthUrl, connectHubSpotForUser, disconnectHubSpotForUser, isHubSpotConnected, syncContactToHubSpot } from "./hubspotService";
 import crypto from "crypto";
-
-// Contact org schema for API
-const contactOrgInputSchema = z.object({
-  department: z.enum(["EXEC", "LEGAL", "PROJECT_DELIVERY", "SALES", "FINANCE", "OPS", "UNKNOWN"]).optional(),
-  reportsToId: z.string().nullable().optional(),
-  role: z.enum(["CHAMPION", "NEUTRAL", "BLOCKER", "UNKNOWN"]).optional(),
-  influence: z.enum(["LOW", "MEDIUM", "HIGH", "UNKNOWN"]).optional(),
-  relationshipStrength: z.enum(["CLOSE", "NORMAL", "CASUAL", "UNKNOWN"]).optional(),
-});
-
-// Task schema
-const contactTaskInputSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  done: z.boolean(),
-  createdAt: z.string(),
-  dueAt: z.string().optional(),
-  completedAt: z.string().optional(),
-});
-
-// Reminder schema
-const contactReminderInputSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  remindAt: z.string(),
-  done: z.boolean(),
-  createdAt: z.string(),
-  doneAt: z.string().optional(),
-});
-
-// Timeline event schema
-const contactTimelineEventInputSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  at: z.string(),
-  summary: z.string(),
-  meta: z.record(z.unknown()).optional(),
-});
-
-// Merge meta schema
-const contactMergeMetaInputSchema = z.object({
-  mergedFromIds: z.array(z.string()).optional(),
-  mergedAt: z.string().optional(),
-});
 
 const contactInputSchema = z.object({
   fullName: z.string().nullable().optional(),
@@ -88,19 +39,8 @@ const contactInputSchema = z.object({
   phone: z.string().nullable().optional(),
   website: z.string().nullable().optional(),
   linkedinUrl: z.string().nullable().optional(),
-  address: z.string().nullable().optional(),
-  eventName: z.string().nullable().optional(),
   rawText: z.string().nullable().optional(),
   companyDomain: z.string().nullable().optional(),
-  dbCompanyId: z.number().nullable().optional(),
-  localCompanyId: z.string().nullable().optional(),
-  org: contactOrgInputSchema.nullable().optional(),
-  tasks: z.array(contactTaskInputSchema).optional(),
-  reminders: z.array(contactReminderInputSchema).optional(),
-  timeline: z.array(contactTimelineEventInputSchema).optional(),
-  notes: z.string().nullable().optional(),
-  mergeMeta: contactMergeMetaInputSchema.nullable().optional(),
-  lastTouchedAt: z.string().nullable().optional(),
 });
 
 const upload = multer({
@@ -109,7 +49,10 @@ const upload = multer({
 });
 
 function generateVCard(contact: ParsedContact): string {
-  const lines: string[] = ["BEGIN:VCARD", "VERSION:3.0"];
+  const lines: string[] = [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+  ];
 
   if (contact.fullName) {
     const names = contact.fullName.split(" ");
@@ -119,12 +62,29 @@ function generateVCard(contact: ParsedContact): string {
     lines.push(`FN:${contact.fullName}`);
   }
 
-  if (contact.companyName) lines.push(`ORG:${contact.companyName}`);
-  if (contact.jobTitle) lines.push(`TITLE:${contact.jobTitle}`);
-  if (contact.email) lines.push(`EMAIL;TYPE=INTERNET:${contact.email}`);
-  if (contact.phone) lines.push(`TEL;TYPE=CELL:${contact.phone}`);
-  if (contact.website) lines.push(`URL:${contact.website}`);
-  if (contact.linkedinUrl) lines.push(`X-SOCIALPROFILE;TYPE=linkedin:${contact.linkedinUrl}`);
+  if (contact.companyName) {
+    lines.push(`ORG:${contact.companyName}`);
+  }
+
+  if (contact.jobTitle) {
+    lines.push(`TITLE:${contact.jobTitle}`);
+  }
+
+  if (contact.email) {
+    lines.push(`EMAIL;TYPE=INTERNET:${contact.email}`);
+  }
+
+  if (contact.phone) {
+    lines.push(`TEL;TYPE=CELL:${contact.phone}`);
+  }
+
+  if (contact.website) {
+    lines.push(`URL:${contact.website}`);
+  }
+
+  if (contact.linkedinUrl) {
+    lines.push(`X-SOCIALPROFILE;TYPE=linkedin:${contact.linkedinUrl}`);
+  }
 
   if (contact.address) {
     const { street, city, state, postcode, country } = splitAuAddress(contact.address);
@@ -134,27 +94,29 @@ function generateVCard(contact: ParsedContact): string {
   }
 
   lines.push("END:VCARD");
+  
   return lines.join("\r\n");
 }
 
-export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+export async function registerRoutes(
+  httpServer: Server,
+  app: Express
+): Promise<Server> {
   initializeOCR();
+  
   await setupAuth(app);
 
-  // FIX: prevent 304/ETag caching from breaking auth detection in the client.
-  // Also: use the same auth gate as /api/contacts.
-  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', async (req: any, res) => {
     try {
-      res.setHeader("Cache-Control", "no-store, max-age=0");
-      res.setHeader("Pragma", "no-cache");
-      res.setHeader("Expires", "0");
-
-      const authId = req.user?.claims?.sub;
+      if (!req.isAuthenticated() || !req.user?.claims?.sub) {
+        return res.json(null);
+      }
+      const authId = req.user.claims.sub;
       const user = await storage.getUserByAuthId(authId);
-      return res.json(user ?? null);
+      res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
-      return res.status(500).json(null);
+      res.json(null);
     }
   });
 
@@ -162,8 +124,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const authId = req.user.claims.sub;
       const user = await storage.getUserByAuthId(authId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
       const limit = parseInt(req.query.limit as string) || 100;
       const contacts = await storage.getContactsByUserId(user.id, limit);
       res.json(contacts);
@@ -174,18 +137,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/contacts", isAuthenticated, async (req: any, res: Response) => {
-    console.log("[POST /api/contacts] Request received, body:", JSON.stringify(req.body).substring(0, 500));
     try {
       const authId = req.user.claims.sub;
       const user = await storage.getUserByAuthId(authId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
       const parsed = contactInputSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid contact data", errors: parsed.error.errors });
       }
-
-      const contact = await storage.createContact({ userId: user.id, ...parsed.data });
+      const contact = await storage.createContact({
+        userId: user.id,
+        ...parsed.data,
+      });
       res.json(contact);
     } catch (error) {
       console.error("Error creating contact:", error);
@@ -197,56 +162,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const authId = req.user.claims.sub;
       const user = await storage.getUserByAuthId(authId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
       const contactId = parseInt(req.params.id);
-      if (isNaN(contactId)) return res.status(400).json({ message: "Invalid contact ID" });
-
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
       const existing = await storage.getContact(contactId);
       if (!existing || existing.userId !== user.id) {
         return res.status(403).json({ message: "Not authorized" });
       }
-
       const parsed = contactInputSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid contact data", errors: parsed.error.errors });
       }
-
-      const updateData: Record<string, unknown> = { ...parsed.data };
-      if (typeof updateData.lastTouchedAt === "string") {
-        updateData.lastTouchedAt = new Date(updateData.lastTouchedAt);
-      }
-
-      // Merge timeline events instead of replacing
-      if (updateData.timeline !== undefined && Array.isArray(updateData.timeline)) {
-        const existingTimeline = (existing.timeline as unknown[]) || [];
-        const newTimeline = updateData.timeline as unknown[];
-        const existingIds = new Set(existingTimeline.map((e: any) => e.id));
-        const eventsToAdd = newTimeline.filter((e: any) => !existingIds.has(e.id));
-        updateData.timeline = [...eventsToAdd, ...existingTimeline];
-      }
-
-      // Merge tasks
-      if (updateData.tasks !== undefined && Array.isArray(updateData.tasks)) {
-        const existingTasks = (existing.tasks as unknown[]) || [];
-        const newTasks = updateData.tasks as unknown[];
-        const merged = new Map<string, unknown>();
-        existingTasks.forEach((t: any) => merged.set(t.id, t));
-        newTasks.forEach((t: any) => merged.set(t.id, t));
-        updateData.tasks = Array.from(merged.values());
-      }
-
-      // Merge reminders
-      if (updateData.reminders !== undefined && Array.isArray(updateData.reminders)) {
-        const existingReminders = (existing.reminders as unknown[]) || [];
-        const newReminders = updateData.reminders as unknown[];
-        const merged = new Map<string, unknown>();
-        existingReminders.forEach((r: any) => merged.set(r.id, r));
-        newReminders.forEach((r: any) => merged.set(r.id, r));
-        updateData.reminders = Array.from(merged.values());
-      }
-
-      const contact = await storage.updateContact(contactId, updateData);
+      const contact = await storage.updateContact(contactId, parsed.data);
       res.json(contact);
     } catch (error) {
       console.error("Error updating contact:", error);
@@ -258,16 +189,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const authId = req.user.claims.sub;
       const user = await storage.getUserByAuthId(authId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
       const contactId = parseInt(req.params.id);
-      if (isNaN(contactId)) return res.status(400).json({ message: "Invalid contact ID" });
-
+      if (isNaN(contactId)) {
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
       const existing = await storage.getContact(contactId);
       if (!existing || existing.userId !== user.id) {
         return res.status(403).json({ message: "Not authorized" });
       }
-
       await storage.deleteContact(contactId);
       res.json({ success: true });
     } catch (error) {
@@ -279,14 +211,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/scan", upload.single("image"), async (req: Request, res: Response) => {
     try {
       const file = req.file;
-      if (!file) return res.status(400).send("No image file provided");
+      if (!file) {
+        return res.status(400).send("No image file provided");
+      }
 
       const base64 = file.buffer.toString("base64");
       const ocrResult = await extractTextFromImage(base64);
-      if (ocrResult.error) return res.status(400).json({ error: ocrResult.error });
+
+      if (ocrResult.error) {
+        return res.status(400).json({ error: ocrResult.error });
+      }
 
       const parsed = parseContact(ocrResult.rawText);
-      res.json({ rawText: ocrResult.rawText, contact: parsed });
+
+      res.json({
+        rawText: ocrResult.rawText,
+        contact: parsed,
+      });
     } catch (error) {
       console.error("Error scanning contact:", error);
       res.status(500).send("Failed to scan contact");
@@ -296,10 +237,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/parse", async (req: Request, res: Response) => {
     try {
       const { text } = req.body;
-      if (!text || typeof text !== "string") return res.status(400).send("Text is required");
+      if (!text || typeof text !== "string") {
+        return res.status(400).send("Text is required");
+      }
 
       const parsed = parseContact(text);
-      res.json({ rawText: text, contact: parsed });
+      res.json({
+        rawText: text,
+        contact: parsed,
+      });
     } catch (error) {
       console.error("Error parsing contact:", error);
       res.status(500).send("Failed to parse contact");
@@ -321,18 +267,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ---- everything below here remains as-is in your app (intel, hubspot, parse-ai, etc.) ----
-
   app.post("/api/intel", async (req: Request, res: Response) => {
     try {
       const { companyName, email, website, contactName, contactTitle } = req.body;
+
       if (!companyName && !email && !website) {
         return res.status(400).send("Company name, email, or website is required");
       }
 
       const companyDomain = email || website;
-      const intel = await getOrCreateCompanyIntel(companyName, companyDomain, {}, { contactName, contactTitle });
-      if (!intel) return res.status(500).send("Failed to generate intel");
+
+      const intel = await getOrCreateCompanyIntel(
+        companyName,
+        companyDomain,
+        {},
+        { contactName, contactTitle }
+      );
+
+      if (!intel) {
+        return res.status(500).send("Failed to generate intel");
+      }
 
       res.json(intel);
     } catch (error) {
@@ -344,15 +298,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/intel-v2", async (req: Request, res: Response) => {
     try {
       const { companyName, domain, role, address } = req.query;
+
       if (!companyName && !domain) {
         return res.status(400).json({ error: "companyName or domain is required" });
       }
 
       const intel = await generateIntelV2(
-        (companyName as string) || "",
-        (domain as string) || null,
-        (role as string) || undefined,
-        (address as string) || undefined,
+        companyName as string || "",
+        domain as string || null,
+        role as string || undefined,
+        address as string || undefined
       );
 
       res.json(intel);
@@ -362,10 +317,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Apollo Boost endpoint - disabled (fetchApolloEnrichment not implemented)
+  // TODO: Implement Apollo enrichment when API integration is ready
   app.post("/api/intel-v2/boost", async (_req: Request, res: Response) => {
     res.status(501).json({ error: "Apollo boost feature not yet implemented" });
   });
 
+  
+  // HubSpot OAuth (per-user)
   app.get("/api/hubspot/connect", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
@@ -395,6 +354,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const redirectUri = getHubSpotRedirectUri(req);
       await connectHubSpotForUser({ userId, code, redirectUri });
 
+      // cleanup
       (req.session as any).hubspot_oauth_state = undefined;
       (req.session as any).hubspot_oauth_user = undefined;
 
@@ -415,7 +375,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Response) => {
+app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
       const connected = await isHubSpotConnected(userId);
@@ -457,14 +417,164 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).send("Text is required");
       }
 
-      const parsed = parseContactWithAI(text);
-      res.json(convertAIResultToContact(parsed, text));
+      const aiResult = await parseContactWithAI(text);
+      console.log("AI PARSE RAW:", JSON.stringify(aiResult, null, 2));
+      
+      const contact = convertAIResultToContact(aiResult);
+      
+      res.json({
+        rawText: text,
+        contact: contact,
+      });
     } catch (error) {
       console.error("Error parsing contact with AI:", error);
       res.status(500).send("Failed to parse contact with AI");
     }
   });
 
-  const server = createServer(app);
-  return server;
+  app.post("/api/scan-ai", upload.single("image"), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).send("No image file provided");
+      }
+
+      const base64 = file.buffer.toString("base64");
+      const ocrResult = await extractTextFromImage(base64);
+
+      if (ocrResult.error) {
+        return res.status(400).json({ error: ocrResult.error });
+      }
+
+      const aiResult = await parseContactWithAI(ocrResult.rawText);
+      console.log("AI PARSE RAW:", JSON.stringify(aiResult, null, 2));
+      
+      const contact = convertAIResultToContact(aiResult);
+
+      res.json({
+        rawText: ocrResult.rawText,
+        contact: contact,
+      });
+    } catch (error) {
+      console.error("Error scanning contact with AI:", error);
+      res.status(500).send("Failed to scan contact with AI");
+    }
+  });
+
+  // AI-powered follow-up message generation
+  const followupSchema = z.object({
+    contact: z.object({
+      name: z.string(),
+      company: z.string().optional(),
+      title: z.string().optional(),
+      email: z.string().optional(),
+    }),
+    request: z.object({
+      mode: z.enum(['email_followup', 'linkedin_message', 'meeting_intro']),
+      tone: z.enum(['friendly', 'direct', 'warm', 'formal']),
+      goal: z.string().optional(),
+      context: z.string().optional(),
+      length: z.enum(['short', 'medium']),
+    }),
+  });
+
+  app.post("/api/followup", async (req: Request, res: Response) => {
+    try {
+      if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
+        return res.status(503).json({ error: "AI service not configured" });
+      }
+
+      const parsed = followupSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.errors });
+      }
+
+      const { contact, request: followupRequest } = parsed.data;
+      const { mode, tone, goal, context, length } = followupRequest;
+
+      const modeDescriptions: Record<string, string> = {
+        email_followup: "a professional follow-up email",
+        linkedin_message: "a LinkedIn direct message (concise, networking-focused)",
+        meeting_intro: "an email requesting a meeting",
+      };
+
+      const toneDescriptions: Record<string, string> = {
+        friendly: "friendly and approachable",
+        direct: "direct and to the point",
+        warm: "warm and personable",
+        formal: "formal and professional",
+      };
+
+      const lengthGuide = length === 'short' 
+        ? "Keep it very brief - 2-3 sentences max." 
+        : "Keep it concise but complete - around 4-6 sentences.";
+
+      const prompt = `Generate ${modeDescriptions[mode]} for the following contact:
+
+Name: ${contact.name}
+${contact.company ? `Company: ${contact.company}` : ''}
+${contact.title ? `Title: ${contact.title}` : ''}
+
+Requirements:
+- Tone: ${toneDescriptions[tone]}
+- ${lengthGuide}
+${goal ? `- Main objective/goal: "${goal}" - IMPORTANT: Naturally incorporate this goal into a well-formed sentence. Do NOT just insert it verbatim.` : ''}
+${context ? `- Context/how we met: ${context}` : ''}
+
+Return a JSON object with these fields:
+{
+  "subject": "email subject line (omit for LinkedIn messages)",
+  "body": "the complete message body",
+  "bullets": ["key point 1", "key point 2"] // 2-3 key points summarizing the message
+}
+
+Important guidelines:
+- Start with an appropriate greeting based on the tone
+- If a goal is provided, work it naturally into the message as a complete, professional sentence
+- Reference the context if provided
+- Include a clear call-to-action
+- End with an appropriate sign-off (but don't include a signature name)
+- For LinkedIn, skip the subject line entirely
+
+Return ONLY valid JSON, no markdown or explanation.`;
+
+      const openai = new OpenAI({
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+      });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        console.error("[Followup] Empty response from AI");
+        return res.status(500).json({ error: "Empty AI response" });
+      }
+
+      // Parse the JSON response
+      const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      const result = JSON.parse(cleanedContent);
+
+      // Ensure required fields
+      if (!result.body) {
+        return res.status(500).json({ error: "Invalid AI response structure" });
+      }
+
+      res.json({
+        subject: result.subject || null,
+        body: result.body,
+        bullets: result.bullets || [],
+      });
+    } catch (error) {
+      console.error("[Followup] Error generating follow-up:", error);
+      res.status(500).json({ error: "Failed to generate follow-up" });
+    }
+  });
+
+  return httpServer;
 }

@@ -21,8 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { ContactTimelineTab } from "@/components/contact-timeline-tab";
-import { StoredContact, loadContacts } from "@/lib/contactsStorage";
-import { useContacts } from "@/hooks/useContacts";
+import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
 import {
   loadContactsV2,
   ContactV2,
@@ -210,7 +209,6 @@ export function ScanTab({
 }: ScanTabProps) {
   const { toast } = useToast();
   const reduceMotion = useReducedMotion();
-  const { saveOrUpdateContact, isAuthenticated, refetch: refetchContacts } = useContacts();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [scanMode, setScanMode] = useState<ScanMode>("scan");
@@ -227,7 +225,6 @@ export function ScanTab({
 
   const [tempEventName, setTempEventName] = useState("");
   const [isEditingEventName, setIsEditingEventName] = useState(false);
-  const [pendingEventName, setPendingEventName] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
@@ -274,105 +271,79 @@ const clearImage = () => {
     setBatchItems([]);
   };
 
-  const saveContactToStorage = async (parsedContact: ParsedContact): Promise<StoredContact> => {
-    console.log("[ScanTab] saveContactToStorage called with:", parsedContact);
-
-    const contactData = {
-      name: parsedContact.fullName || "",
-      company: parsedContact.companyName || "",
-      title: parsedContact.jobTitle || "",
-      email: parsedContact.email || "",
-      phone: parsedContact.phone || "",
-      website: parsedContact.website || "",
-      linkedinUrl: parsedContact.linkedinUrl || "",
-      address: parsedContact.address || "",
-    };
-
-    const savedContact = await saveOrUpdateContact(contactData, eventModeEnabled ? effectiveEventName : null);
-
-    if (!savedContact) {
-      throw new Error("saveOrUpdateContact returned null");
-    }
-
-    // Keep v2/local timeline enrichment from blocking saves.
-    // If anything in this block fails, we still return the successfully saved contact.
+  const saveContactToStorage = (parsedContact: ParsedContact): StoredContact | null => {
     try {
-      if (!isAuthenticated) {
-        // Update local v2 cache (offline)
-        const existingV2 = contactV2;
-        let v2Contact: ContactV2;
+      const contactData = {
+        name: parsedContact.fullName || "",
+        company: parsedContact.companyName || "",
+        title: parsedContact.jobTitle || "",
+        email: parsedContact.email || "",
+        phone: parsedContact.phone || "",
+        website: parsedContact.website || "",
+        linkedinUrl: parsedContact.linkedinUrl || "",
+        address: parsedContact.address || "",
+      };
 
-        if (existingV2 && existingV2.id === savedContact.id) {
-          v2Contact = {
-            ...existingV2,
-            name: savedContact.name,
-            company: savedContact.company,
-            title: savedContact.title,
-            email: savedContact.email,
-            phone: savedContact.phone,
-            website: savedContact.website,
-            linkedinUrl: savedContact.linkedinUrl,
-            address: savedContact.address,
-            timeline: [
-              {
-                id: generateTimelineId(),
-                type: "contact_updated" as const,
-                at: new Date().toISOString(),
-                summary: "Contact updated via scan",
-              },
-              ...(existingV2.timeline || []),
-            ],
-            lastTouchedAt: new Date().toISOString(),
-          };
-        } else {
-          v2Contact = {
-            id: savedContact.id,
-            userId: "local",
-            name: savedContact.name,
-            company: savedContact.company,
-            title: savedContact.title,
-            email: savedContact.email,
-            phone: savedContact.phone,
-            website: savedContact.website,
-            linkedinUrl: savedContact.linkedinUrl,
-            address: savedContact.address,
-            eventName: savedContact.eventName || null,
-            createdAt: savedContact.createdAt || new Date().toISOString(),
-            org: savedContact.org || {
-              department: "UNKNOWN",
-              reportsToId: null,
-              role: "UNKNOWN",
-              influence: "UNKNOWN",
-              relationshipStrength: "UNKNOWN",
+      const savedContact = saveContact(contactData, eventModeEnabled ? effectiveEventName : null);
+      if (!savedContact) return null;
+
+      const existingV2Contacts = loadContactsV2();
+      const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
+
+      let v2Contact: ContactV2;
+
+      if (existingV2) {
+        v2Contact = {
+          ...existingV2,
+          name: savedContact.name,
+          company: savedContact.company,
+          title: savedContact.title,
+          email: savedContact.email,
+          phone: savedContact.phone,
+          website: savedContact.website,
+          linkedinUrl: savedContact.linkedinUrl,
+          address: savedContact.address,
+          eventName: savedContact.eventName,
+          companyId: savedContact.companyId,
+          timeline: [
+            ...existingV2.timeline,
+            {
+              id: generateTimelineId(),
+              type: "contact_updated" as const,
+              at: new Date().toISOString(),
+              summary: "Contact updated via scan",
             },
-            tasks: [],
-            reminders: [],
-            timeline: [
-              {
-                id: generateTimelineId(),
-                type: "scan_created" as const,
-                at: savedContact.createdAt || new Date().toISOString(),
-                summary: "Contact created via scan",
-              },
-            ],
-            lastTouchedAt: savedContact.createdAt || new Date().toISOString(),
-            notes: "",
-            mergeMeta: null,
-          };
-        }
-
-        upsertContactV2(v2Contact);
-        setContactV2(v2Contact);
+          ],
+          lastTouchedAt: new Date().toISOString(),
+        };
       } else {
-        // Authenticated users: refetch to get fresh data from server
-        refetchContacts();
+        v2Contact = {
+          ...savedContact,
+          tasks: [],
+          reminders: [],
+          timeline: [
+            {
+              id: generateTimelineId(),
+              type: "scan_created" as const,
+              at: savedContact.createdAt || new Date().toISOString(),
+              summary: "Contact created via scan",
+            },
+          ],
+          lastTouchedAt: savedContact.createdAt,
+          notes: "",
+        };
       }
-    } catch (e) {
-      console.error("[ScanTab] Non-blocking v2 enrichment failed:", e);
-    }
 
-    onContactSaved?.();
-    return savedContact;
+      upsertContactV2(v2Contact);
+      setContactV2(v2Contact);
+
+      onContactSaved?.();
+
+      return savedContact;
+    } catch (e) {
+      console.error("[ScanTab] Failed to save contact to storage:", e);
+      return null;
+    }
   };
 
   const scanCardMutation = useMutation({
@@ -407,7 +378,7 @@ const clearImage = () => {
       }
       return (await res.json()) as ScanResult;
     },
-    onSuccess: async (data) => {
+    onSuccess: (data) => {
       if (data.error) {
         toast({
           title: "OCR Warning",
@@ -419,22 +390,21 @@ const clearImage = () => {
 
       setRawText(data.rawText);
 
-      try {
-        const saved = await saveContactToStorage(data.contact);
+      const saved = saveContactToStorage(data.contact);
+      if (saved) {
         setScannedStoredContact(saved);
         toast({
           title: "Saved",
           description: "Contact captured successfully",
         });
-      } catch (e: any) {
-        console.error("[ScanTab] Save failed:", e);
+      } else {
         toast({
           title: "Save failed",
-          description: e?.message ?? "Could not save this contact",
+          description: "Could not save this contact",
           variant: "destructive",
         });
       }
-},
+    },
     onError: (error: Error) => {
       toast({
         title: "Scan failed",
@@ -446,48 +416,32 @@ const clearImage = () => {
 
   const parseTextMutation = useMutation({
     mutationFn: async (text: string) => {
-      // /api/parse-ai returns a "contact-like" object (not { rawText, contact }).
-      // Normalize it into ScanResult so downstream code is consistent.
       try {
         const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
-        if (aiRes.ok) {
-          const aiData: any = await aiRes.json();
-
-          // If server already returns ScanResult, use it.
-          if (aiData && typeof aiData === "object" && "contact" in aiData) {
-            return aiData as ScanResult;
-          }
-
-          // Otherwise treat the payload itself as the parsed contact.
-          const contact = (aiData && typeof aiData === "object") ? aiData : {};
-          return { rawText: text, contact } as ScanResult;
-        }
-      } catch {
-        // Fall through to deterministic parser.
-      }
+        if (aiRes.ok) return (await aiRes.json()) as ScanResult;
+      } catch {}
 
       const res = await apiRequest("POST", "/api/parse", { text });
       return (await res.json()) as ScanResult;
     },
-    onSuccess: async (data) => {
+    onSuccess: (data) => {
       setRawText(data.rawText);
 
-      try {
-        const saved = await saveContactToStorage(data.contact);
+      const saved = saveContactToStorage(data.contact);
+      if (saved) {
         setScannedStoredContact(saved);
         toast({
           title: "Saved",
           description: "Contact captured successfully",
         });
-      } catch (e: any) {
-        console.error("[ScanTab] Save failed:", e);
+      } else {
         toast({
           title: "Save failed",
-          description: e?.message ?? "Could not save this contact",
+          description: "Could not save this contact",
           variant: "destructive",
         });
       }
-},
+    },
     onError: (error: Error) => {
       toast({
         title: "Extraction failed",
