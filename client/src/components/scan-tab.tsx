@@ -446,10 +446,25 @@ const clearImage = () => {
 
   const parseTextMutation = useMutation({
     mutationFn: async (text: string) => {
+      // /api/parse-ai returns a "contact-like" object (not { rawText, contact }).
+      // Normalize it into ScanResult so downstream code is consistent.
       try {
         const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
-        if (aiRes.ok) return (await aiRes.json()) as ScanResult;
-      } catch {}
+        if (aiRes.ok) {
+          const aiData: any = await aiRes.json();
+
+          // If server already returns ScanResult, use it.
+          if (aiData && typeof aiData === "object" && "contact" in aiData) {
+            return aiData as ScanResult;
+          }
+
+          // Otherwise treat the payload itself as the parsed contact.
+          const contact = (aiData && typeof aiData === "object") ? aiData : {};
+          return { rawText: text, contact } as ScanResult;
+        }
+      } catch {
+        // Fall through to deterministic parser.
+      }
 
       const res = await apiRequest("POST", "/api/parse", { text });
       return (await res.json()) as ScanResult;
