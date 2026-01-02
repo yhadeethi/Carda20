@@ -70,7 +70,7 @@ function dbContactToStoredContact(contact: DbContact): StoredContact {
 
 function storedContactToDbContact(contact: Partial<StoredContact>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-  
+
   if (contact.name !== undefined) result.fullName = contact.name || null;
   if (contact.company !== undefined) result.companyName = contact.company || null;
   if (contact.title !== undefined) result.jobTitle = contact.title || null;
@@ -84,7 +84,7 @@ function storedContactToDbContact(contact: Partial<StoredContact>): Record<strin
   if (contact.timeline !== undefined) result.timeline = contact.timeline || [];
   if (contact.notes !== undefined) result.notes = contact.notes || null;
   if (contact.lastTouchedAt !== undefined) result.lastTouchedAt = contact.lastTouchedAt || null;
-  
+
   return result;
 }
 
@@ -157,9 +157,9 @@ export function useContacts() {
   ): Promise<StoredContact | null> => {
     // Always check fresh auth status before saving by fetching user directly
     let currentlyAuthenticated = false;
-    
+
     try {
-      const authRes = await fetch('/api/auth/user', { credentials: 'include' });
+      const authRes = await fetch('/api/auth/user', { credentials: 'include', cache: 'no-store' });
       if (authRes.ok) {
         const user = await authRes.json();
         currentlyAuthenticated = !!user;
@@ -167,9 +167,9 @@ export function useContacts() {
     } catch {
       currentlyAuthenticated = false;
     }
-    
+
     console.log("[useContacts] saveOrUpdateContact called, hook isAuthenticated:", isAuthenticated, "fresh check:", currentlyAuthenticated);
-    
+
     if (!currentlyAuthenticated) {
       console.log("[useContacts] Not authenticated, using local storage");
       return saveLocalContact(contactData, eventName);
@@ -180,7 +180,7 @@ export function useContacts() {
       console.log("[useContacts] Authenticated, saving to server via direct fetch. Contact data:", contactData);
       const existing = findExistingContact(contactData.email, contactData.name, contactData.company);
       const now = new Date().toISOString();
-      
+
       if (existing) {
         console.log("[useContacts] Updating existing contact:", existing.id);
         const updateEvent: TimelineEvent = {
@@ -189,27 +189,32 @@ export function useContacts() {
           at: now,
           summary: "Contact updated via scan",
         };
-        
+
         const dbContact = storedContactToDbContact({
           ...contactData, 
           eventName: eventName ?? existing.eventName,
           timeline: [updateEvent],
           lastTouchedAt: now,
         });
-        
+
         const res = await fetch(`/api/contacts/${existing.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify(dbContact),
         });
-        
+
         if (!res.ok) {
+          if (res.status === 401) {
+            // Session expired/invalid -> force re-auth
+            window.location.href = "/api/login";
+            return null;
+          }
           const errorText = await res.text();
           console.error("[useContacts] PATCH failed:", res.status, errorText);
           throw new Error(`Failed to update contact: ${res.status} ${errorText}`);
         }
-        
+
         const updated = await res.json();
         console.log("[useContacts] Contact updated successfully:", updated);
         queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
@@ -222,27 +227,32 @@ export function useContacts() {
           at: now,
           summary: "Contact created via scan",
         };
-        
+
         const dbContact = storedContactToDbContact({
           ...contactData,
           eventName,
           timeline: [scanCreatedEvent],
           lastTouchedAt: now,
         });
-        
+
         const res = await fetch('/api/contacts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify(dbContact),
         });
-        
+
         if (!res.ok) {
+          if (res.status === 401) {
+            // Session expired/invalid -> force re-auth
+            window.location.href = "/api/login";
+            return null;
+          }
           const errorText = await res.text();
           console.error("[useContacts] POST failed:", res.status, errorText);
           throw new Error(`Failed to create contact: ${res.status} ${errorText}`);
         }
-        
+
         const created = await res.json();
         console.log("[useContacts] Contact created successfully:", created);
         queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
