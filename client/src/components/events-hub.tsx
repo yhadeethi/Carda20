@@ -512,11 +512,13 @@ export function EventsHub({ onScanAtEvent }: EventsHubProps) {
     <div className="p-4 max-w-2xl mx-auto space-y-4">
       {/* Header */}
       <div className="space-y-1">
+        <h1 className="text-2xl font-semibold" data-testid="events-hub-title">
+          Events Hub
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Discover industry events near you, Pin key ones, or add them to your calendar.
+          Pin key events, plan your month, and jump straight into scanning mode when you&apos;re on the floor.
         </p>
       </div>
-
 
       {/* Top mode pills */}
       <div className="flex gap-2 overflow-x-auto pb-1">
