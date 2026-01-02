@@ -39,7 +39,6 @@ import {
   Settings2,
   X,
   Filter,
-  Loader2,
 } from "lucide-react";
 import { FilterSheet, getFilterSummary } from "@/components/filters/FilterSheet";
 import {
@@ -113,7 +112,6 @@ function CompanyHeader({ company, contactCount, contacts }: { company: Company; 
 
 export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab = 'orgmap' }: CompanyDetailProps) {
   const [company, setCompany] = useState<Company | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [contacts, setContacts] = useState<StoredContact[]>([]);
   const [activeTab, setActiveTab] = useState(initialTab);
   const reduceMotion = useReducedMotion();
@@ -128,7 +126,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
 
   // Load company and contacts
   useEffect(() => {
-    setIsLoading(true);
     const loadedCompany = getCompanyById(companyId);
     setCompany(loadedCompany || null);
     setNotes(loadedCompany?.notes || "");
@@ -147,7 +144,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       });
       setContacts(companyContacts);
     }
-    setIsLoading(false);
   }, [companyId]);
 
   const refreshContacts = useCallback(() => {
@@ -238,20 +234,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       setNotesSaved(true);
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="p-4 max-w-2xl mx-auto">
-        <Button variant="ghost" onClick={onBack} className="mb-4">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
-        </Button>
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    );
-  }
 
   if (!company) {
     return (

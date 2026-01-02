@@ -278,7 +278,14 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button variant="outline" size="sm" onClick={handleFitView} data-testid="button-diagram-fit">
                   Fit View
                 </Button>
-               
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowDiagram(false)}
+                  data-testid="button-close-diagram"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
               </div>
             </div>
 
