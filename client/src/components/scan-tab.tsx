@@ -274,37 +274,35 @@ const clearImage = () => {
     setBatchItems([]);
   };
 
-  const saveContactToStorage = async (parsedContact: ParsedContact): Promise<StoredContact | null> => {
+  const saveContactToStorage = async (parsedContact: ParsedContact): Promise<StoredContact> => {
+    console.log("[ScanTab] saveContactToStorage called with:", parsedContact);
+
+    const contactData = {
+      name: parsedContact.fullName || "",
+      company: parsedContact.companyName || "",
+      title: parsedContact.jobTitle || "",
+      email: parsedContact.email || "",
+      phone: parsedContact.phone || "",
+      website: parsedContact.website || "",
+      linkedinUrl: parsedContact.linkedinUrl || "",
+      address: parsedContact.address || "",
+    };
+
+    const savedContact = await saveOrUpdateContact(contactData, eventModeEnabled ? effectiveEventName : null);
+
+    if (!savedContact) {
+      throw new Error("saveOrUpdateContact returned null");
+    }
+
+    // Keep v2/local timeline enrichment from blocking saves.
+    // If anything in this block fails, we still return the successfully saved contact.
     try {
-      console.log("[ScanTab] saveContactToStorage called with:", parsedContact);
-      const contactData = {
-        name: parsedContact.fullName || "",
-        company: parsedContact.companyName || "",
-        title: parsedContact.jobTitle || "",
-        email: parsedContact.email || "",
-        phone: parsedContact.phone || "",
-        website: parsedContact.website || "",
-        linkedinUrl: parsedContact.linkedinUrl || "",
-        address: parsedContact.address || "",
-      };
-
-      console.log("[ScanTab] Calling saveOrUpdateContact with:", contactData, "eventName:", eventModeEnabled ? effectiveEventName : null);
-      const savedContact = await saveOrUpdateContact(contactData, eventModeEnabled ? effectiveEventName : null);
-      console.log("[ScanTab] saveOrUpdateContact returned:", savedContact);
-      if (!savedContact) {
-        console.error("[ScanTab] saveOrUpdateContact returned null");
-        return null;
-      }
-
-      // For authenticated users, contacts are stored in the database
-      // Only use local V2 storage for non-authenticated users
       if (!isAuthenticated) {
-        const existingV2Contacts = loadContactsV2();
-        const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
-
+        // Update local v2 cache (offline)
+        const existingV2 = contactV2;
         let v2Contact: ContactV2;
 
-        if (existingV2) {
+        if (existingV2 && existingV2.id === savedContact.id) {
           v2Contact = {
             ...existingV2,
             name: savedContact.name,
@@ -315,22 +313,38 @@ const clearImage = () => {
             website: savedContact.website,
             linkedinUrl: savedContact.linkedinUrl,
             address: savedContact.address,
-            eventName: savedContact.eventName,
-            companyId: savedContact.companyId,
             timeline: [
-              ...existingV2.timeline,
               {
                 id: generateTimelineId(),
                 type: "contact_updated" as const,
                 at: new Date().toISOString(),
                 summary: "Contact updated via scan",
               },
+              ...(existingV2.timeline || []),
             ],
             lastTouchedAt: new Date().toISOString(),
           };
         } else {
           v2Contact = {
-            ...savedContact,
+            id: savedContact.id,
+            userId: "local",
+            name: savedContact.name,
+            company: savedContact.company,
+            title: savedContact.title,
+            email: savedContact.email,
+            phone: savedContact.phone,
+            website: savedContact.website,
+            linkedinUrl: savedContact.linkedinUrl,
+            address: savedContact.address,
+            eventName: savedContact.eventName || null,
+            createdAt: savedContact.createdAt || new Date().toISOString(),
+            org: savedContact.org || {
+              department: "UNKNOWN",
+              reportsToId: null,
+              role: "UNKNOWN",
+              influence: "UNKNOWN",
+              relationshipStrength: "UNKNOWN",
+            },
             tasks: [],
             reminders: [],
             timeline: [
@@ -341,25 +355,24 @@ const clearImage = () => {
                 summary: "Contact created via scan",
               },
             ],
-            lastTouchedAt: savedContact.createdAt,
+            lastTouchedAt: savedContact.createdAt || new Date().toISOString(),
             notes: "",
+            mergeMeta: null,
           };
         }
 
         upsertContactV2(v2Contact);
         setContactV2(v2Contact);
       } else {
-        // For authenticated users, refetch to get fresh data from server
+        // Authenticated users: refetch to get fresh data from server
         refetchContacts();
       }
-
-      onContactSaved?.();
-
-      return savedContact;
     } catch (e) {
-      console.error("[ScanTab] Failed to save contact to storage:", e);
-      return null;
+      console.error("[ScanTab] Non-blocking v2 enrichment failed:", e);
     }
+
+    onContactSaved?.();
+    return savedContact;
   };
 
   const scanCardMutation = useMutation({
@@ -406,21 +419,22 @@ const clearImage = () => {
 
       setRawText(data.rawText);
 
-      const saved = await saveContactToStorage(data.contact);
-      if (saved) {
+      try {
+        const saved = await saveContactToStorage(data.contact);
         setScannedStoredContact(saved);
         toast({
           title: "Saved",
           description: "Contact captured successfully",
         });
-      } else {
+      } catch (e: any) {
+        console.error("[ScanTab] Save failed:", e);
         toast({
           title: "Save failed",
-          description: "Could not save this contact",
+          description: e?.message ?? "Could not save this contact",
           variant: "destructive",
         });
       }
-    },
+},
     onError: (error: Error) => {
       toast({
         title: "Scan failed",
@@ -443,21 +457,22 @@ const clearImage = () => {
     onSuccess: async (data) => {
       setRawText(data.rawText);
 
-      const saved = await saveContactToStorage(data.contact);
-      if (saved) {
+      try {
+        const saved = await saveContactToStorage(data.contact);
         setScannedStoredContact(saved);
         toast({
           title: "Saved",
           description: "Contact captured successfully",
         });
-      } else {
+      } catch (e: any) {
+        console.error("[ScanTab] Save failed:", e);
         toast({
           title: "Save failed",
-          description: "Could not save this contact",
+          description: e?.message ?? "Could not save this contact",
           variant: "destructive",
         });
       }
-    },
+},
     onError: (error: Error) => {
       toast({
         title: "Extraction failed",
