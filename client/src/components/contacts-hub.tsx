@@ -289,9 +289,7 @@ export function ContactsHub({
 
       <Card className="glass">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xl font-semibold" data-testid="contacts-hub-title">
-            Relationships
-          </CardTitle>
+          
           <p className="text-sm text-muted-foreground">
             All your scanned contacts in one place. Search by name or company.
           </p>
@@ -313,7 +311,7 @@ export function ContactsHub({
 
               <TabsTrigger
                 value="people"
-                className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
                 data-testid="tab-people"
               >
                 <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
@@ -323,7 +321,7 @@ export function ContactsHub({
 
               <TabsTrigger
                 value="companies"
-                className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
                 data-testid="tab-companies"
               >
                 <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
