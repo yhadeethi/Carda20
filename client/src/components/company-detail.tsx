@@ -60,10 +60,6 @@ import {
   revertAutoGroup,
 } from "@/lib/contactsStorage";
 import { useToast } from "@/hooks/use-toast";
-
-/** ✅ ADDED (delete company hook) */
-import { useCompanies } from "@/hooks/useCompanies";
-
 import { OrgMap } from "@/components/org-map";
 import { CompanyAvatar } from "@/components/companies/CompanyAvatar";
 
@@ -90,7 +86,7 @@ const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SA
 // Company Header with Logo using shared CompanyAvatar
 function CompanyHeader({ company, contactCount, contacts }: { company: Company; contactCount: number; contacts: StoredContact[] }) {
   const contactEmails = contacts.map(c => c.email).filter(Boolean);
-
+  
   return (
     <div className="flex items-center gap-4 py-2">
       <CompanyAvatar 
@@ -128,15 +124,12 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const [quickEditContact, setQuickEditContact] = useState<StoredContact | null>(null);
   const { toast } = useToast();
 
-  /** ✅ ADDED */
-  const { deleteCompany, isDeletingCompany } = useCompanies();
-
   // Load company and contacts
   useEffect(() => {
     const loadedCompany = getCompanyById(companyId);
     setCompany(loadedCompany || null);
     setNotes(loadedCompany?.notes || "");
-
+    
     // Load all contacts and filter by company
     const allContacts = loadContacts();
     if (loadedCompany) {
@@ -216,10 +209,10 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   // Quick edit org field handlers
   const handleQuickEditField = useCallback((field: 'department' | 'role' | 'reportsToId', value: string | null) => {
     if (!quickEditContact) return;
-
+    
     const currentOrg = quickEditContact.org || { ...DEFAULT_ORG };
     const updatedOrg = { ...currentOrg, [field]: value };
-
+    
     updateContact(quickEditContact.id, { org: updatedOrg });
     setQuickEditContact({ ...quickEditContact, org: updatedOrg });
     refreshContacts();
@@ -242,22 +235,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     }
   };
 
-  /** ✅ ADDED (delete company handler) */
-  const handleDeleteCompany = async () => {
-    const ok = window.confirm("Delete this company?\n\nContacts will remain but be unlinked.");
-    if (!ok) return;
-    try {
-      await deleteCompany(companyId);
-      onBack();
-    } catch (e) {
-      toast({
-        title: "Delete failed",
-        description: "Could not delete the company. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
   if (!company) {
     return (
       <div className="p-4 max-w-2xl mx-auto">
@@ -274,72 +251,59 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
-      {/* ✅ CHANGED (wrap back button to add delete) */}
-      <div className="flex items-center gap-2 mb-2">
-        <Button variant="ghost" onClick={onBack} className="mb-0" data-testid="button-back-companies">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Companies
-        </Button>
-
-        <Button
-          variant="ghost"
-          className="ml-auto text-red-600 hover:text-red-700"
-          disabled={isDeletingCompany}
-          onClick={handleDeleteCompany}
-          data-testid="button-delete-company"
-        >
-          Delete
-        </Button>
-      </div>
+      <Button variant="ghost" onClick={onBack} className="mb-2" data-testid="button-back-companies">
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Companies
+      </Button>
 
       {/* Simplified Hero Header with Logo */}
       <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
-          <motion.span
-            className="pointer-events-none absolute top-1 bottom-1 left-1 rounded-full bg-background shadow-sm"
-            style={{ width: "calc((100% - 0.5rem) / 3)" }}
-            animate={{ x: `${tabIndex * 100}%` }}
-            transition={
-              reduceMotion
-                ? { duration: 0 }
-                : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
-            }
-          />
-          <TabsTrigger
-            value="contacts"
-            className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-            data-testid="tab-people"
-          >
-            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
-              <Users className="w-4 h-4 shrink-0" />
-              <span className="min-w-0 truncate">People</span>
-            </span>
-          </TabsTrigger>
+  <motion.span
+    className="pointer-events-none absolute top-1 bottom-1 left-1 rounded-full bg-background shadow-sm"
+    style={{ width: "calc((100% - 0.5rem) / 3)" }}
+    animate={{ x: `${tabIndex * 100}%` }}
+    transition={
+      reduceMotion
+        ? { duration: 0 }
+        : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
+    }
+  />
+  <TabsTrigger
+    value="contacts"
+    className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+    data-testid="tab-people"
+  >
+    <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
+      <Users className="w-4 h-4 shrink-0" />
+      <span className="min-w-0 truncate">People</span>
+    </span>
+  </TabsTrigger>
 
-          <TabsTrigger
-            value="orgmap"
-            className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-            data-testid="tab-org"
-          >
-            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
-              <Network className="w-4 h-4 shrink-0" />
-              <span className="min-w-0 truncate">Org</span>
-            </span>
-          </TabsTrigger>
+  <TabsTrigger
+    value="orgmap"
+    className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+    data-testid="tab-org"
+  >
+    <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
+      <Network className="w-4 h-4 shrink-0" />
+      <span className="min-w-0 truncate">Org</span>
+    </span>
+  </TabsTrigger>
 
-          <TabsTrigger
-            value="notes"
-            className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-            data-testid="tab-notes"
-          >
-            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
-              <StickyNote className="w-4 h-4 shrink-0" />
-              <span className="min-w-0 truncate">Notes</span>
-            </span>
-          </TabsTrigger>
-        </TabsList>
+  <TabsTrigger
+    value="notes"
+    className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+    data-testid="tab-notes"
+  >
+    <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
+      <StickyNote className="w-4 h-4 shrink-0" />
+      <span className="min-w-0 truncate">Notes</span>
+    </span>
+  </TabsTrigger>
+</TabsList>
 
         <TabsContent value="contacts" className="mt-4 space-y-3">
           {contacts.length === 0 ? (
@@ -570,10 +534,10 @@ function OrgRoleBadge({ role }: { role: OrgRole }) {
     BLOCKER: { icon: AlertTriangle, className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
     UNKNOWN: { icon: CircleDot, className: "bg-gray-100 text-gray-500" },
   };
-
+  
   const { icon: Icon, className } = config[role];
   const displayName = role.charAt(0) + role.slice(1).toLowerCase();
-
+  
   return (
     <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-5 gap-0.5 ${className}`}>
       <Icon className="w-2.5 h-2.5" />
@@ -593,7 +557,7 @@ function DepartmentBadge({ department }: { department: Department }) {
     OPS: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
     UNKNOWN: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
   };
-
+  
   return (
     <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-5 gap-0.5 ${config[department]}`}>
       <Briefcase className="w-2.5 h-2.5" />
