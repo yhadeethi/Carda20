@@ -34,11 +34,11 @@ function dbContactToStoredContact(contact: DbContact): StoredContact {
     eventName: null,
     companyId: contact.companyId ? String(contact.companyId) : null,
     org: {
-      department: 'UNKNOWN',
+      department: "UNKNOWN",
       reportsToId: null,
-      role: 'UNKNOWN',
-      influence: 'UNKNOWN',
-      relationshipStrength: 'UNKNOWN',
+      role: "UNKNOWN",
+      influence: "UNKNOWN",
+      relationshipStrength: "UNKNOWN",
     },
   };
 }
@@ -78,7 +78,13 @@ export function useContacts() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<StoredContact> }) => {
+    mutationFn: async ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: Partial<StoredContact>;
+    }) => {
       const dbContact = storedContactToDbContact(updates);
       const res = await apiRequest("PATCH", `/api/contacts/${id}`, dbContact);
       return res.json();
@@ -98,14 +104,41 @@ export function useContacts() {
     },
   });
 
+  /**
+   * NEW — manually link a contact to an existing company
+   */
+  const linkCompanyMutation = useMutation({
+    mutationFn: async ({
+      contactId,
+      companyId,
+    }: {
+      contactId: string;
+      companyId: string;
+    }) => {
+      const res = await apiRequest("PATCH", `/api/contacts/${contactId}`, {
+        companyId,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+    },
+  });
+
   return {
     contacts,
     isLoading,
     createContact: createMutation.mutateAsync,
     updateContact: updateMutation.mutateAsync,
     deleteContact: deleteMutation.mutateAsync,
+
+    // NEW
+    linkContactToCompany: linkCompanyMutation.mutateAsync,
+
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    isLinkingCompany: linkCompanyMutation.isPending,
   };
 }
