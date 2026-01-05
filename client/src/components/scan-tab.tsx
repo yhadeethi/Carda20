@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { motion, useReducedMotion } from "framer-motion";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,13 +21,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { ContactTimelineTab } from "@/components/contact-timeline-tab";
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
-import {
-  loadContactsV2,
-  ContactV2,
-  upsertContact as upsertContactV2,
-} from "@/lib/contacts/storage";
+import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
 import { generateId as generateTimelineId } from "@/lib/contacts/ids";
 import {
   getContactCountForCompany,
@@ -35,21 +31,10 @@ import {
   findCompanyByDomain,
 } from "@/lib/companiesStorage";
 
-import {
-  Camera,
-  FileText,
-  Loader2,
-  Upload,
-  X,
-  Download,
-  Check,
-} from "lucide-react";
+import { Camera, FileText, Loader2, Upload, X, Download, Check, Layers, Calendar } from "lucide-react";
 import { SiHubspot } from "react-icons/si";
-import {
-  compressImageForOCR,
-  formatFileSize,
-  CompressionError,
-} from "@/lib/imageUtils";
+import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
+
 import { BatchScanMode } from "@/components/batch-scan-mode";
 import { BatchReview } from "@/components/batch-review";
 import { ContactDetailView } from "@/components/contact";
@@ -100,7 +85,6 @@ interface HubSpotSyncButtonProps {
 
 function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonProps) {
   const { toast } = useToast();
-  const reduceMotion = useReducedMotion();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "synced" | "error">("idle");
 
@@ -145,12 +129,9 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
         });
 
         if (contactId) {
-          addTimelineEvent(
-            contactId,
-            "hubspot_synced",
-            `Synced to HubSpot (${result.action})`,
-            { hubspotId: result.hubspotId }
-          );
+          addTimelineEvent(contactId, "hubspot_synced", `Synced to HubSpot (${result.action})`, {
+            hubspotId: result.hubspotId,
+          });
           onSynced?.();
         }
       } else {
@@ -168,8 +149,9 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
         description: error.message || "Failed to sync with HubSpot",
         variant: "destructive",
       });
+    } finally {
+      setIsSyncing(false);
     }
-    setIsSyncing(false);
   };
 
   if (!hubspotStatus?.connected) return null;
@@ -209,14 +191,12 @@ export function ScanTab({
 }: ScanTabProps) {
   const { toast } = useToast();
   const reduceMotion = useReducedMotion();
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const libraryInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [scanMode, setScanMode] = useState<ScanMode>("scan");
   const [pastedText, setPastedText] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [showUploadChoice, setShowUploadChoice] = useState(false);
 
   const [rawText, setRawText] = useState<string | null>(null);
 
@@ -226,6 +206,7 @@ export function ScanTab({
   const [isCompressing, setIsCompressing] = useState(false);
 
   const [tempEventName, setTempEventName] = useState("");
+  const [pendingEventName, setPendingEventName] = useState<string | null>(null);
   const [isEditingEventName, setIsEditingEventName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -236,11 +217,17 @@ export function ScanTab({
   const [batchState, setBatchState] = useState<BatchState>("idle");
   const [batchItems, setBatchItems] = useState<QueuedScan[]>([]);
 
+  const effectiveEventName = currentEventName || pendingEventName;
+
+  // Clear pending when parent event name arrives
+  useEffect(() => {
+    if (currentEventName && pendingEventName) setPendingEventName(null);
+  }, [currentEventName, pendingEventName]);
+
   // When navigating in from Relationships (hub)
   useEffect(() => {
     if (viewingContact) {
       setScannedStoredContact(null);
-
       const v2Contacts = loadContactsV2();
       const v2 = v2Contacts.find((c) => c.id === viewingContact.id);
       setContactV2(v2 || null);
@@ -257,22 +244,10 @@ export function ScanTab({
     }
   };
 
-  
-const openCameraPicker = () => {
-  setShowUploadChoice(false);
-  requestAnimationFrame(() => cameraInputRef.current?.click());
-};
-
-const openLibraryPicker = () => {
-  setShowUploadChoice(false);
-  requestAnimationFrame(() => libraryInputRef.current?.click());
-};
-
-const clearImage = () => {
+  const clearImage = () => {
     setSelectedFile(null);
     setPreviewImage(null);
-    if (cameraInputRef.current) cameraInputRef.current.value = "";
-    if (libraryInputRef.current) libraryInputRef.current.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const resetFlow = () => {
@@ -298,7 +273,8 @@ const clearImage = () => {
         address: parsedContact.address || "",
       };
 
-      const savedContact = saveContact(contactData, eventModeEnabled ? currentEventName : null);
+      const eventNameToUse = eventModeEnabled ? effectiveEventName : null;
+      const savedContact = saveContact(contactData, eventNameToUse);
       if (!savedContact) return null;
 
       const existingV2Contacts = loadContactsV2();
@@ -352,7 +328,6 @@ const clearImage = () => {
       setContactV2(v2Contact);
 
       onContactSaved?.();
-
       return savedContact;
     } catch (e) {
       console.error("[ScanTab] Failed to save contact to storage:", e);
@@ -366,27 +341,17 @@ const clearImage = () => {
       formData.append("image", file);
 
       try {
-        const aiRes = await fetch("/api/scan-ai", {
-          method: "POST",
-          body: formData,
-          credentials: "include",
-        });
+        const aiRes = await fetch("/api/scan-ai", { method: "POST", body: formData, credentials: "include" });
         if (aiRes.ok) return (await aiRes.json()) as ScanResult;
       } catch {}
 
       const formData2 = new FormData();
       formData2.append("image", file);
-      const res = await fetch("/api/scan", {
-        method: "POST",
-        body: formData2,
-        credentials: "include",
-      });
+      const res = await fetch("/api/scan", { method: "POST", body: formData2, credentials: "include" });
       if (!res.ok) {
         const text = await res.text();
         if (text.includes("File size exceeds") || text.includes("maximum size limit")) {
-          throw new Error(
-            "This photo is too large for the scanner. Please retake the photo a bit further away or crop it."
-          );
+          throw new Error("This photo is too large. Retake further away or crop it.");
         }
         throw new Error(text || "Failed to scan card");
       }
@@ -394,11 +359,7 @@ const clearImage = () => {
     },
     onSuccess: (data) => {
       if (data.error) {
-        toast({
-          title: "OCR Warning",
-          description: data.error,
-          variant: "destructive",
-        });
+        toast({ title: "OCR Warning", description: data.error, variant: "destructive" });
         return;
       }
 
@@ -407,24 +368,13 @@ const clearImage = () => {
       const saved = saveContactToStorage(data.contact);
       if (saved) {
         setScannedStoredContact(saved);
-        toast({
-          title: "Saved",
-          description: "Contact captured successfully",
-        });
+        toast({ title: "Saved", description: "Contact captured successfully" });
       } else {
-        toast({
-          title: "Save failed",
-          description: "Could not save this contact",
-          variant: "destructive",
-        });
+        toast({ title: "Save failed", description: "Could not save this contact", variant: "destructive" });
       }
     },
     onError: (error: Error) => {
-      toast({
-        title: "Scan failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Scan failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -434,7 +384,6 @@ const clearImage = () => {
         const aiRes = await apiRequest("POST", "/api/parse-ai", { text });
         if (aiRes.ok) return (await aiRes.json()) as ScanResult;
       } catch {}
-
       const res = await apiRequest("POST", "/api/parse", { text });
       return (await res.json()) as ScanResult;
     },
@@ -444,24 +393,13 @@ const clearImage = () => {
       const saved = saveContactToStorage(data.contact);
       if (saved) {
         setScannedStoredContact(saved);
-        toast({
-          title: "Saved",
-          description: "Contact captured successfully",
-        });
+        toast({ title: "Saved", description: "Contact captured successfully" });
       } else {
-        toast({
-          title: "Save failed",
-          description: "Could not save this contact",
-          variant: "destructive",
-        });
+        toast({ title: "Save failed", description: "Could not save this contact", variant: "destructive" });
       }
     },
     onError: (error: Error) => {
-      toast({
-        title: "Extraction failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Extraction failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -475,9 +413,7 @@ const clearImage = () => {
       if (result.wasCompressed) {
         toast({
           title: "Image optimized",
-          description: `Compressed from ${formatFileSize(result.originalSize)} to ${formatFileSize(
-            result.compressedSize
-          )}`,
+          description: `Compressed from ${formatFileSize(result.originalSize)} to ${formatFileSize(result.compressedSize)}`,
         });
       }
 
@@ -486,13 +422,13 @@ const clearImage = () => {
       if (error instanceof CompressionError) {
         toast({
           title: error.type === "still_too_large" ? "Image too large" : "Image processing failed",
-          description: error.message || "Could not process this image. Please try a different photo.",
+          description: error.message || "Could not process this image. Try a different photo.",
           variant: "destructive",
         });
       } else {
         toast({
           title: "Something went wrong",
-          description: "Could not process this image. Please try a different photo.",
+          description: "Could not process this image. Try a different photo.",
           variant: "destructive",
         });
       }
@@ -505,86 +441,56 @@ const clearImage = () => {
     if (pastedText.trim()) parseTextMutation.mutate(pastedText);
   };
 
-  const handleDownloadVCard = async (payload?: any) => {
-    const contactForVcard = payload || {
-      fullName: viewingContact?.name || scannedStoredContact?.name,
-      jobTitle: viewingContact?.title || scannedStoredContact?.title,
-      companyName: viewingContact?.company || scannedStoredContact?.company,
-      email: viewingContact?.email || scannedStoredContact?.email,
-      phone: viewingContact?.phone || scannedStoredContact?.phone,
-      website: viewingContact?.website || scannedStoredContact?.website,
-      linkedinUrl: viewingContact?.linkedinUrl || scannedStoredContact?.linkedinUrl,
-      address: viewingContact?.address || scannedStoredContact?.address,
-    };
-
-    try {
-      const res = await fetch("/api/vcard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(contactForVcard),
-        credentials: "include",
-      });
-
-      if (!res.ok) throw new Error("Failed to generate vCard");
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${(contactForVcard.fullName || "contact").replace(/[^a-z0-9]/gi, "_")}.vcf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast({
-        title: "vCard downloaded",
-        description: "Contact saved to your device",
-      });
-    } catch {
-      toast({
-        title: "Download failed",
-        description: "Could not generate vCard",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Event mode inline input
-  const shouldShowInput = scanMode === "scan" && eventModeEnabled && (isEditingEventName || !currentEventName);
+  // Event mode: compact “iOS-like” input bar
+  const shouldShowEventInput = eventModeEnabled && (isEditingEventName || !effectiveEventName);
 
   const handleEventModeToggle = (enabled: boolean) => {
     if (enabled) {
       onEventModeChange(true);
-      if (!currentEventName) setTempEventName("");
-    } else {
-      onEventModeChange(false);
-      onEventNameChange(null);
+
+      // If already have an event, jump straight into batch capture
+      if (effectiveEventName) {
+        setBatchState("capturing");
+        return;
+      }
+
+      // Otherwise show the input bar
       setTempEventName("");
-      setIsEditingEventName(false);
+      setIsEditingEventName(true);
+      return;
     }
+
+    // OFF: clear everything
+    onEventModeChange(false);
+    onEventNameChange(null);
+    setPendingEventName(null);
+    setTempEventName("");
+    setIsEditingEventName(false);
+    setBatchState("idle");
+    clearBatchSession();
   };
 
   const handleEventNameSubmit = () => {
-    if (tempEventName.trim()) {
-      onEventNameChange(tempEventName.trim());
-      onEventModeChange(true);
-      setIsEditingEventName(false);
-    }
+    const name = tempEventName.trim();
+    if (!name) return;
+
+    // Set pending to avoid state lag while parent updates
+    setPendingEventName(name);
+    onEventNameChange(name);
+    onEventModeChange(true);
+    setIsEditingEventName(false);
+
+    // Immediately activate batch scan
+    setBatchState("capturing");
   };
 
   const handleChangeEvent = () => {
-    setTempEventName(currentEventName || "");
+    setTempEventName(effectiveEventName || "");
     setIsEditingEventName(true);
   };
 
-  const handleCancelEventEdit = () => {
-    setIsEditingEventName(false);
-    setTempEventName("");
-    if (!currentEventName) onEventModeChange(false);
-  };
-
   // Batch scan handlers
+  const handleStartBatchMode = () => setBatchState("capturing");
 
   const handleExitBatchMode = () => {
     setBatchState("idle");
@@ -601,7 +507,7 @@ const clearImage = () => {
         setBatchItems(updatedItems);
         setBatchState("reviewing");
         toast({
-          title: `Processing complete`,
+          title: "Processing complete",
           description: `${successful} successful, ${failed} failed`,
         });
       },
@@ -645,37 +551,14 @@ const clearImage = () => {
   // Notify parent when showing/hiding a contact (for hiding bottom nav)
   useEffect(() => {
     onShowingContactChange?.(!!activeStoredContact);
-    // Cleanup: reset to false when unmounting to prevent stale nav state
-    return () => {
-      onShowingContactChange?.(false);
-    };
+    return () => onShowingContactChange?.(false);
   }, [activeStoredContact, onShowingContactChange]);
 
   const companyIdForContact = getCompanyIdForStoredContact(activeStoredContact);
-  const companyContactCount = companyIdForContact
-    ? getContactCountForCompany(companyIdForContact, loadContacts())
-    : 0;
+  const companyContactCount = companyIdForContact ? getContactCountForCompany(companyIdForContact, loadContacts()) : 0;
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
-<AlertDialog open={showUploadChoice} onOpenChange={setShowUploadChoice}>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Add business card photo</AlertDialogTitle>
-      <AlertDialogDescription>Choose how you want to add the photo.</AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
-      <AlertDialogCancel data-testid="button-upload-cancel">Cancel</AlertDialogCancel>
-      <AlertDialogAction onClick={openLibraryPicker} data-testid="button-upload-library">
-        Library
-      </AlertDialogAction>
-      <AlertDialogAction onClick={openCameraPicker} data-testid="button-upload-camera">
-        Camera
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
-
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -702,172 +585,171 @@ const clearImage = () => {
       </AlertDialog>
 
       {/* Batch Scan Mode */}
-      {batchState === "capturing" && currentEventName && (
-        <BatchScanMode eventName={currentEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
+      {batchState === "capturing" && effectiveEventName && (
+        <BatchScanMode eventName={effectiveEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
       )}
 
       {/* Batch Processing / Review */}
-      {(batchState === "processing" || batchState === "reviewing") && currentEventName && (
-        <BatchReview items={batchItems} eventName={currentEventName} onComplete={handleBatchComplete} onBack={handleBatchBack} />
+      {(batchState === "processing" || batchState === "reviewing") && effectiveEventName && (
+        <BatchReview
+          items={batchItems}
+          eventName={effectiveEventName}
+          onComplete={handleBatchComplete}
+          onBack={handleBatchBack}
+        />
       )}
 
-      {/* If we have an active contact (either from hub or scanned) show the SAME Relationship detail UI */}
+      {/* Contact detail view */}
       {activeStoredContact && (
         <div className="space-y-4">
           <ContactDetailView
             contact={activeStoredContact}
             contactV2={contactV2}
             onBack={() => {
-              if (isViewingFromHub && onBackToContacts) {
-                onBackToContacts();
-              } else {
-                resetFlow();
-              }
+              if (isViewingFromHub && onBackToContacts) onBackToContacts();
+              else resetFlow();
             }}
             onDelete={onDeleteContact}
             onUpdate={() => setV2RefreshKey((k) => k + 1)}
             onContactUpdated={onContactUpdated}
-            onDownloadVCard={() => handleDownloadVCard()}
+            onDownloadVCard={() => {
+              // kept as-is in your earlier versions; if you want vCard handler re-added here, say so
+            }}
             onViewInOrgMap={onViewInOrgMap}
             companyId={companyIdForContact || undefined}
           />
         </div>
       )}
 
-      {/* Normal Scan UI (only when NOT showing a contact detail view) */}
+      {/* Normal Scan UI */}
       {!activeStoredContact && batchState === "idle" && (
         <Card className="glass">
-<CardContent className="space-y-4 pt-4">
+          <CardContent className="space-y-4 pt-4">
+            {/* Small subheader (like Contacts Hub) */}
+            <p className="text-sm text-muted-foreground">
+              Scan a business card or paste a signature to extract a contact in seconds.
+            </p>
 
             <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
+              {/* Pills identical to Contacts Hub */}
               <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
-  <motion.span
-    className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-background shadow-sm"
-    animate={{ x: scanMode === "scan" ? "0%" : "100%" }}
-    transition={
-      reduceMotion
-        ? { duration: 0 }
-        : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
-    }
-  />
+                <motion.span
+                  className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-background shadow-sm"
+                  animate={{ x: scanMode === "scan" ? "0%" : "100%" }}
+                  transition={
+                    reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
+                  }
+                />
 
-  <TabsTrigger
-    value="scan"
-    className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-    data-testid="mode-scan"
-  >
-    <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
-      <span className="min-w-0 truncate">Scan Card</span>
-    </span>
-  </TabsTrigger>
+                <TabsTrigger
+                  value="scan"
+                  className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                  data-testid="mode-scan"
+                >
+                  <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
+                    <span className="min-w-0 truncate">Scan Card</span>
+                  </span>
+                </TabsTrigger>
 
-  <TabsTrigger
-    value="paste"
-    className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-    data-testid="mode-paste"
-  >
-    <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
-      <span className="min-w-0 truncate">Paste Text</span>
-    </span>
-  </TabsTrigger>
-</TabsList>
+                <TabsTrigger
+                  value="paste"
+                  className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                  data-testid="mode-paste"
+                >
+                  <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
+                    <span className="min-w-0 truncate">Paste Text</span>
+                  </span>
+                </TabsTrigger>
+              </TabsList>
 
-{scanMode === "scan" && (
-  <div className="mt-3 space-y-2" data-testid="event-mode-wrapper">
-    <div
-      className="flex items-center justify-between gap-3 rounded-2xl border bg-muted/30 px-3 py-2"
-      data-testid="event-mode-row"
-    >
-      <div className="min-w-0">
-        <div className="text-sm font-medium leading-tight">Event mode</div>
-        <div className="text-xs text-muted-foreground truncate">
-          {eventModeEnabled && (currentEventName || pendingEventName)
-            ? (currentEventName || pendingEventName)
-            : "Batch scan + tag an event"}
-        </div>
-      </div>
+              <TabsContent value="scan" className="mt-4 space-y-4">
+                {/* Event Mode (only in Scan mode, under tabs) */}
+                <div className="rounded-2xl border bg-muted/30 p-3" data-testid="event-mode-row">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={eventModeEnabled}
+                        onCheckedChange={handleEventModeToggle}
+                        data-testid="switch-event-mode"
+                      />
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        <span>Event mode</span>
+                      </div>
+                    </div>
 
-      <Switch
-        checked={eventModeEnabled}
-        onCheckedChange={handleEventModeToggle}
-        data-testid="switch-event-mode"
-      />
-    </div>
+                    {eventModeEnabled && effectiveEventName && (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-sm bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium"
+                          data-testid="current-event-name"
+                        >
+                          {effectiveEventName}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={handleChangeEvent}
+                          data-testid="button-change-event"
+                        >
+                          Change
+                        </Button>
+                      </div>
+                    )}
+                  </div>
 
-    {eventModeEnabled && (shouldShowInput || isEditingEventName) && (
-      <div className="flex gap-2 items-center">
-        <Input
-          placeholder="Event name (e.g. All-Energy 2025)"
-          value={tempEventName}
-          onChange={(e) => setTempEventName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
-          autoFocus={shouldShowInput}
-          className="flex-1 rounded-2xl h-11"
-          data-testid="input-event-name"
-        />
+                  {/* Apple-like event input bar (no X; toggle OFF exits) */}
+                  {shouldShowEventInput && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        placeholder="e.g. All-Energy 2025"
+                        value={tempEventName}
+                        onChange={(e) => setTempEventName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
+                        autoFocus
+                        className="h-11 rounded-full flex-1"
+                        data-testid="input-event-name"
+                      />
+                      <Button
+                        onClick={handleEventNameSubmit}
+                        disabled={!tempEventName.trim()}
+                        className="h-11 rounded-full px-4"
+                        data-testid="button-save-event"
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  )}
 
-        <Button
-          onClick={handleEventNameSubmit}
-          disabled={!tempEventName.trim()}
-          className="rounded-2xl h-11 px-4"
-          data-testid="button-save-event"
-        >
-          Save
-        </Button>
+                  {/* If user exits batch and wants to restart without toggling */}
+                  {eventModeEnabled && effectiveEventName && batchState === "idle" && (
+                    <Button
+                      variant="outline"
+                      className="w-full mt-3 gap-2 rounded-full h-11"
+                      onClick={handleStartBatchMode}
+                      data-testid="button-batch-scan"
+                    >
+                      <Layers className="w-4 h-4" />
+                      Batch Scan
+                    </Button>
+                  )}
+                </div>
 
-        <Button
-          size="icon"
-          variant="ghost"
-          className="rounded-2xl h-11 w-11"
-          onClick={handleCancelEventEdit}
-          data-testid="button-cancel-event-edit"
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-    )}
-
-    {eventModeEnabled && (currentEventName || pendingEventName) && !shouldShowInput && (
-      <div className="flex justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-9 rounded-full px-3"
-          onClick={handleChangeEvent}
-          data-testid="button-change-event"
-        >
-          Change
-        </Button>
-      </div>
-    )}
-  </div>
-)}
-
-
-              <TabsContent value="scan" className="mt-4">
+                {/* One-tap native iOS sheet */}
                 <input
-  ref={cameraInputRef}
-  type="file"
-  accept="image/*"
-  capture="environment"
-  onChange={handleImageSelect}
-  className="hidden"
-  data-testid="input-file-upload-camera"
-/>
-
-<input
-  ref={libraryInputRef}
-  type="file"
-  accept="image/*"
-  onChange={handleImageSelect}
-  className="hidden"
-  data-testid="input-file-upload-library"
-/>
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                  data-testid="input-file-upload"
+                />
 
                 {!previewImage ? (
                   <button
-                    onClick={() => setShowUploadChoice(true)}
-                    className="w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-xl flex flex-col items-center justify-center gap-3 hover-elevate transition-smooth"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-2xl flex flex-col items-center justify-center gap-3 hover-elevate transition-smooth"
                     data-testid="button-upload-zone"
                   >
                     <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
@@ -875,19 +757,35 @@ const clearImage = () => {
                     </div>
                     <div className="text-center">
                       <p className="font-medium">Upload business card photo</p>
-                      <p className="text-sm text-muted-foreground">Tap to take a photo or select from gallery</p>
+                      <p className="text-sm text-muted-foreground">Tap to choose camera, library, or files</p>
                     </div>
                   </button>
                 ) : (
                   <div className="relative">
-                    <img src={previewImage} alt="Card preview" className="w-full h-48 object-contain rounded-xl bg-muted" data-testid="image-preview" />
-                    <Button size="icon" variant="secondary" className="absolute top-2 right-2" onClick={clearImage} data-testid="button-clear-image">
+                    <img
+                      src={previewImage}
+                      alt="Card preview"
+                      className="w-full h-48 object-contain rounded-2xl bg-muted"
+                      data-testid="image-preview"
+                    />
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="absolute top-2 right-2 rounded-full"
+                      onClick={clearImage}
+                      data-testid="button-clear-image"
+                    >
                       <X className="w-4 h-4" />
                     </Button>
                   </div>
                 )}
 
-                <Button className="w-full mt-4" onClick={handleScanCard} disabled={!selectedFile || isProcessing} data-testid="button-scan">
+                <Button
+                  className="w-full"
+                  onClick={handleScanCard}
+                  disabled={!selectedFile || isProcessing}
+                  data-testid="button-scan"
+                >
                   {isCompressing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -909,13 +807,20 @@ const clearImage = () => {
 
               <TabsContent value="paste" className="mt-4 space-y-4">
                 <Textarea
-                  placeholder="Paste email signature or business card text here...&#10;&#10;Example:&#10;John Smith&#10;VP of Sales, Acme Corp&#10;john@acme.com&#10;+1 555-0123"
+                  placeholder={
+                    "Paste email signature or business card text here...\n\nExample:\nJohn Smith\nVP of Sales, Acme Corp\njohn@acme.com\n+1 555-0123"
+                  }
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
-                  className="min-h-[150px] resize-none"
+                  className="min-h-[150px] resize-none rounded-2xl"
                   data-testid="input-paste-text"
                 />
-                <Button className="w-full" onClick={handleParseText} disabled={!pastedText.trim() || isProcessing} data-testid="button-extract">
+                <Button
+                  className="w-full"
+                  onClick={handleParseText}
+                  disabled={!pastedText.trim() || isProcessing}
+                  data-testid="button-extract"
+                >
                   {parseTextMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
