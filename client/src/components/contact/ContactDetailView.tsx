@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useContacts } from "@/hooks/useContacts";
+import { useCompanies } from "@/hooks/useCompanies";
 import { apiRequest } from "@/lib/queryClient";
 
 import { Button } from "@/components/ui/button";
@@ -165,6 +168,9 @@ export function ContactDetailView({
   onDownloadVCard,
 }: ContactDetailViewProps) {
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
+  const contactsApi = useContacts();
+  const companiesApi = useCompanies();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
@@ -211,6 +217,8 @@ export function ContactDetailView({
 
   // Intel drawer state
   const [showIntel, setShowIntel] = useState(false);
+  const [showCompanyPicker, setShowCompanyPicker] = useState(false);
+  const [companySearch, setCompanySearch] = useState("");
   const intelV2 = useIntelV2();
 
   const { data: hubspotStatus } = useQuery<{ connected: boolean }>({
@@ -324,6 +332,56 @@ export function ContactDetailView({
       window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
     }
   };
+
+  const filteredCompanyOptions = useMemo(() => {
+    const q = companySearch.trim().toLowerCase();
+    const list = companiesApi.companies || [];
+    if (!q) return list;
+    return list.filter((c) => (c.name || "").toLowerCase().includes(q) || (c.domain || "").toLowerCase().includes(q));
+  }, [companySearch, companiesApi.companies]);
+
+  const handleLinkToCompany = async (companyId: string) => {
+    const selected = companiesApi.companies.find((c) => c.id === companyId);
+    if (!selected) return;
+
+    try {
+      if (isAuthenticated) {
+        await contactsApi.linkContactToCompany({
+          contactId: contact.id,
+          companyId: selected.id,
+          companyName: selected.name,
+          companyDomain: selected.domain || null,
+        });
+      } else {
+        // Local: only set the companyId (keeps contact.company text as-is)
+        updateContact(contact.id, { companyId: selected.id });
+      }
+      toast({ title: "Linked", description: `Linked to ${selected.name}` });
+      setShowCompanyPicker(false);
+      setCompanySearch("");
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Link failed", description: "Couldn't link to that company.", variant: "destructive" });
+    }
+  };
+
+  const handleUnlinkCompany = async () => {
+    try {
+      if (isAuthenticated) {
+        await contactsApi.linkContactToCompany({
+          contactId: contact.id,
+          companyId: null,
+        });
+      } else {
+        updateContact(contact.id, { companyId: null });
+      }
+      toast({ title: "Unlinked", description: "Company link removed." });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Unlink failed", description: "Couldn't unlink.", variant: "destructive" });
+    }
+  };
+
 
   const handleAddNote = async (text: string) => {
     setIsAddingNote(true);

@@ -3,6 +3,10 @@
  */
 
 import { useState, useMemo, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import { useContacts } from "@/hooks/useContacts";
+import { useCompanies } from "@/hooks/useCompanies";
 import { motion, useReducedMotion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,11 +28,12 @@ import {
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
+import { StoredContact, loadContacts, deleteContact, getUniqueEventNames, batchUpdateContacts } from "@/lib/contactsStorage";
 import {
   Company,
   getCompanies,
   upsertCompany,
+  deleteCompany as deleteLocalCompany,
   createCompany,
   autoGenerateCompaniesFromContacts,
   getContactCountForCompany,
@@ -64,9 +69,15 @@ export function ContactsHub({
   const [peopleSubView, setPeopleSubView] = useState<PeopleSubView>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [eventFilter, setEventFilter] = useState<string>("all");
+  const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
+  const contactsApi = useContacts();
+  const companiesApi = useCompanies();
+
   const [contacts, setContacts] = useState<StoredContact[]>(() => loadContacts());
   const [companies, setCompanies] = useState<Company[]>(() => getCompanies());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteCompanyConfirmId, setDeleteCompanyConfirmId] = useState<string | null>(null);
 
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -77,17 +88,27 @@ export function ContactsHub({
   const [newCompanyNotes, setNewCompanyNotes] = useState("");
 
   useEffect(() => {
+    if (isAuthenticated) {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      return;
+    }
+
     const loadedContacts = loadContacts();
     setContacts(loadedContacts);
 
     const updatedCompanies = autoGenerateCompaniesFromContacts(loadedContacts);
     setCompanies(updatedCompanies);
-  }, [refreshKey]);
+  }, [refreshKey, isAuthenticated, queryClient]);
 
   const eventNames = useMemo(() => getUniqueEventNames(), [contacts]);
 
+  const effectiveContacts = isAuthenticated ? contactsApi.contacts : contacts;
+  const effectiveCompanies = isAuthenticated ? companiesApi.companies : companies;
+
+
   const filteredContacts = useMemo(() => {
-    let result = [...contacts];
+    let result = [...effectiveContacts];
 
     if (eventFilter !== "all") {
       result = result.filter((c) => c.eventName === eventFilter);
@@ -100,10 +121,10 @@ export function ContactsHub({
 
     result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return result;
-  }, [contacts, searchQuery, eventFilter]);
+  }, [effectiveContacts, searchQuery, eventFilter]);
 
   const filteredCompanies = useMemo(() => {
-    let result = [...companies];
+    let result = [...effectiveCompanies];
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -111,25 +132,50 @@ export function ContactsHub({
     }
 
     result.sort((a, b) => {
-      const countA = getContactCountForCompany(a.id, contacts);
-      const countB = getContactCountForCompany(b.id, contacts);
+      const countA = getContactCountForCompany(a.id, effectiveContacts);
+      const countB = getContactCountForCompany(b.id, effectiveContacts);
       if (countB !== countA) return countB - countA;
       return a.name.localeCompare(b.name);
     });
 
     return result;
-  }, [companies, searchQuery, contacts]);
+  }, [effectiveCompanies, searchQuery, effectiveContacts]);
 
-  const confirmDelete = () => {
-    if (deleteConfirmId) {
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
+
+    if (isAuthenticated) {
+      await contactsApi.deleteContact(deleteConfirmId);
+    } else {
       deleteContact(deleteConfirmId);
       setContacts(loadContacts());
-      setDeleteConfirmId(null);
-      onContactDeleted?.();
     }
+
+    setDeleteConfirmId(null);
+    onContactDeleted?.();
+  };
+
+  const confirmDeleteCompany = async () => {
+    if (!deleteCompanyConfirmId) return;
+
+    if (isAuthenticated) {
+      await companiesApi.deleteCompany(deleteCompanyConfirmId);
+    } else {
+      // Local: delete company and unlink contacts
+      deleteLocalCompany(deleteCompanyConfirmId);
+      const updated = loadContacts().map((c) =>
+        c.companyId === deleteCompanyConfirmId ? { ...c, companyId: null } : c
+      );
+      batchUpdateContacts(updated);
+      setContacts(updated);
+      setCompanies(getCompanies());
+    }
+
+    setDeleteCompanyConfirmId(null);
   };
 
   const handleAddCompany = () => {
+    if (isAuthenticated) return;
     if (!newCompanyName.trim()) return;
 
     const company = createCompany({
@@ -175,6 +221,21 @@ export function ContactsHub({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
+      <AlertDialog open={!!deleteCompanyConfirmId} onOpenChange={(open) => !open && setDeleteCompanyConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete company?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will unlink all your contacts from this company. Contacts will not be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteCompany}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       </AlertDialog>
 
       <Drawer open={showAddCompany} onOpenChange={setShowAddCompany}>
@@ -473,13 +534,13 @@ export function ContactsHub({
               <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="companies-list">
                 <CompanyGrid
                   companies={filteredCompanies}
-                  getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
+                  getContactCount={(companyId) => getContactCountForCompany(companyId, effectiveContacts)}
                   getContactEmails={(companyId) => {
                     const companyContacts = contacts.filter((c) => c.companyId === companyId);
                     return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
                   }}
                   onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
-                  onAddCompany={() => setShowAddCompany(true)}
+                  onAddCompany={isAuthenticated ? undefined : () => setShowAddCompany(true)}
                   searchQuery={searchQuery}
                 />
               </div>
