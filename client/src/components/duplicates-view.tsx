@@ -42,6 +42,8 @@ import {
 } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useContacts } from "@/hooks/useContacts";
 import {
   loadContactsV2,
   saveContactsV2,
@@ -80,6 +82,13 @@ const MERGE_FIELDS: MergeField[] = [
 ];
 
 export function DuplicatesView({ onRefresh }: DuplicatesViewProps) {
+  const { isAuthenticated } = useAuth();
+  const { appendTimelineEvent } = useContacts();
+  const logTimeline = (contactId: string, type: any, summary: string, meta?: Record<string, unknown>) => {
+    const ev = logTimeline(contactId, type, summary, meta);
+    if (ev && isAuthenticated) void appendTimelineEvent({ contactId, event: ev });
+  };
+
   const { toast } = useToast();
   const [selectedGroup, setSelectedGroup] = useState<DuplicateGroup | null>(null);
   const [selectedContacts, setSelectedContacts] = useState<ContactV2[]>([]);
@@ -130,7 +139,7 @@ export function DuplicatesView({ onRefresh }: DuplicatesViewProps) {
     const fullMerged = mergeContacts(merged, right);
 
     // Add merge timeline event
-    addTimelineEvent(
+    logTimeline(
       fullMerged.id,
       'contact_merged',
       `Merged with ${right.name}`,

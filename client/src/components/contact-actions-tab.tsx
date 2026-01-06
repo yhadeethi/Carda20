@@ -42,6 +42,8 @@ import {
 } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useContacts } from "@/hooks/useContacts";
 import { ContactV2, addTask, completeTask, deleteTask, addReminder, completeReminder, addTimelineEvent } from "@/lib/contacts/storage";
 import { ContactTask, ContactReminder, FollowUpMode, FollowUpTone, FollowUpLength } from "@/lib/contacts/types";
 import { generateFollowUp, FOLLOWUP_MODE_LABELS, FOLLOWUP_TONE_LABELS, FOLLOWUP_LENGTH_LABELS } from "@/lib/followup/followup";
@@ -54,6 +56,13 @@ interface ContactActionsTabProps {
 }
 
 export function ContactActionsTab({ contact, onUpdate }: ContactActionsTabProps) {
+  const { isAuthenticated } = useAuth();
+  const { appendTimelineEvent } = useContacts();
+  const logTimeline = (contactId: string, type: any, summary: string, meta?: Record<string, unknown>) => {
+    const ev = logTimeline(contactId, type, summary, meta);
+    if (ev && isAuthenticated) void appendTimelineEvent({ contactId, event: ev });
+  };
+
   const { toast } = useToast();
   
   // Follow-up state
@@ -112,7 +121,7 @@ export function ContactActionsTab({ contact, onUpdate }: ContactActionsTabProps)
       setGeneratedFollowUp(result);
       
       // Add timeline event
-      addTimelineEvent(
+      logTimeline(
         contact.id,
         'followup_generated',
         `Generated ${FOLLOWUP_MODE_LABELS[followUpMode]} (${followUpTone} tone)`,
@@ -203,7 +212,7 @@ export function ContactActionsTab({ contact, onUpdate }: ContactActionsTabProps)
     const filename = `meeting-${contact.name.replace(/\s+/g, '-').toLowerCase()}.ics`;
     downloadIcsFile(icsContent, filename);
     
-    addTimelineEvent(
+    logTimeline(
       contact.id,
       'meeting_scheduled',
       `Meeting scheduled for ${format(startTime, 'PPp')}`,

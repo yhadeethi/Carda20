@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import type { StoredContact } from "@/lib/contactsStorage";
+import type { TimelineEvent } from "@/lib/contacts/types";
 
 export interface DbContact {
   id: number;
@@ -88,7 +89,20 @@ export function useContacts() {
     },
   });
 
-  const deleteMutation = useMutation({
+  
+  const appendTimelineMutation = useMutation({
+    mutationFn: async (params: { contactId: string; event: TimelineEvent }) => {
+      if (!isAuthenticated) return null;
+      const contactId = parseInt(params.contactId);
+      if (isNaN(contactId)) throw new Error("Invalid contact ID");
+      return apiRequest("PATCH", `/api/contacts/${contactId}`, { appendTimelineEvent: params.event });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+    },
+  });
+
+const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("DELETE", `/api/contacts/${id}`);
       return res.json();
@@ -98,33 +112,15 @@ export function useContacts() {
     },
   });
 
-
-  const linkCompanyMutation = useMutation({
-    mutationFn: async ({ contactId, companyId, companyName, companyDomain }: { contactId: string; companyId: string | null; companyName?: string | null; companyDomain?: string | null; }) => {
-      const payload: any = {
-        companyId: companyId ? Number(companyId) : null,
-      };
-      if (typeof companyName !== "undefined") payload.companyName = companyName;
-      if (typeof companyDomain !== "undefined") payload.companyDomain = companyDomain;
-      const res = await apiRequest("PATCH", `/api/contacts/${contactId}`, payload);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
-    },
-  });
-
   return {
     contacts,
     isLoading,
     createContact: createMutation.mutateAsync,
     updateContact: updateMutation.mutateAsync,
     deleteContact: deleteMutation.mutateAsync,
-    linkContactToCompany: linkCompanyMutation.mutateAsync,
+    appendTimelineEvent: appendTimelineMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
-    isLinkingCompany: linkCompanyMutation.isPending,
   };
 }

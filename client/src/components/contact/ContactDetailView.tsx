@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useContacts } from "@/hooks/useContacts";
-import { useCompanies } from "@/hooks/useCompanies";
 import { apiRequest } from "@/lib/queryClient";
 
 import { Button } from "@/components/ui/button";
@@ -159,6 +158,16 @@ function useKeyboardInset(active: boolean) {
 }
 
 export function ContactDetailView({
+  const { isAuthenticated } = useAuth();
+  const { appendTimelineEvent } = useContacts();
+
+  const logTimeline = (type: any, summary: string, meta?: Record<string, unknown>) => {
+    const ev = logTimeline( type, summary, meta);
+    if (ev && isAuthenticated) {
+      // Fire-and-forget; UI should never block on this
+      void appendTimelineEvent({ contactId: contact.id, event: ev });
+    }
+  };
   contact,
   contactV2,
   onBack,
@@ -168,9 +177,6 @@ export function ContactDetailView({
   onDownloadVCard,
 }: ContactDetailViewProps) {
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
-  const contactsApi = useContacts();
-  const companiesApi = useCompanies();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
@@ -217,8 +223,6 @@ export function ContactDetailView({
 
   // Intel drawer state
   const [showIntel, setShowIntel] = useState(false);
-  const [showCompanyPicker, setShowCompanyPicker] = useState(false);
-  const [companySearch, setCompanySearch] = useState("");
   const intelV2 = useIntelV2();
 
   const { data: hubspotStatus } = useQuery<{ connected: boolean }>({
@@ -299,7 +303,7 @@ export function ContactDetailView({
       onContactUpdated?.(contact.id);
 
       try {
-        addTimelineEvent(contact.id, "contact_updated", "Contact details updated");
+        logTimeline("contact_updated", "Contact details updated");
       } catch (timelineErr) {
         console.warn("[ContactDetailView] Timeline event failed:", timelineErr);
       }
@@ -333,60 +337,10 @@ export function ContactDetailView({
     }
   };
 
-  const filteredCompanyOptions = useMemo(() => {
-    const q = companySearch.trim().toLowerCase();
-    const list = companiesApi.companies || [];
-    if (!q) return list;
-    return list.filter((c) => (c.name || "").toLowerCase().includes(q) || (c.domain || "").toLowerCase().includes(q));
-  }, [companySearch, companiesApi.companies]);
-
-  const handleLinkToCompany = async (companyId: string) => {
-    const selected = companiesApi.companies.find((c) => c.id === companyId);
-    if (!selected) return;
-
-    try {
-      if (isAuthenticated) {
-        await contactsApi.linkContactToCompany({
-          contactId: contact.id,
-          companyId: selected.id,
-          companyName: selected.name,
-          companyDomain: selected.domain || null,
-        });
-      } else {
-        // Local: only set the companyId (keeps contact.company text as-is)
-        updateContact(contact.id, { companyId: selected.id });
-      }
-      toast({ title: "Linked", description: `Linked to ${selected.name}` });
-      setShowCompanyPicker(false);
-      setCompanySearch("");
-    } catch (e) {
-      console.error(e);
-      toast({ title: "Link failed", description: "Couldn't link to that company.", variant: "destructive" });
-    }
-  };
-
-  const handleUnlinkCompany = async () => {
-    try {
-      if (isAuthenticated) {
-        await contactsApi.linkContactToCompany({
-          contactId: contact.id,
-          companyId: null,
-        });
-      } else {
-        updateContact(contact.id, { companyId: null });
-      }
-      toast({ title: "Unlinked", description: "Company link removed." });
-    } catch (e) {
-      console.error(e);
-      toast({ title: "Unlink failed", description: "Couldn't unlink.", variant: "destructive" });
-    }
-  };
-
-
   const handleAddNote = async (text: string) => {
     setIsAddingNote(true);
     try {
-      addTimelineEvent(contact.id, "note_added", text);
+      logTimeline("note_added", text);
       onUpdate();
       toast({ title: "Note added" });
     } catch {
@@ -425,9 +379,8 @@ export function ContactDetailView({
       const result = await response.json();
 
       if (result.success) {
-        addTimelineEvent(
-          contact.id,
-          "hubspot_synced",
+        logTimeline(
+                    "hubspot_synced",
           `Synced to HubSpot (${result.action})`,
           { hubspotId: result.hubspotId }
         );
@@ -522,8 +475,7 @@ export function ContactDetailView({
 
       setFollowUpResult(res);
 
-      addTimelineEvent(
-        contact.id,
+      logTimeline(
         "followup_generated",
         `Follow-up generated (${FOLLOWUP_MODE_LABELS[followUpMode]})`,
         { bodyPreview: res.body.slice(0, 160) }
@@ -570,7 +522,7 @@ export function ContactDetailView({
 
     downloadIcsFile(ics, `carda-meeting-${safeName}.ics`);
 
-    addTimelineEvent(contact.id, "meeting_scheduled", "Meeting invite created", {
+    logTimeline( "meeting_scheduled", "Meeting invite created", {
       startIso: meetingStart.toISOString(),
       durationMinutes: meetingDuration,
     });

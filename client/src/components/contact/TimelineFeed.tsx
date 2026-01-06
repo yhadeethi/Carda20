@@ -16,30 +16,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
+import type { TimelineItemType as CanonTimelineItemType } from "@/lib/contacts/types";
 
-export type TimelineEventType =
-  | "note"
-  | "followup"
-  | "reminder"
-  | "crm"
-  | "created"
-  | "scan_created"
-  | "note_added"
-  | "note_updated"
-  | "followup_generated"
-  | "reminder_set"
-  | "reminder_done"
-  | "task_added"
-  | "task_done"
-  | "meeting_scheduled"
-  | "event_attended"
-  | "contact_merged"
-  | "contact_updated"
-  | "hubspot_synced";
+
+type TimelineItemType = CanonTimelineItemType | "note" | "followup" | "reminder" | "crm" | "created";
 
 export interface TimelineItem {
   id: string;
-  type: TimelineEventType;
+  type: TimelineItemType;
   title: string;
   detail?: string;
   at: string | Date;
