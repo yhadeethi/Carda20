@@ -8,13 +8,7 @@
  * - ensured actions sit at bottom consistently
  */
 
-import { Users, Globe, Network, StickyNote, MoreVertical, Trash2 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Users, Globe, Network, StickyNote } from "lucide-react";
 import { Company } from "@/lib/companiesStorage";
 import { CompanyAvatar } from "./CompanyAvatar";
 
@@ -25,7 +19,6 @@ interface CompanyTileProps {
   onClick: () => void;
   onOpenOrg?: () => void;
   onAddNote?: () => void;
-  onDelete?: () => void;
 }
 
 export function CompanyTile({
@@ -35,7 +28,6 @@ export function CompanyTile({
   onClick,
   onOpenOrg,
   onAddNote,
-  onDelete,
 }: CompanyTileProps) {
   const hasActions = !!onOpenOrg || !!onAddNote;
 
@@ -47,36 +39,7 @@ export function CompanyTile({
       data-testid={`company-tile-${company.id}`}
     >
       <div className="flex flex-col h-full min-w-0">
-              {onDelete && (
-        <div className="absolute top-3 right-3 z-10">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-background/80 border hover:bg-muted active:scale-[0.98]"
-                onClick={(e) => e.stopPropagation()}
-                aria-label="Company actions"
-                data-testid={`company-tile-menu-${company.id}`}
-              >
-                <MoreVertical className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={(e) => {
-                  e.preventDefault();
-                  onDelete();
-                }}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete company
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
-
-{/* Logo */}
+        {/* Logo */}
         <CompanyAvatar
           name={company.name}
           domain={company.domain}

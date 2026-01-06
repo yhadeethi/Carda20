@@ -4,23 +4,11 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { useCompanies } from "@/hooks/useCompanies";
 import { motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
+import { Textarea } from "@/components/ui/textarea";
 import {
   Drawer,
   DrawerContent,
@@ -59,7 +47,6 @@ import {
   upsertCompany,
   normalizeCompanyName,
   extractDomainFromEmail,
-  deleteCompany as deleteLocalCompany,
 } from "@/lib/companiesStorage";
 import {
   StoredContact,
@@ -136,9 +123,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const [undoState, setUndoState] = useState<Map<string, Department> | null>(null);
   const [quickEditContact, setQuickEditContact] = useState<StoredContact | null>(null);
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
-  const companiesApi = useCompanies();
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // Load company and contacts
   useEffect(() => {
@@ -251,29 +235,6 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     }
   };
 
-  const handleDeleteCompany = async () => {
-    if (!company) return;
-
-    try {
-      if (isAuthenticated) {
-        await companiesApi.deleteCompany(company.id);
-      } else {
-        deleteLocalCompany(company.id);
-        const updated = loadContacts().map((c) =>
-          c.companyId === company.id ? { ...c, companyId: null } : c
-        );
-        batchUpdateContacts(updated);
-      }
-      toast({ title: "Company deleted", description: "Contacts were unlinked (not deleted)." });
-      onBack();
-    } catch (e) {
-      console.error(e);
-      toast({ title: "Delete failed", description: "Couldn't delete that company.", variant: "destructive" });
-    } finally {
-      setConfirmDeleteOpen(false);
-    }
-  };
-
   if (!company) {
     return (
       <div className="p-4 max-w-2xl mx-auto">
@@ -290,36 +251,10 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
-      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete company?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will unlink all contacts from this company. Contacts will not be deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteCompany}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-            <div className="flex items-center justify-between gap-3 mb-2">
-        <Button variant="ghost" onClick={onBack} data-testid="button-back-companies">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Companies
-        </Button>
-
-        <Button
-          variant="destructive"
-          onClick={() => setConfirmDeleteOpen(true)}
-          className="rounded-2xl"
-          data-testid="button-delete-company"
-        >
-          Delete
-        </Button>
-      </div>
+      <Button variant="ghost" onClick={onBack} className="mb-2" data-testid="button-back-companies">
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Companies
+      </Button>
 
       {/* Simplified Hero Header with Logo */}
       <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />

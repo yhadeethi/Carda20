@@ -98,33 +98,14 @@ export function useContacts() {
     },
   });
 
-
-  const linkCompanyMutation = useMutation({
-    mutationFn: async ({ contactId, companyId, companyName, companyDomain }: { contactId: string; companyId: string | null; companyName?: string | null; companyDomain?: string | null; }) => {
-      const payload: any = {
-        companyId: companyId ? Number(companyId) : null,
-      };
-      if (typeof companyName !== "undefined") payload.companyName = companyName;
-      if (typeof companyDomain !== "undefined") payload.companyDomain = companyDomain;
-      const res = await apiRequest("PATCH", `/api/contacts/${contactId}`, payload);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
-    },
-  });
-
   return {
     contacts,
     isLoading,
     createContact: createMutation.mutateAsync,
     updateContact: updateMutation.mutateAsync,
     deleteContact: deleteMutation.mutateAsync,
-    linkContactToCompany: linkCompanyMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
-    isLinkingCompany: linkCompanyMutation.isPending,
   };
 }
