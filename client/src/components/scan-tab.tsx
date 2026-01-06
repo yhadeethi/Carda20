@@ -2,8 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { useContacts } from "@/hooks/useContacts";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -262,7 +260,8 @@ export function ScanTab({
     setBatchItems([]);
   };
 
-  const saveContactToStorage = async (parsedContact: ParsedContact): Promise<StoredContact | null> => {
+  const saveContactToStorage = (parsedContact: ParsedContact): StoredContact | null => {
+    try {
       const contactData = {
         name: parsedContact.fullName || "",
         company: parsedContact.companyName || "",
@@ -275,88 +274,6 @@ export function ScanTab({
       };
 
       const eventNameToUse = eventModeEnabled ? effectiveEventName : null;
-
-      // Logged-in: source of truth is the API/DB. We also mirror into local v2 so timeline/tasks UI keeps working.
-      if (isAuthenticated) {
-        const dbContact = await createContact({
-          fullName: contactData.name || null,
-          companyName: contactData.company || null,
-          jobTitle: contactData.title || null,
-          email: contactData.email || null,
-          phone: contactData.phone || null,
-          website: contactData.website || null,
-          linkedinUrl: contactData.linkedinUrl || null,
-          rawText: null,
-          companyDomain: null,
-          companyId: null,
-          notes: null,
-          lastTouchedAt: new Date().toISOString(),
-          // Ensure arrays exist in DB (schema defaults also cover this)
-          tasks: [],
-          reminders: [],
-          timeline: [],
-        } as any);
-
-        const id = String(dbContact.id);
-
-        const savedContact: StoredContact = {
-          id,
-          createdAt: dbContact.createdAt ? new Date(dbContact.createdAt as any).toISOString() : new Date().toISOString(),
-          name: contactData.name,
-          company: contactData.company,
-          title: contactData.title,
-          email: contactData.email,
-          phone: contactData.phone,
-          website: contactData.website,
-          linkedinUrl: contactData.linkedinUrl,
-          address: contactData.address,
-          eventName: eventNameToUse,
-          companyId: null,
-        };
-
-        // Mirror into local v2 for UI compatibility
-        const existingV2Contacts = loadContactsV2();
-        const existingV2 = existingV2Contacts.find((c) => c.id === id);
-
-        const v2Contact: ContactV2 = existingV2
-          ? {
-              ...existingV2,
-              name: savedContact.name,
-              company: savedContact.company,
-              title: savedContact.title,
-              email: savedContact.email,
-              phone: savedContact.phone,
-              website: savedContact.website,
-              linkedinUrl: savedContact.linkedinUrl,
-              address: savedContact.address,
-              eventName: savedContact.eventName,
-            }
-          : {
-              ...savedContact,
-              tasks: [],
-              reminders: [],
-              timeline: [],
-              lastTouchedAt: new Date().toISOString(),
-              notes: "",
-            };
-
-        upsertContactV2(v2Contact);
-
-        // Log scan event both locally + to DB (so it syncs)
-        const ev = addTimelineEvent(id, "scan_created", "Business card scanned");
-        if (ev) {
-          try {
-            await appendTimelineEvent({ contactId: id, event: ev });
-          } catch (e) {
-            // Don't block the UX if the timeline API write fails
-            console.warn("Failed to persist scan timeline event:", e);
-          }
-        }
-
-        return savedContact;
-      }
-
-      // Logged-out: existing behavior (local v1 + local v2)
       const savedContact = saveContact(contactData, eventNameToUse);
       if (!savedContact) return null;
 
@@ -377,24 +294,46 @@ export function ScanTab({
           linkedinUrl: savedContact.linkedinUrl,
           address: savedContact.address,
           eventName: savedContact.eventName,
+          companyId: savedContact.companyId,
+          timeline: [
+            ...existingV2.timeline,
+            {
+              id: generateTimelineId(),
+              type: "contact_updated" as const,
+              at: new Date().toISOString(),
+              summary: "Contact updated via scan",
+            },
+          ],
+          lastTouchedAt: new Date().toISOString(),
         };
       } else {
         v2Contact = {
           ...savedContact,
           tasks: [],
           reminders: [],
-          timeline: [],
-          lastTouchedAt: new Date().toISOString(),
+          timeline: [
+            {
+              id: generateTimelineId(),
+              type: "scan_created" as const,
+              at: savedContact.createdAt || new Date().toISOString(),
+              summary: "Contact created via scan",
+            },
+          ],
+          lastTouchedAt: savedContact.createdAt,
           notes: "",
         };
       }
 
       upsertContactV2(v2Contact);
+      setContactV2(v2Contact);
 
-      addTimelineEvent(savedContact.id, "scan_created", "Business card scanned");
-
+      onContactSaved?.();
       return savedContact;
-    };
+    } catch (e) {
+      console.error("[ScanTab] Failed to save contact to storage:", e);
+      return null;
+    }
+  };
 
   const scanCardMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -426,7 +365,7 @@ export function ScanTab({
 
       setRawText(data.rawText);
 
-      const saved = await saveContactToStorage(data.contact);
+      const saved = saveContactToStorage(data.contact);
       if (saved) {
         setScannedStoredContact(saved);
         toast({ title: "Saved", description: "Contact captured successfully" });
@@ -451,7 +390,7 @@ export function ScanTab({
     onSuccess: (data) => {
       setRawText(data.rawText);
 
-      const saved = await saveContactToStorage(data.contact);
+      const saved = saveContactToStorage(data.contact);
       if (saved) {
         setScannedStoredContact(saved);
         toast({ title: "Saved", description: "Contact captured successfully" });
