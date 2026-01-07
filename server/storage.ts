@@ -134,7 +134,8 @@ export class DatabaseStorage implements IStorage {
 
   async deleteContact(id: number): Promise<boolean> {
     const result = await db.delete(contacts).where(eq(contacts.id, id));
-    return true;
+    // Drizzle returns an array-like result with rowCount property
+    return (result as any).rowCount > 0;
   }
 
   async findDuplicateContact(userId: number, email: string, companyName: string): Promise<Contact | undefined> {

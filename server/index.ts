@@ -2,6 +2,10 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { validateEnvironmentVariables } from "./validateEnv";
+
+// Validate environment variables before starting the server
+validateEnvironmentVariables();
 
 const app = express();
 const httpServer = createServer(app);
