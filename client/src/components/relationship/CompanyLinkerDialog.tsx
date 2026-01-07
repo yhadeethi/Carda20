@@ -112,6 +112,13 @@ export function CompanyLinkerDialog({
           backdropFilter: "blur(40px) saturate(180%)",
           WebkitBackdropFilter: "blur(40px) saturate(180%)",
         }}
+        onInteractOutside={(e) => {
+          // Prevent dialog from closing when interacting with Select dropdown
+          const target = e.target as HTMLElement;
+          if (target.closest('[role="listbox"]') || target.closest('[data-radix-select-content]')) {
+            e.preventDefault();
+          }
+        }}
       >
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold flex items-center gap-2">
