@@ -319,7 +319,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <div className="flex-1 min-w-0">
                   <DialogTitle className="text-base font-semibold sm:text-lg">Org Diagram</DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground sm:text-sm">
-                    Drag to connect reporting lines
+                    Hover over a person, then drag the handles to connect reporting lines
                   </DialogDescription>
                   {focusMode && focusId && (
                     <div className="mt-1 text-[11px] text-muted-foreground sm:text-xs">
@@ -396,7 +396,9 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 backdrop-blur-sm px-4 py-3 text-sm text-foreground">
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 text-primary shrink-0" />
-                  <span className="text-xs sm:text-sm">Tip: Drag from a node handle to another node to set a reporting line.</span>
+                  <span className="text-xs sm:text-sm">
+                    Tip: Hover over a person to reveal connection handles (circles). Drag from the bottom handle of one person to the top handle of another to set reporting lines.
+                  </span>
                 </div>
                 <button
                   type="button"
