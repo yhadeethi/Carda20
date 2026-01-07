@@ -314,19 +314,34 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         >
           <div className="flex flex-col h-full">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b bg-background/95 backdrop-blur-sm">
-              <div>
-                <DialogTitle className="text-lg font-semibold">Org Diagram</DialogTitle>
-                <DialogDescription className="text-sm text-muted-foreground">
-                  Drag to connect reporting lines
-                </DialogDescription>
-                {focusMode && focusId && (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Focused on <span className="font-medium text-foreground">{effectiveFocusContact?.name || "contact"}</span>
-                  </div>
-                )}
+            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <DialogTitle className="text-base font-semibold sm:text-lg">Org Diagram</DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground sm:text-sm">
+                    Drag to connect reporting lines
+                  </DialogDescription>
+                  {focusMode && focusId && (
+                    <div className="mt-1 text-[11px] text-muted-foreground sm:text-xs">
+                      Focused on{" "}
+                      <span className="font-medium text-foreground">
+                        {effectiveFocusContact?.name || "contact"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 sm:hidden"
+                  onClick={() => setShowDiagram(false)}
+                  data-testid="button-close-diagram"
+                  aria-label="Close diagram"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                 <Button
                   variant={focusMode ? "default" : "outline"}
                   size="sm"
@@ -347,8 +362,10 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="hidden sm:inline-flex"
                   onClick={() => setShowDiagram(false)}
                   data-testid="button-close-diagram"
+                  aria-label="Close diagram"
                 >
                   <X className="w-5 h-5" />
                 </Button>
