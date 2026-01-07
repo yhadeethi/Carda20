@@ -214,7 +214,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         <Button
           variant="outline"
           size="sm"
-          className="gap-1 h-8 text-xs px-3"
+          className="gap-1 h-8 text-xs px-3 rounded-full"
           onClick={() => setShowDiagram(true)}
           data-testid="button-view-diagram"
         >
@@ -314,9 +314,9 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         >
           <div className="flex flex-col h-full">
             {/* Modal Header */}
-            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="flex-1 min-w-0">
                   <DialogTitle className="text-base font-semibold sm:text-lg">Org Diagram</DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground sm:text-sm">
                     Drag to connect reporting lines
@@ -330,12 +330,13 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                     </div>
                   )}
                 </div>
+                {/* Mobile-only close button - prominent and always visible */}
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon"
-                  className="h-8 w-8 shrink-0 sm:hidden"
+                  className="h-10 w-10 shrink-0 rounded-full sm:hidden"
                   onClick={() => setShowDiagram(false)}
-                  data-testid="button-close-diagram"
+                  data-testid="button-close-diagram-mobile"
                   aria-label="Close diagram"
                 >
                   <X className="h-5 w-5" />
@@ -345,26 +346,46 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant={focusMode ? "default" : "outline"}
                   size="sm"
+                  className="rounded-full min-h-9"
                   onClick={() => setFocusMode((v) => !v)}
                   data-testid="button-diagram-focus"
                 >
                   Focus
                 </Button>
-                <Button variant="outline" size="icon" onClick={handleZoomOut} aria-label="Zoom out">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full h-9 w-9"
+                  onClick={handleZoomOut}
+                  aria-label="Zoom out"
+                >
                   <ZoomOut className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" size="icon" onClick={handleZoomIn} aria-label="Zoom in">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full h-9 w-9"
+                  onClick={handleZoomIn}
+                  aria-label="Zoom in"
+                >
                   <ZoomIn className="w-4 h-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleFitView} data-testid="button-diagram-fit">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full min-h-9"
+                  onClick={handleFitView}
+                  data-testid="button-diagram-fit"
+                >
                   Fit View
                 </Button>
+                {/* Desktop-only close button */}
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon"
-                  className="hidden sm:inline-flex"
+                  className="hidden sm:inline-flex rounded-full h-9 w-9"
                   onClick={() => setShowDiagram(false)}
-                  data-testid="button-close-diagram"
+                  data-testid="button-close-diagram-desktop"
                   aria-label="Close diagram"
                 >
                   <X className="w-5 h-5" />
@@ -372,14 +393,14 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               </div>
             </div>
             {showInteractionHint && (
-              <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-foreground">
+              <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 backdrop-blur-sm px-4 py-3 text-sm text-foreground">
                 <div className="flex items-start gap-2">
-                  <Info className="mt-0.5 h-4 w-4 text-primary" />
-                  <span>Tip: Drag from a node handle to another node to set a reporting line.</span>
+                  <Info className="mt-0.5 h-4 w-4 text-primary shrink-0" />
+                  <span className="text-xs sm:text-sm">Tip: Drag from a node handle to another node to set a reporting line.</span>
                 </div>
                 <button
                   type="button"
-                  className="text-xs font-medium text-primary hover:underline"
+                  className="text-xs font-medium text-primary hover:underline shrink-0"
                   onClick={handleDismissHint}
                 >
                   Got it

@@ -157,28 +157,33 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   return (
     <div
       className={`
-        group relative rounded-2xl border cursor-pointer overflow-hidden
-        transition-all duration-200 ease-out
+        group relative rounded-2xl border-2 cursor-pointer overflow-hidden
+        transition-all duration-200 ease-out backdrop-blur-sm
         ${colors.bg} ${colors.border}
         ${isDimmed ? "opacity-25 saturate-50" : "opacity-100"}
         ${
           selected
             ? "ring-2 ring-primary ring-offset-2 shadow-xl scale-[1.02]"
-            : "shadow-lg shadow-black/8 dark:shadow-black/20 hover:shadow-xl hover:shadow-black/12 hover:scale-[1.01] active:scale-[0.97] active:shadow-md"
+            : "shadow-lg shadow-black/8 dark:shadow-black/20 hover:shadow-xl hover:shadow-black/12 hover:scale-[1.02] active:scale-[0.98] active:shadow-md"
         }
       `}
-      style={{ width: NODE_WIDTH, minHeight: NODE_HEIGHT - 8 }}
+      style={{
+        width: NODE_WIDTH,
+        minHeight: NODE_HEIGHT - 8,
+        backdropFilter: "blur(8px) saturate(180%)",
+        WebkitBackdropFilter: "blur(8px) saturate(180%)"
+      }}
       onClick={handleClick}
       data-testid={`org-node-${contact.id}`}
     >
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 dark:via-white/20 to-transparent" />
       <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full ${colors.accent} shadow-sm`} />
 
-      {isFocused && <div className="absolute inset-0 ring-2 ring-primary/60 ring-inset pointer-events-none" />}
-      <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      {isFocused && <div className="absolute inset-0 ring-2 ring-primary/60 ring-inset pointer-events-none rounded-2xl" />}
+      <div className="absolute right-2 top-2 flex items-center gap-1.5 opacity-0 transition-all duration-200 group-hover:opacity-100">
         <button
           type="button"
-          className="rounded-full bg-background/80 text-foreground shadow-sm border border-border p-1 hover:bg-background"
+          className="rounded-full bg-background/95 text-foreground shadow-md border border-border p-1.5 hover:bg-background hover:scale-110 transition-all duration-200 backdrop-blur-xl"
           onClick={handleFocusContact}
           aria-label="Focus on contact"
         >
@@ -186,7 +191,7 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
         </button>
         <button
           type="button"
-          className="rounded-full bg-background/80 text-foreground shadow-sm border border-border p-1 hover:bg-background"
+          className="rounded-full bg-background/95 text-foreground shadow-md border border-border p-1.5 hover:bg-background hover:scale-110 transition-all duration-200 backdrop-blur-xl"
           onClick={handleOpenContact}
           aria-label="Open contact"
         >
@@ -226,7 +231,7 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
           <div className="flex items-center gap-1.5 pt-0.5">
             <Badge
               variant="secondary"
-              className={`text-[10px] px-2 py-0.5 h-[20px] font-medium ${colors.text} ${colors.accentLight} border-0`}
+              className={`text-[10px] px-2.5 py-0.5 h-[20px] font-medium rounded-full ${colors.text} ${colors.accentLight} border-0`}
             >
               {DEPARTMENT_LABELS[department]}
             </Badge>
