@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
 import { extractTextFromImage, initializeOCR } from "./ocrService";
 import { parseContact, ParsedContact, splitAuAddress } from "./parseService";
 import { getOrCreateCompanyIntel } from "./intelService";
@@ -12,8 +13,35 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
 import OpenAI from "openai";
 
+// Type definitions for authenticated requests
+interface ReplitAuthUser {
+  claims: {
+    sub: string;
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+}
+
+interface AuthenticatedRequest extends Request {
+  user: ReplitAuthUser;
+}
+
+interface HubSpotOAuthSession {
+  hubspot_oauth_state?: string;
+  hubspot_oauth_user?: number;
+}
+
+interface SessionRequest extends Request {
+  session: Express.Session & HubSpotOAuthSession;
+}
+
 async function getCurrentUserId(req: Request): Promise<number> {
-  const authId = (req.user as any)?.claims?.sub;
+  const authUser = req.user as ReplitAuthUser | undefined;
+  const authId = authUser?.claims?.sub;
   if (!authId) throw new Error("Unauthorized");
   const user = await storage.getUserByAuthId(authId);
   if (!user) throw new Error("Unauthorized");
@@ -43,9 +71,79 @@ const contactInputSchema = z.object({
   companyDomain: z.string().nullable().optional(),
 });
 
+// Allowed MIME types for business card images
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+];
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+    files: 1, // Only one file at a time
+  },
+  fileFilter: (req, file, cb) => {
+    // Check MIME type
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype.toLowerCase())) {
+      return cb(new Error(`Invalid file type. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}`));
+    }
+
+    // Check file extension as additional validation
+    const ext = file.originalname.toLowerCase().split('.').pop();
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'];
+    if (ext && !allowedExtensions.includes(ext)) {
+      return cb(new Error(`Invalid file extension. Allowed extensions: ${allowedExtensions.join(', ')}`));
+    }
+
+    cb(null, true);
+  },
+});
+
+// Rate limiting for expensive AI/OCR operations
+const aiRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // Limit each user to 50 requests per 15 minutes
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Use user ID if authenticated, otherwise IP
+  keyGenerator: async (req) => {
+    try {
+      const authUser = req.user as ReplitAuthUser | undefined;
+      if (authUser?.claims?.sub) {
+        return `user:${authUser.claims.sub}`;
+      }
+      return req.ip || 'unknown';
+    } catch {
+      return req.ip || 'unknown';
+    }
+  },
+});
+
+// Stricter rate limiting for image upload endpoints
+const uploadRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // Limit each user to 30 uploads per 15 minutes
+  message: { error: 'Too many file uploads, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: async (req) => {
+    try {
+      const authUser = req.user as ReplitAuthUser | undefined;
+      if (authUser?.claims?.sub) {
+        return `user:${authUser.claims.sub}`;
+      }
+      return req.ip || 'unknown';
+    } catch {
+      return req.ip || 'unknown';
+    }
+  },
 });
 
 function generateVCard(contact: ParsedContact): string {
@@ -208,7 +306,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/scan", upload.single("image"), async (req: Request, res: Response) => {
+  app.post("/api/scan", uploadRateLimiter, upload.single("image"), async (req: Request, res: Response) => {
     try {
       const file = req.file;
       if (!file) {
@@ -267,7 +365,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/intel", async (req: Request, res: Response) => {
+  app.post("/api/intel", aiRateLimiter, async (req: Request, res: Response) => {
     try {
       const { companyName, email, website, contactName, contactTitle } = req.body;
 
@@ -325,12 +423,12 @@ export async function registerRoutes(
 
   
   // HubSpot OAuth (per-user)
-  app.get("/api/hubspot/connect", isAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/hubspot/connect", isAuthenticated, async (req: SessionRequest, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
       const state = crypto.randomUUID();
-      (req.session as any).hubspot_oauth_state = state;
-      (req.session as any).hubspot_oauth_user = userId;
+      req.session.hubspot_oauth_state = state;
+      req.session.hubspot_oauth_user = userId;
 
       const redirectUri = getHubSpotRedirectUri(req);
       const url = buildHubSpotAuthUrl({ redirectUri, state });
@@ -340,12 +438,12 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/hubspot/callback", isAuthenticated, async (req: Request, res: Response) => {
+  app.get("/api/hubspot/callback", isAuthenticated, async (req: SessionRequest, res: Response) => {
     try {
       const code = req.query.code as string | undefined;
       const state = req.query.state as string | undefined;
-      const expectedState = (req.session as any).hubspot_oauth_state as string | undefined;
-      const userId = (req.session as any).hubspot_oauth_user as number | undefined;
+      const expectedState = req.session.hubspot_oauth_state;
+      const userId = req.session.hubspot_oauth_user;
 
       if (!code || !state || !expectedState || state !== expectedState || !userId) {
         return res.status(400).send("Invalid HubSpot OAuth callback.");
@@ -355,8 +453,8 @@ export async function registerRoutes(
       await connectHubSpotForUser({ userId, code, redirectUri });
 
       // cleanup
-      (req.session as any).hubspot_oauth_state = undefined;
-      (req.session as any).hubspot_oauth_user = undefined;
+      req.session.hubspot_oauth_state = undefined;
+      req.session.hubspot_oauth_user = undefined;
 
       res.redirect("/?hubspot=connected");
     } catch (e: any) {
@@ -410,7 +508,7 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
     }
   });
 
-  app.post("/api/parse-ai", async (req: Request, res: Response) => {
+  app.post("/api/parse-ai", aiRateLimiter, async (req: Request, res: Response) => {
     try {
       const { text } = req.body;
       if (!text || typeof text !== "string") {
@@ -432,7 +530,7 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
     }
   });
 
-  app.post("/api/scan-ai", upload.single("image"), async (req: Request, res: Response) => {
+  app.post("/api/scan-ai", uploadRateLimiter, upload.single("image"), async (req: Request, res: Response) => {
     try {
       const file = req.file;
       if (!file) {
@@ -478,7 +576,7 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
     }),
   });
 
-  app.post("/api/followup", async (req: Request, res: Response) => {
+  app.post("/api/followup", aiRateLimiter, async (req: Request, res: Response) => {
     try {
       if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
         return res.status(503).json({ error: "AI service not configured" });

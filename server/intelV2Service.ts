@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import sanitizeHtml from "sanitize-html";
 import {
   CompanyIntelV2,
   IntelSource,
@@ -201,11 +202,16 @@ async function fetchWebsiteContent(domain: string, paths: string[]): Promise<Sou
       const html = await res.text();
       const socialLinks = extractSocialLinksFromHtml(html);
 
-      const textContent = html
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-        .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "")
-        .replace(/<[^>]+>/g, " ")
+      // Sanitize HTML and extract text content safely
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: [], // Strip all HTML tags
+        allowedAttributes: {},
+        textFilter: function(text) {
+          return text;
+        }
+      });
+
+      const textContent = sanitized
         .replace(/\s+/g, " ")
         .trim()
         .substring(0, 2200);

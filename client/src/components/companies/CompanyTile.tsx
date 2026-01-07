@@ -6,9 +6,11 @@
  * - fixed layout overflow (long names/domains) with min-w-0 + truncation
  * - removed hover translate to prevent grid jitter
  * - ensured actions sit at bottom consistently
+ * - Added liquid glass morphing effects (Apple-style)
+ * - Added manual delete functionality
  */
 
-import { Users, Globe, Network, StickyNote } from "lucide-react";
+import { Users, Globe, Network, StickyNote, Trash2 } from "lucide-react";
 import { Company } from "@/lib/companiesStorage";
 import { CompanyAvatar } from "./CompanyAvatar";
 
@@ -19,6 +21,7 @@ interface CompanyTileProps {
   onClick: () => void;
   onOpenOrg?: () => void;
   onAddNote?: () => void;
+  onDelete?: () => void;
 }
 
 export function CompanyTile({
@@ -28,14 +31,20 @@ export function CompanyTile({
   onClick,
   onOpenOrg,
   onAddNote,
+  onDelete,
 }: CompanyTileProps) {
-  const hasActions = !!onOpenOrg || !!onAddNote;
+  const hasActions = !!onOpenOrg || !!onAddNote || !!onDelete;
 
   return (
     <div
-      className="relative h-full p-4 rounded-xl border bg-card cursor-pointer transition-shadow duration-200 hover:shadow-md active:scale-[0.99] group"
+      className="relative h-full p-4 rounded-xl border bg-card/80 backdrop-blur-xl cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 hover:bg-card/90 active:scale-[0.98] group"
       onClick={onClick}
-      style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+      style={{
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)"
+      }}
       data-testid={`company-tile-${company.id}`}
     >
       <div className="flex flex-col h-full min-w-0">
@@ -79,15 +88,16 @@ export function CompanyTile({
 
         {/* Quick actions */}
         {hasActions && (
-          <div className="flex items-center gap-3 mt-3 pt-3 border-t">
+          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50">
             {onOpenOrg && (
               <button
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-all duration-200 hover:scale-105"
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpenOrg();
                 }}
                 style={{ touchAction: "manipulation" }}
+                aria-label="View organization chart"
               >
                 <Network className="w-3 h-3" />
                 <span>Org</span>
@@ -95,15 +105,30 @@ export function CompanyTile({
             )}
             {onAddNote && (
               <button
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-all duration-200 hover:scale-105"
                 onClick={(e) => {
                   e.stopPropagation();
                   onAddNote();
                 }}
                 style={{ touchAction: "manipulation" }}
+                aria-label="Add note"
               >
                 <StickyNote className="w-3 h-3" />
                 <span>Note</span>
+              </button>
+            )}
+            {onDelete && (
+              <button
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-all duration-200 hover:scale-105 ml-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                style={{ touchAction: "manipulation" }}
+                aria-label="Delete company"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Delete</span>
               </button>
             )}
           </div>

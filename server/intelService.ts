@@ -2,9 +2,8 @@ import OpenAI from "openai";
 import { CompanyIntelData, User } from "@shared/schema";
 import { storage } from "./storage";
 
-// This is using Replit's AI Integrations service, which provides OpenAI-compatible API access 
+// This is using Replit's AI Integrations service, which provides OpenAI-compatible API access
 // without requiring your own OpenAI API key. Charges are billed to your credits.
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -430,7 +429,7 @@ Return a JSON object with these fields (use null for missing information):
 Be accurate and only extract information that is clearly present in the text.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       max_completion_tokens: 1024,
@@ -470,7 +469,7 @@ export async function parseContactFromImage(imageBase64: string): Promise<{
 }> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      model: "gpt-4o",
       messages: [
         {
           role: "user",

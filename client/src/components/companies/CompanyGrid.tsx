@@ -15,6 +15,7 @@ interface CompanyGridProps {
   onSelectCompany: (companyId: string) => void;
   onOpenOrg?: (companyId: string) => void;
   onAddNote?: (companyId: string) => void;
+  onDeleteCompany?: (companyId: string) => void;
   onAddCompany?: () => void;
   searchQuery?: string;
 }
@@ -26,6 +27,7 @@ export function CompanyGrid({
   onSelectCompany,
   onOpenOrg,
   onAddNote,
+  onDeleteCompany,
   onAddCompany,
   searchQuery,
 }: CompanyGridProps) {
@@ -85,6 +87,7 @@ export function CompanyGrid({
             onClick={() => onSelectCompany(company.id)}
             onOpenOrg={onOpenOrg ? () => onOpenOrg(company.id) : undefined}
             onAddNote={onAddNote ? () => onAddNote(company.id) : undefined}
+            onDelete={onDeleteCompany ? () => onDeleteCompany(company.id) : undefined}
           />
         ))}
       </div>

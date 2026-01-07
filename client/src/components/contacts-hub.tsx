@@ -30,6 +30,7 @@ import {
   getCompanies,
   upsertCompany,
   createCompany,
+  deleteCompany,
   autoGenerateCompaniesFromContacts,
   getContactCountForCompany,
 } from "@/lib/companiesStorage";
@@ -67,6 +68,7 @@ export function ContactsHub({
   const [contacts, setContacts] = useState<StoredContact[]>(() => loadContacts());
   const [companies, setCompanies] = useState<Company[]>(() => getCompanies());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteCompanyConfirmId, setDeleteCompanyConfirmId] = useState<string | null>(null);
 
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -129,6 +131,14 @@ export function ContactsHub({
     }
   };
 
+  const confirmDeleteCompany = () => {
+    if (deleteCompanyConfirmId) {
+      deleteCompany(deleteCompanyConfirmId);
+      setCompanies(getCompanies());
+      setDeleteCompanyConfirmId(null);
+    }
+  };
+
   const handleAddCompany = () => {
     if (!newCompanyName.trim()) return;
 
@@ -157,11 +167,13 @@ export function ContactsHub({
   };
 
   const contactToDelete = deleteConfirmId ? contacts.find((c) => c.id === deleteConfirmId) : null;
+  const companyToDelete = deleteCompanyConfirmId ? companies.find((c) => c.id === deleteCompanyConfirmId) : null;
 
   return (
     <>
+      {/* Contact Delete Confirmation */}
       <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="backdrop-blur-xl bg-background/95">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete contact?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -172,6 +184,45 @@ export function ContactsHub({
             <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} data-testid="button-confirm-delete">
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Company Delete Confirmation - Liquid Glass Design */}
+      <AlertDialog open={!!deleteCompanyConfirmId} onOpenChange={(open) => !open && setDeleteCompanyConfirmId(null)}>
+        <AlertDialogContent
+          className="backdrop-blur-2xl bg-background/90 border border-border/50 shadow-2xl"
+          style={{
+            backdropFilter: "blur(40px) saturate(180%)",
+            WebkitBackdropFilter: "blur(40px) saturate(180%)"
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-semibold">Delete company?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Are you sure you want to delete <span className="font-medium text-foreground">{companyToDelete?.name}</span>?
+              {companyToDelete && getContactCountForCompany(companyToDelete.id, contacts) > 0 && (
+                <span className="block mt-2 text-sm text-amber-600 dark:text-amber-500">
+                  ⚠️ {getContactCountForCompany(companyToDelete.id, contacts)} contact{getContactCountForCompany(companyToDelete.id, contacts) !== 1 ? 's are' : ' is'} linked to this company. They will not be deleted.
+                </span>
+              )}
+              <span className="block mt-2">This action cannot be undone.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel
+              data-testid="button-cancel-delete-company"
+              className="rounded-xl transition-all duration-200 hover:scale-105"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCompany}
+              data-testid="button-confirm-delete-company"
+              className="rounded-xl bg-destructive hover:bg-destructive/90 transition-all duration-200 hover:scale-105"
+            >
+              Delete Company
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -441,6 +492,11 @@ export function ContactsHub({
                           contact={contact}
                           onOpen={() => onSelectContact(contact)}
                           onDelete={() => setDeleteConfirmId(contact.id)}
+                          onContactUpdated={() => {
+                            setContacts(loadContacts());
+                            const updatedCompanies = autoGenerateCompaniesFromContacts(loadContacts());
+                            setCompanies(updatedCompanies);
+                          }}
                         />
                       ))
                     )}
@@ -479,6 +535,7 @@ export function ContactsHub({
                     return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
                   }}
                   onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
+                  onDeleteCompany={(companyId) => setDeleteCompanyConfirmId(companyId)}
                   onAddCompany={() => setShowAddCompany(true)}
                   searchQuery={searchQuery}
                 />

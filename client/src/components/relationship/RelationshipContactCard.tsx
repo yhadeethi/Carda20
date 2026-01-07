@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -7,8 +8,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { StoredContact } from "@/lib/contactsStorage";
-import { Building, Calendar, MoreHorizontal, Tag, User } from "lucide-react";
+import { Building, Calendar, MoreHorizontal, Tag, User, Link2 } from "lucide-react";
 import { format } from "date-fns";
+import { CompanyLinkerDialog } from "./CompanyLinkerDialog";
 
 interface RelationshipContactCardProps {
   contact: StoredContact;
@@ -16,6 +18,7 @@ interface RelationshipContactCardProps {
 
   // Optional actions (Relationships list uses these; Scan preview can omit)
   onDelete?: () => void;
+  onContactUpdated?: () => void;
 
   // Optional UI tweaks
   showActionsMenu?: boolean;
@@ -26,9 +29,11 @@ export function RelationshipContactCard({
   contact,
   onOpen,
   onDelete,
+  onContactUpdated,
   showActionsMenu = true,
   showMeta = true,
 }: RelationshipContactCardProps) {
+  const [showLinker, setShowLinker] = useState(false);
   const formatDate = (dateStr: string) => {
     try {
       return format(new Date(dateStr), "d MMM yyyy");
@@ -93,8 +98,16 @@ export function RelationshipContactCard({
                     </Button>
                   </DropdownMenuTrigger>
 
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={onOpen}>Open</DropdownMenuItem>
+                  <DropdownMenuContent align="end" className="backdrop-blur-xl bg-background/95">
+                    <DropdownMenuItem onClick={onOpen}>
+                      <User className="w-4 h-4 mr-2" />
+                      Open
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem onClick={() => setShowLinker(true)}>
+                      <Link2 className="w-4 h-4 mr-2" />
+                      Link to Company
+                    </DropdownMenuItem>
 
                     {onDelete ? (
                       <>
@@ -146,6 +159,16 @@ export function RelationshipContactCard({
           ) : null}
         </div>
       </div>
+
+      {/* Company Linker Dialog */}
+      <CompanyLinkerDialog
+        contact={contact}
+        open={showLinker}
+        onOpenChange={setShowLinker}
+        onLinked={() => {
+          onContactUpdated?.();
+        }}
+      />
     </div>
   );
 }
