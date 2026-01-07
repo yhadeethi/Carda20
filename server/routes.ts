@@ -112,6 +112,7 @@ const aiRateLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   // Use user ID if authenticated, otherwise IP
   keyGenerator: async (req) => {
     try {
@@ -133,6 +134,7 @@ const uploadRateLimiter = rateLimit({
   message: { error: 'Too many file uploads, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   keyGenerator: async (req) => {
     try {
       const authUser = req.user as ReplitAuthUser | undefined;
