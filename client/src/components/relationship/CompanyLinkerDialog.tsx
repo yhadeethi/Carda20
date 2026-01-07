@@ -107,10 +107,25 @@ export function CompanyLinkerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-[500px]"
+        onPointerDownOutside={(e) => {
+          // Prevent dialog from closing when interacting with Select dropdown
+          const target = e.target as HTMLElement;
+          if (
+            target.closest('[role="listbox"]') ||
+            target.closest('[data-radix-select-content]') ||
+            target.closest('[data-radix-popper-content-wrapper]')
+          ) {
+            e.preventDefault();
+          }
+        }}
         onInteractOutside={(e) => {
           // Prevent dialog from closing when interacting with Select dropdown
           const target = e.target as HTMLElement;
-          if (target.closest('[role="listbox"]') || target.closest('[data-radix-select-content]')) {
+          if (
+            target.closest('[role="listbox"]') ||
+            target.closest('[data-radix-select-content]') ||
+            target.closest('[data-radix-popper-content-wrapper]')
+          ) {
             e.preventDefault();
           }
         }}
@@ -158,10 +173,14 @@ export function CompanyLinkerDialog({
 
           {/* Company Selector */}
           <Select value={selectedCompanyId || ""} onValueChange={setSelectedCompanyId}>
-            <SelectTrigger>
+            <SelectTrigger onClick={(e) => e.stopPropagation()}>
               <SelectValue placeholder="Select a company" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
               {filteredCompanies.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   No companies found
