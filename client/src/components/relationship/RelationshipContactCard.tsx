@@ -104,7 +104,13 @@ export function RelationshipContactCard({
                       Open
                     </DropdownMenuItem>
 
-                    <DropdownMenuItem onClick={() => setShowLinker(true)}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowLinker(true);
+                      }}
+                      onSelect={(e) => e.preventDefault()}
+                    >
                       <Link2 className="w-4 h-4 mr-2" />
                       Link to Company
                     </DropdownMenuItem>
