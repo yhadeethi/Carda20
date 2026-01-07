@@ -143,7 +143,7 @@ const HierarchyRow = memo(function HierarchyRow({
       </div>
 
       {department !== "UNKNOWN" && DEPARTMENT_LABELS[department] && (
-        <Badge variant="secondary" className={`text-[10px] px-1.5 py-0.5 shrink-0 ${DEPARTMENT_COLORS[department]}`}>
+        <Badge variant="secondary" className={`text-[10px] px-2 py-0.5 shrink-0 rounded-full ${DEPARTMENT_COLORS[department]}`}>
           {DEPARTMENT_LABELS[department]}
         </Badge>
       )}
