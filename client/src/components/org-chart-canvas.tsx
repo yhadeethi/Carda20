@@ -23,7 +23,7 @@ import {
 import dagre from "dagre";
 import "@xyflow/react/dist/style.css";
 import { Badge } from "@/components/ui/badge";
-import { Users } from "lucide-react";
+import { ExternalLink, Users, Crosshair } from "lucide-react";
 import { StoredContact, Department } from "@/lib/contactsStorage";
 
 // Dev-only console log
@@ -103,8 +103,11 @@ const NODE_HEIGHT = 96;
 interface ContactNodeData extends Record<string, unknown> {
   contact: StoredContact;
   onNodeClick?: (contact: StoredContact) => void;
+  onOpenContact?: (contact: StoredContact) => void;
+  onFocusContact?: (contact: StoredContact) => void;
   isDimmed?: boolean;
   isFocused?: boolean;
+  isEditable?: boolean;
 }
 
 function getInitials(name: string): string {
@@ -129,15 +132,32 @@ function getGradientColor(department: Department, shade: "light" | "dark"): stri
 
 // Custom Contact Node
 function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
-  const { contact, onNodeClick } = data;
+  const { contact, onNodeClick, onOpenContact, onFocusContact } = data;
   const isDimmed = Boolean(data.isDimmed);
   const isFocused = Boolean(data.isFocused);
+  const isEditable = Boolean(data.isEditable);
   const department = contact.org?.department || "UNKNOWN";
   const colors = DEPARTMENT_COLORS[department];
 
   const handleClick = useCallback(() => {
     onNodeClick?.(contact);
   }, [contact, onNodeClick]);
+
+  const handleOpenContact = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      onOpenContact?.(contact);
+    },
+    [contact, onOpenContact]
+  );
+
+  const handleFocusContact = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      onFocusContact?.(contact);
+    },
+    [contact, onFocusContact]
+  );
 
   return (
     <div
@@ -160,11 +180,33 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
       <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full ${colors.accent} shadow-sm`} />
 
       {isFocused && <div className="absolute inset-0 ring-2 ring-primary/60 ring-inset pointer-events-none" />}
+      <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          className="rounded-full bg-background/80 text-foreground shadow-sm border border-border p-1 hover:bg-background"
+          onClick={handleFocusContact}
+          aria-label="Focus on contact"
+        >
+          <Crosshair className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          className="rounded-full bg-background/80 text-foreground shadow-sm border border-border p-1 hover:bg-background"
+          onClick={handleOpenContact}
+          aria-label="Open contact"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </button>
+      </div>
 
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-gray-300 dark:!bg-gray-600 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800 !shadow-sm"
+        className={`!w-3 !h-3 !border-2 !border-white dark:!border-gray-800 !shadow-sm ${
+          isEditable
+            ? "!bg-primary/90 dark:!bg-primary/70 animate-pulse"
+            : "!bg-gray-300 dark:!bg-gray-600"
+        }`}
       />
 
       <div className="flex items-start gap-3 p-3.5 pl-5">
@@ -200,7 +242,11 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-gray-300 dark:!bg-gray-600 !w-3 !h-3 !border-2 !border-white dark:!border-gray-800 !shadow-sm"
+        className={`!w-3 !h-3 !border-2 !border-white dark:!border-gray-800 !shadow-sm ${
+          isEditable
+            ? "!bg-primary/90 dark:!bg-primary/70 animate-pulse"
+            : "!bg-gray-300 dark:!bg-gray-600"
+        }`}
       />
     </div>
   );
@@ -211,7 +257,10 @@ const nodeTypes = { contact: ContactNode };
 function buildGraphWithLayout(
   contacts: StoredContact[],
   onNodeClick?: (contact: StoredContact) => void,
-  focusId?: string | null
+  onOpenContact?: (contact: StoredContact) => void,
+  onFocusContact?: (contact: StoredContact) => void,
+  focusId?: string | null,
+  editMode?: boolean
 ): { nodes: Node<ContactNodeData>[]; edges: Edge[] } {
   if (contacts.length === 0) return { nodes: [], edges: [] };
 
@@ -311,8 +360,11 @@ function buildGraphWithLayout(
       data: {
         contact,
         onNodeClick,
+        onOpenContact,
+        onFocusContact,
         isDimmed: hasFocus && !focusSet.has(contact.id),
         isFocused: hasFocus && contact.id === focusId,
+        isEditable: Boolean(editMode),
       },
     };
   });
@@ -329,13 +381,15 @@ export interface OrgChartCanvasHandle {
 interface OrgChartCanvasInnerProps {
   contacts: StoredContact[];
   onNodeClick?: (contact: StoredContact) => void;
+  onOpenContact?: (contact: StoredContact) => void;
+  onFocusContact?: (contact: StoredContact) => void;
   onSetManager?: (sourceId: string, targetId: string) => void;
   editMode?: boolean;
   focusId?: string | null;
 }
 
 const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInnerProps>(function OrgChartCanvasInner(
-  { contacts, onNodeClick, onSetManager, editMode, focusId },
+  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode, focusId },
   ref
 ) {
   const { fitView, zoomIn, zoomOut } = useReactFlow();
@@ -350,15 +404,18 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
     [fitView, zoomIn, zoomOut]
   );
 
-  const initialGraph = useMemo(() => buildGraphWithLayout(contacts, onNodeClick, focusId), [contacts, onNodeClick, focusId]);
+  const initialGraph = useMemo(
+    () => buildGraphWithLayout(contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode),
+    [contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode]
+  );
   const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
 
   useEffect(() => {
-    const newGraph = buildGraphWithLayout(contacts, onNodeClick, focusId);
+    const newGraph = buildGraphWithLayout(contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode);
     setNodes(newGraph.nodes);
     setEdges(newGraph.edges);
-  }, [contacts, onNodeClick, focusId, setNodes, setEdges]);
+  }, [contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode, setNodes, setEdges]);
 
   const handleConnect = useCallback(
     (connection: Connection) => {
@@ -416,13 +473,15 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
 interface OrgChartCanvasProps {
   contacts: StoredContact[];
   onNodeClick?: (contact: StoredContact) => void;
+  onOpenContact?: (contact: StoredContact) => void;
+  onFocusContact?: (contact: StoredContact) => void;
   onSetManager?: (sourceId: string, targetId: string) => void;
   editMode?: boolean;
   focusId?: string | null;
 }
 
 export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasProps>(function OrgChartCanvas(
-  { contacts, onNodeClick, onSetManager, editMode = false, focusId },
+  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode = false, focusId },
   ref
 ) {
   return (
@@ -431,6 +490,8 @@ export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasPro
         ref={ref}
         contacts={contacts}
         onNodeClick={onNodeClick}
+        onOpenContact={onOpenContact}
+        onFocusContact={onFocusContact}
         onSetManager={onSetManager}
         editMode={editMode}
         focusId={focusId}
