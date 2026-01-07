@@ -10,7 +10,7 @@
  * which also mirrors to V1 (compat) so the rest of the UI stays consistent.
  */
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -29,7 +29,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Users, GitBranch, Maximize2, X } from "lucide-react";
+import { Info, Users, GitBranch, Maximize2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { StoredContact, Department, DEFAULT_ORG } from "@/lib/contactsStorage";
 import { updateContactV2 } from "@/lib/contacts/storage";
 import { useToast } from "@/hooks/use-toast";
@@ -48,9 +48,33 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [showQuickEdit, setShowQuickEdit] = useState(false);
   const [focusMode, setFocusMode] = useState(true);
+  const [showInteractionHint, setShowInteractionHint] = useState(false);
   const [relayoutKey] = useState(0);
   const canvasRef = useRef<{ fitView: () => void; zoomIn: () => void; zoomOut: () => void } | null>(null);
   const { toast } = useToast();
+  const contactIds = useMemo(() => new Set(contacts.map((c) => c.id)), [contacts]);
+  const rootContact = useMemo(
+    () => contacts.find((c) => !c.org?.reportsToId || !contactIds.has(c.org.reportsToId)) || contacts[0],
+    [contacts, contactIds]
+  );
+
+  const effectiveFocusContact = focusMode ? selectedContact || rootContact || null : null;
+  const focusId = effectiveFocusContact?.id || null;
+
+  useEffect(() => {
+    if (!showDiagram) return;
+    try {
+      const hasSeenHint = window.localStorage.getItem("carda_org_diagram_hint_v1");
+      if (!hasSeenHint) setShowInteractionHint(true);
+    } catch {
+      setShowInteractionHint(true);
+    }
+  }, [showDiagram]);
+
+  useEffect(() => {
+    if (!showDiagram || !focusMode || selectedContact || !rootContact) return;
+    setSelectedContact(rootContact);
+  }, [showDiagram, focusMode, selectedContact, rootContact]);
 
   // Check if setting managerId as sourceId's manager would create a cycle
   const wouldCreateCycle = useCallback(
@@ -107,6 +131,19 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     setShowQuickEdit(true);
   }, []);
 
+  const handleFocusContact = useCallback((contact: StoredContact) => {
+    setSelectedContact(contact);
+    setFocusMode(true);
+  }, []);
+
+  const handleOpenContactFromDiagram = useCallback(
+    (contact: StoredContact) => {
+      setShowDiagram(false);
+      onSelectContact(contact);
+    },
+    [onSelectContact]
+  );
+
   const companyContacts = useMemo(() => contacts, [contacts]);
 
   const managerOptions = useMemo(() => {
@@ -131,6 +168,21 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
   const handleFitView = useCallback(() => {
     canvasRef.current?.fitView();
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    canvasRef.current?.zoomIn();
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    canvasRef.current?.zoomOut();
+  }, []);
+
+  const handleDismissHint = useCallback(() => {
+    try {
+      window.localStorage.setItem("carda_org_diagram_hint_v1", "seen");
+    } catch {}
+    setShowInteractionHint(false);
   }, []);
 
   // Empty state
@@ -256,7 +308,10 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
       {/* Diagram Modal - Full Screen Sheet */}
       <Dialog open={showDiagram} onOpenChange={setShowDiagram}>
-        <DialogContent className="max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] p-0 rounded-none sm:rounded-none">
+        <DialogContent
+          className="max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] p-0 rounded-none sm:rounded-none"
+          hideClose
+        >
           <div className="flex flex-col h-full">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b bg-background/95 backdrop-blur-sm">
@@ -265,6 +320,11 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <DialogDescription className="text-sm text-muted-foreground">
                   Drag to connect reporting lines
                 </DialogDescription>
+                {focusMode && focusId && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Focused on <span className="font-medium text-foreground">{effectiveFocusContact?.name || "contact"}</span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -274,6 +334,12 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   data-testid="button-diagram-focus"
                 >
                   Focus
+                </Button>
+                <Button variant="outline" size="icon" onClick={handleZoomOut} aria-label="Zoom out">
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={handleZoomIn} aria-label="Zoom in">
+                  <ZoomIn className="w-4 h-4" />
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleFitView} data-testid="button-diagram-fit">
                   Fit View
@@ -288,6 +354,21 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 </Button>
               </div>
             </div>
+            {showInteractionHint && (
+              <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-foreground">
+                <div className="flex items-start gap-2">
+                  <Info className="mt-0.5 h-4 w-4 text-primary" />
+                  <span>Tip: Drag from a node handle to another node to set a reporting line.</span>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:underline"
+                  onClick={handleDismissHint}
+                >
+                  Got it
+                </button>
+              </div>
+            )}
 
             {/* Diagram Canvas */}
             <div className="flex-1 min-h-0 bg-gradient-to-br from-slate-50 to-white dark:from-gray-900 dark:to-gray-950">
@@ -297,9 +378,11 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   ref={canvasRef}
                   contacts={contacts}
                   onNodeClick={handleNodeClick}
+                  onOpenContact={handleOpenContactFromDiagram}
+                  onFocusContact={handleFocusContact}
                   onSetManager={handleSetManager}
                   editMode={true}
-                  focusId={focusMode ? selectedContact?.id || null : null}
+                  focusId={focusId}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
