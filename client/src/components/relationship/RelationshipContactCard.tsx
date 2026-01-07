@@ -98,7 +98,7 @@ export function RelationshipContactCard({
                     </Button>
                   </DropdownMenuTrigger>
 
-                  <DropdownMenuContent align="end" className="backdrop-blur-xl bg-background/95">
+                  <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={onOpen}>
                       <User className="w-4 h-4 mr-2" />
                       Open
