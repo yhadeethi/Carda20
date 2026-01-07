@@ -1,6 +1,5 @@
 /**
  * Company Linker Dialog - Link contacts to companies manually
- * Features liquid glass morphing effects (Apple-style)
  */
 
 import { useState, useMemo } from "react";
@@ -107,14 +106,17 @@ export function CompanyLinkerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="backdrop-blur-2xl bg-background/90 border border-border/50 shadow-2xl sm:max-w-[500px]"
-        style={{
-          backdropFilter: "blur(40px) saturate(180%)",
-          WebkitBackdropFilter: "blur(40px) saturate(180%)",
+        className="sm:max-w-[500px]"
+        onInteractOutside={(e) => {
+          // Prevent dialog from closing when interacting with Select dropdown
+          const target = e.target as HTMLElement;
+          if (target.closest('[role="listbox"]') || target.closest('[data-radix-select-content]')) {
+            e.preventDefault();
+          }
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2">
             <Link2 className="w-5 h-5" />
             Link to Company
           </DialogTitle>
@@ -126,7 +128,7 @@ export function CompanyLinkerDialog({
         <div className="space-y-4 py-4">
           {/* Current Company Display */}
           {currentCompany && (
-            <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between">
+            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium">{currentCompany.name}</span>
@@ -135,7 +137,7 @@ export function CompanyLinkerDialog({
                 variant="ghost"
                 size="sm"
                 onClick={handleUnlink}
-                className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive transition-all duration-200 hover:scale-105"
+                className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive"
               >
                 <X className="w-3 h-3 mr-1" />
                 Unlink
@@ -150,20 +152,16 @@ export function CompanyLinkerDialog({
               placeholder="Search companies..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 rounded-xl backdrop-blur-xl bg-background/60 border-border/50 focus:bg-background/80 transition-all"
-              style={{
-                backdropFilter: "blur(20px)",
-                WebkitBackdropFilter: "blur(20px)",
-              }}
+              className="pl-9"
             />
           </div>
 
           {/* Company Selector */}
           <Select value={selectedCompanyId || ""} onValueChange={setSelectedCompanyId}>
-            <SelectTrigger className="rounded-xl backdrop-blur-xl bg-background/60 border-border/50 hover:bg-background/80 transition-all">
+            <SelectTrigger>
               <SelectValue placeholder="Select a company" />
             </SelectTrigger>
-            <SelectContent className="backdrop-blur-2xl bg-background/95 border-border/50">
+            <SelectContent>
               {filteredCompanies.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   No companies found
@@ -173,7 +171,6 @@ export function CompanyLinkerDialog({
                   <SelectItem
                     key={company.id}
                     value={company.id}
-                    className="cursor-pointer hover:bg-primary/10 transition-colors"
                   >
                     <div className="flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -201,14 +198,12 @@ export function CompanyLinkerDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="rounded-xl transition-all duration-200 hover:scale-105"
           >
             Cancel
           </Button>
           <Button
             onClick={handleLink}
             disabled={!selectedCompanyId}
-            className="rounded-xl bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105"
           >
             <Link2 className="w-4 h-4 mr-2" />
             Link Company

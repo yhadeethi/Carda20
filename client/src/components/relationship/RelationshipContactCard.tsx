@@ -98,13 +98,19 @@ export function RelationshipContactCard({
                     </Button>
                   </DropdownMenuTrigger>
 
-                  <DropdownMenuContent align="end" className="backdrop-blur-xl bg-background/95">
+                  <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={onOpen}>
                       <User className="w-4 h-4 mr-2" />
                       Open
                     </DropdownMenuItem>
 
-                    <DropdownMenuItem onClick={() => setShowLinker(true)}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowLinker(true);
+                      }}
+                      onSelect={(e) => e.preventDefault()}
+                    >
                       <Link2 className="w-4 h-4 mr-2" />
                       Link to Company
                     </DropdownMenuItem>
