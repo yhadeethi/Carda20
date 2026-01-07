@@ -92,8 +92,8 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
   UNKNOWN: "Unknown",
 };
 
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 96;
+const NODE_WIDTH = 260;
+const NODE_HEIGHT = 72;
 
 interface ContactNodeData extends Record<string, unknown> {
   contact: StoredContact;
@@ -157,61 +157,67 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   return (
     <div
       className={`
-        group relative rounded-2xl border-2 cursor-pointer overflow-hidden
-        transition-all duration-200 ease-out backdrop-blur-sm
+        group relative rounded-full cursor-pointer overflow-visible
+        transition-all duration-200 ease-out
         ${colors.bg} ${colors.border}
         ${isDimmed ? "opacity-25 saturate-50" : "opacity-100"}
         ${
           selected
-            ? "ring-2 ring-primary ring-offset-2 shadow-xl scale-[1.02]"
-            : "shadow-lg shadow-black/8 dark:shadow-black/20 hover:shadow-xl hover:shadow-black/12 hover:scale-[1.02] active:scale-[0.98] active:shadow-md"
+            ? "ring-2 ring-primary ring-offset-2 shadow-xl scale-[1.03]"
+            : "shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
         }
       `}
       style={{
         width: NODE_WIDTH,
-        minHeight: NODE_HEIGHT - 8,
-        backdropFilter: "blur(8px) saturate(180%)",
-        WebkitBackdropFilter: "blur(8px) saturate(180%)"
+        height: NODE_HEIGHT,
+        backdropFilter: "blur(12px) saturate(180%)",
+        WebkitBackdropFilter: "blur(12px) saturate(180%)",
+        border: "1px solid rgba(255, 255, 255, 0.2)",
+        boxShadow: isDimmed
+          ? "0 4px 12px rgba(0, 0, 0, 0.1)"
+          : `0 4px 20px ${getGradientColor(department, "light")}40, 0 2px 8px rgba(0, 0, 0, 0.1)`,
       }}
       onClick={handleClick}
       data-testid={`org-node-${contact.id}`}
     >
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 dark:via-white/20 to-transparent" />
-      <div className={`absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full ${colors.accent} shadow-sm`} />
-
-      {isFocused && <div className="absolute inset-0 ring-2 ring-primary/60 ring-inset pointer-events-none rounded-2xl" />}
-      <div className="absolute right-2 top-2 flex items-center gap-1.5 opacity-0 transition-all duration-200 group-hover:opacity-100">
+      {/* Hover action buttons */}
+      {isFocused && <div className="absolute inset-0 ring-2 ring-primary/60 ring-inset pointer-events-none rounded-full" />}
+      <div className="absolute -right-1 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-2">
         <button
           type="button"
-          className="rounded-full bg-background/95 text-foreground shadow-md border border-border p-1.5 hover:bg-background hover:scale-110 transition-all duration-200 backdrop-blur-xl"
+          className="rounded-full bg-background/95 text-foreground shadow-lg border border-border p-1.5 hover:bg-background hover:scale-110 transition-all duration-200 backdrop-blur-xl"
           onClick={handleFocusContact}
           aria-label="Focus on contact"
         >
-          <Crosshair className="h-3.5 w-3.5" />
+          <Crosshair className="h-3 w-3" />
         </button>
         <button
           type="button"
-          className="rounded-full bg-background/95 text-foreground shadow-md border border-border p-1.5 hover:bg-background hover:scale-110 transition-all duration-200 backdrop-blur-xl"
+          className="rounded-full bg-background/95 text-foreground shadow-lg border border-border p-1.5 hover:bg-background hover:scale-110 transition-all duration-200 backdrop-blur-xl"
           onClick={handleOpenContact}
           aria-label="Open contact"
         >
-          <ExternalLink className="h-3.5 w-3.5" />
+          <ExternalLink className="h-3 w-3" />
         </button>
       </div>
 
+      {/* Connection Handles */}
       <Handle
         type="target"
         position={Position.Top}
-        className={`!w-3 !h-3 !border-2 !border-white dark:!border-gray-800 !shadow-sm ${
+        className={`!w-4 !h-4 !border-2 !border-white dark:!border-gray-800 !shadow-lg !-top-2 ${
           isEditable
-            ? "!bg-primary/90 dark:!bg-primary/70 animate-pulse"
-            : "!bg-gray-300 dark:!bg-gray-600"
+            ? "!bg-primary !animate-pulse !scale-110"
+            : "!bg-gray-400/50 dark:!bg-gray-600/50 !opacity-0 group-hover:!opacity-100"
         }`}
+        style={{ transition: "all 0.2s ease-out" }}
       />
 
-      <div className="flex items-start gap-3 p-3.5 pl-5">
+      {/* Main content - horizontal pill layout */}
+      <div className="flex items-center gap-3 h-full px-3 py-2">
+        {/* Large Avatar */}
         <div
-          className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 shadow-md ${colors.accent}`}
+          className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold text-white shrink-0 shadow-lg ring-2 ring-white/20"
           style={{
             background: `linear-gradient(135deg, ${getGradientColor(department, "light")} 0%, ${getGradientColor(
               department,
@@ -222,31 +228,36 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
           {getInitials(contact.name || "")}
         </div>
 
-        <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Name and Title */}
+        <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm truncate text-foreground leading-tight" style={{ fontWeight: 600 }}>
             {contact.name || "Unknown"}
           </p>
-          {contact.title && <p className="text-xs text-muted-foreground truncate leading-tight">{contact.title}</p>}
-
-          <div className="flex items-center gap-1.5 pt-0.5">
-            <Badge
-              variant="secondary"
-              className={`text-[10px] px-2.5 py-0.5 h-[20px] font-medium rounded-full ${colors.text} ${colors.accentLight} border-0`}
-            >
-              {DEPARTMENT_LABELS[department]}
-            </Badge>
-          </div>
+          {contact.title && (
+            <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">{contact.title}</p>
+          )}
         </div>
+
+        {/* Department Badge */}
+        {department !== "UNKNOWN" && (
+          <Badge
+            variant="secondary"
+            className={`text-[9px] px-2 py-0.5 shrink-0 font-medium rounded-full ${colors.text} ${colors.accentLight} border-0`}
+          >
+            {DEPARTMENT_LABELS[department]}
+          </Badge>
+        )}
       </div>
 
       <Handle
         type="source"
         position={Position.Bottom}
-        className={`!w-3 !h-3 !border-2 !border-white dark:!border-gray-800 !shadow-sm ${
+        className={`!w-4 !h-4 !border-2 !border-white dark:!border-gray-800 !shadow-lg !-bottom-2 ${
           isEditable
-            ? "!bg-primary/90 dark:!bg-primary/70 animate-pulse"
-            : "!bg-gray-300 dark:!bg-gray-600"
+            ? "!bg-primary !animate-pulse !scale-110"
+            : "!bg-gray-400/50 dark:!bg-gray-600/50 !opacity-0 group-hover:!opacity-100"
         }`}
+        style={{ transition: "all 0.2s ease-out" }}
       />
     </div>
   );
