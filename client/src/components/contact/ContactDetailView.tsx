@@ -93,6 +93,11 @@ interface ContactDetailViewProps {
   onDownloadVCard: () => void;
   onViewInOrgMap?: (companyId: string) => void;
   companyId?: string | null;
+  /**
+   * If true, opens the follow-up composer panel on mount.
+   * Used by Home Scoreboard “Send follow-up” CTA to reduce taps.
+   */
+  autoOpenFollowUp?: boolean;
 }
 
 function toDatetimeLocalValue(d: Date): string {
@@ -163,6 +168,9 @@ export function ContactDetailView({
   onUpdate,
   onContactUpdated,
   onDownloadVCard,
+  onViewInOrgMap,
+  companyId,
+  autoOpenFollowUp,
 }: ContactDetailViewProps) {
   const { toast } = useToast();
 
@@ -197,6 +205,17 @@ export function ContactDetailView({
   const [followUpResult, setFollowUpResult] =
     useState<FollowUpResponse | null>(null);
   const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+
+  // Allow upstream screens (e.g., Home Scoreboard) to deep-link into the follow-up drawer.
+  useEffect(() => {
+    if (!autoOpenFollowUp) return;
+    // Open on next tick so layout is stable.
+    const t = window.setTimeout(() => {
+      setShowFollowUp(true);
+      setFollowUpResult(null);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [autoOpenFollowUp]);
 
   const keyboardInset = useKeyboardInset(showFollowUp);
 
@@ -400,12 +419,33 @@ export function ContactDetailView({
     const body = buildFollowUpCopyText(res);
     const mode = String(followUpMode);
 
+    const logFollowUpAction = (channel: string, note?: string) => {
+      try {
+        addTimelineEvent(
+          contact.id,
+          "followup_sent",
+          `Follow-up sent (${channel})`,
+          {
+            channel,
+            note,
+            subject: res.subject,
+            bodyPreview: res.body?.slice?.(0, 160),
+          }
+        );
+        onUpdate();
+      } catch (e) {
+        console.warn("[ContactDetailView] Failed to log followup_sent:", e);
+      }
+    };
+
     if (mode.includes("email")) {
       if (!contact.email) {
         await navigator.clipboard.writeText(body);
         toast({ title: "Copied", description: "No email. Copied to clipboard." });
+        logFollowUpAction("copied", "no_email");
         return;
       }
+      logFollowUpAction("email");
       openMailto(contact.email, res.subject || undefined, res.body);
       return;
     }
@@ -415,8 +455,10 @@ export function ContactDetailView({
       if (!p) {
         await navigator.clipboard.writeText(body);
         toast({ title: "Copied", description: "No phone. Copied to clipboard." });
+        logFollowUpAction("copied", "no_phone");
         return;
       }
+      logFollowUpAction("sms");
       openSms(p, body);
       return;
     }
@@ -424,12 +466,14 @@ export function ContactDetailView({
     if (mode.includes("linkedin")) {
       await navigator.clipboard.writeText(body);
       toast({ title: "Copied", description: "Copied. Opening LinkedIn…" });
+      logFollowUpAction("linkedin");
       if (contact.linkedinUrl) window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
       return;
     }
 
     await navigator.clipboard.writeText(body);
     toast({ title: "Copied" });
+    logFollowUpAction("copied", "fallback");
   };
 
   const handleGenerateFollowUp = async () => {
@@ -485,6 +529,13 @@ export function ContactDetailView({
     if (!followUpResult) return;
     try {
       await navigator.clipboard.writeText(buildFollowUpCopyText(followUpResult));
+      addTimelineEvent(
+        contact.id,
+        "followup_sent",
+        "Follow-up copied",
+        { channel: "copied", bodyPreview: followUpResult.body.slice(0, 160) }
+      );
+      onUpdate();
       toast({ title: "Copied" });
     } catch {
       toast({ title: "Copy failed", variant: "destructive" });

@@ -15,3 +15,7 @@ Notes:
 
 Next storage step:
 - Update useScoreboard to pull from useContacts() (cloud/local router) so counts match cloud data.
+
+
+Additional fix:
+- client/src/hooks/useAuth.ts (edited): adds proper typing for the user object returned from /api/auth/user.

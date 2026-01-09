@@ -36,7 +36,7 @@ export function useScoreboard(refreshKey: number) {
     return contacts
       .map((c) => {
         const createdAt = parseIso(c.createdAt) || new Date(0);
-        const lastTouchedAt = parseIso((c as any).lastTouchedAt) || createdAt;
+        const lastTouchedAt = parseIso(c.lastTouchedAt) || createdAt;
         const followUpDone = hasTimelineEvent(c, "followup_sent");
         return { c, createdAt, lastTouchedAt, followUpDone };
       })

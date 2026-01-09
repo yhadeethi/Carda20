@@ -72,22 +72,31 @@ export default function HomePage() {
 
   const recentAccounts = useMemo(() => loadRecentAccounts(), []);
   const otherAccounts = useMemo(() => {
-    const currentEmail = (user as any)?.email;
+    const currentEmail = user?.email;
     return recentAccounts.filter(a => a.email !== currentEmail);
   }, [recentAccounts, user]);
 
   useEffect(() => {
-    const email = (user as any)?.email;
+    const email = user?.email;
     if (email) {
       saveRecentAccount(email);
     }
   }, [user]);
 
-  const handleSwitchAccount = () => {
+  const handleSwitchAccount = (email: string) => {
+    // Replit auth does not support true multi-session switching in-app.
+    // We store the target email so the UI can show intent post-login.
+    try {
+      localStorage.setItem("carda_switch_to_email", email);
+    } catch {}
     window.location.href = "/api/logout";
   };
 
   const handleAddAccount = () => {
+    // Triggers sign-out so the user can sign in with another account.
+    try {
+      localStorage.setItem("carda_add_account", "1");
+    } catch {}
     window.location.href = "/api/logout";
   };
 
@@ -207,7 +216,7 @@ export default function HomePage() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
                 <Avatar className="w-8 h-8">
-                  <AvatarImage src={(user as any)?.profileImageUrl} alt="Profile" />
+                  <AvatarImage src={user?.profileImageUrl} alt="Profile" />
                   <AvatarFallback>
                     <User className="w-4 h-4" />
                   </AvatarFallback>
@@ -217,11 +226,11 @@ export default function HomePage() {
             <DropdownMenuContent align="end" className="w-56">
               <div className="px-2 py-1.5">
                 <p className="text-sm font-medium" data-testid="text-user-name">
-                  {(user as any)?.firstName || (user as any)?.fullName || 'User'}
+                  {user?.firstName || user?.fullName || 'User'}
                 </p>
-                {(user as any)?.email && (
+                {user?.email && (
                   <p className="text-xs text-muted-foreground" data-testid="text-user-email">
-                    {(user as any)?.email}
+                    {user?.email}
                   </p>
                 )}
               </div>
@@ -234,7 +243,7 @@ export default function HomePage() {
                   {otherAccounts.slice(0, 3).map((account) => (
                     <DropdownMenuItem
                       key={account.email}
-                      onClick={handleSwitchAccount}
+                      onClick={() => handleSwitchAccount(account.email)}
                       className="flex items-center gap-2 cursor-pointer"
                       data-testid={`button-switch-account-${account.email}`}
                     >

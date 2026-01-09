@@ -30,6 +30,7 @@ export type TimelineEventType =
   | "note_added"
   | "note_updated"
   | "followup_generated"
+  | "followup_sent"
   | "reminder_set"
   | "reminder_done"
   | "task_added"
