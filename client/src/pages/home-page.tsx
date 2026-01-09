@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw } from "lucide-react";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
-import { ContactV2 } from "@/lib/contacts/storage";
+import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 import { motion, AnimatePresence } from "framer-motion";
 
 type TabMode = "home" | "scan" | "contacts" | "events";
@@ -129,13 +129,10 @@ export default function HomePage() {
     setViewMode("contact-detail");
   };
 
-  const handleSelectContactV2WithAction = useCallback((contactV2: ContactV2, action?: "followup") => {
-    const storedContact = loadContacts().find(c => c.id === contactV2.id);
-    if (storedContact) {
-      setSelectedContact(storedContact);
-      setContactInitialAction(action || null);
-      setViewMode("contact-detail");
-    }
+  const handleSelectUnifiedContact = useCallback((contact: UnifiedContact, action?: "followup") => {
+    setSelectedContact(contact);
+    setContactInitialAction(action || null);
+    setViewMode("contact-detail");
   }, []);
 
   const handleBackToContacts = () => {
@@ -294,7 +291,7 @@ export default function HomePage() {
                 onPressScan={() => handleTabChange("scan")}
                 onPressRelationships={() => handleTabChange("contacts")}
                 onPressEvents={() => handleTabChange("events")}
-                onSelectContact={(c, action) => handleSelectContactV2WithAction(c, action)}
+                onSelectContact={(c, action) => handleSelectUnifiedContact(c, action)}
               />
             </motion.div>
           )}

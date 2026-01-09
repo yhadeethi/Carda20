@@ -1,16 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { Camera, Calendar, Plus, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ContactV2 } from "@/lib/contacts/storage";
 import { useScoreboard } from "@/hooks/useScoreboard";
+import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 
 type HomeScoreboardProps = {
   refreshKey: number;
   onPressScan: () => void;
   onPressRelationships: () => void;
   onPressEvents: () => void;
-  onSelectContact: (contact: ContactV2, initialAction?: "followup") => void;
+  onSelectContact: (contact: UnifiedContact, initialAction?: "followup") => void;
 };
 
 function initials(name?: string | null): string {
@@ -28,7 +28,7 @@ function ContactRow({
   onCTA,
   onOpen,
 }: {
-  contact: ContactV2;
+  contact: UnifiedContact;
   ctaLabel: string;
   onCTA: () => void;
   onOpen: () => void;
@@ -64,7 +64,13 @@ export function HomeScoreboard({
   onPressEvents,
   onSelectContact,
 }: HomeScoreboardProps) {
-  const { dueFollowUps, newCaptures, eventSprints, counts, insights } = useScoreboard(refreshKey);
+  const { contacts, refreshLocal } = useUnifiedContacts();
+  
+  useEffect(() => {
+    refreshLocal();
+  }, [refreshKey, refreshLocal]);
+  
+  const { dueFollowUps, newCaptures, eventSprints, counts, insights } = useScoreboard(contacts, refreshKey);
 
   const topEvent = eventSprints[0] || null;
   const showEventTile = counts.eventSprints > 0 && !!topEvent;

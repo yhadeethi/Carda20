@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ContactV2, loadContactsV2 } from "@/lib/contacts/storage";
+import type { UnifiedContact } from "./useUnifiedContacts";
 
 const FOLLOWUP_DUE_AFTER_DAYS = 3;
 const NEW_CAPTURE_HOURS = 24;
@@ -11,7 +11,7 @@ function parseIso(s?: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function hasTimelineEvent(contact: ContactV2, type: string): boolean {
+function hasTimelineEvent(contact: UnifiedContact, type: string): boolean {
   return Array.isArray(contact.timeline) && contact.timeline.some((t) => t.type === type);
 }
 
@@ -20,17 +20,10 @@ export type EventSprintSummary = {
   pending: number;
 };
 
-export function useScoreboard(refreshKey: number) {
+export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: number) {
   const now = useMemo(() => new Date(), [refreshKey]);
 
-  const contacts = useMemo(() => {
-    try {
-      return loadContactsV2();
-    } catch {
-      return [] as ContactV2[];
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]);
+  const contacts = useMemo(() => inputContacts, [inputContacts]);
 
   const enriched = useMemo(() => {
     return contacts
@@ -67,7 +60,7 @@ export function useScoreboard(refreshKey: number) {
       if (followUpDone) continue;
       map.set(eventName, (map.get(eventName) || 0) + 1);
     }
-    return [...map.entries()]
+    return Array.from(map.entries())
       .map(([eventName, pending]) => ({ eventName, pending }))
       .sort((a, b) => b.pending - a.pending);
   }, [enriched]);
