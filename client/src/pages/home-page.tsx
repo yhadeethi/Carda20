@@ -413,8 +413,8 @@ export default function HomePage() {
 
             {/* Pill group */}
             <div
-              className={`inline-flex items-center rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-xl border transition-all duration-300 ease-out ${
-                isCompact ? "gap-4 px-4 py-2" : "gap-6 px-5 py-3"
+              className={`inline-flex items-center h-12 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-xl border transition-all duration-300 ease-out ${
+                isCompact ? "gap-4 px-4" : "gap-6 px-5"
               }`}
             >
               {tabs.map((tab) => {

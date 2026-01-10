@@ -91,48 +91,48 @@ export function HomeScoreboard({
       <div className="grid grid-cols-2 gap-3 mb-4">
         <button
           onClick={onPressRelationships}
-          className="rounded-2xl bg-card border p-3 text-left hover:bg-accent/30 transition-colors"
+          className="rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border border-blue-200 dark:border-blue-800/50 p-3 text-left hover:from-blue-100 hover:to-blue-200/50 dark:hover:from-blue-900/40 dark:hover:to-blue-800/30 transition-all"
           style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
         >
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Follow-ups</div>
-            <Users className="w-4 h-4 text-muted-foreground" />
+            <div className="text-xs text-blue-700 dark:text-blue-300 font-medium">Follow-ups</div>
+            <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className="mt-2 text-2xl font-semibold">{counts.dueFollowUps}</div>
-          <div className="text-xs text-muted-foreground">Due</div>
+          <div className="mt-2 text-2xl font-semibold text-blue-900 dark:text-blue-100">{counts.dueFollowUps}</div>
+          <div className="text-xs text-blue-600 dark:text-blue-400">Due</div>
         </button>
 
         <button
           onClick={onPressScan}
-          className="rounded-2xl bg-card border p-3 text-left hover:bg-accent/30 transition-colors"
+          className="rounded-2xl bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border border-green-200 dark:border-green-800/50 p-3 text-left hover:from-green-100 hover:to-green-200/50 dark:hover:from-green-900/40 dark:hover:to-green-800/30 transition-all"
           style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
         >
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">New captures</div>
-            <Camera className="w-4 h-4 text-muted-foreground" />
+            <div className="text-xs text-green-700 dark:text-green-300 font-medium">New captures</div>
+            <Camera className="w-4 h-4 text-green-600 dark:text-green-400" />
           </div>
-          <div className="mt-2 text-2xl font-semibold">{counts.newCaptures}</div>
-          <div className="text-xs text-muted-foreground">In last 24h</div>
+          <div className="mt-2 text-2xl font-semibold text-green-900 dark:text-green-100">{counts.newCaptures}</div>
+          <div className="text-xs text-green-600 dark:text-green-400">In last 24h</div>
         </button>
       </div>
 
       {showEventTile && topEvent && (
         <button
           onClick={onPressEvents}
-          className="w-full rounded-2xl bg-card border p-3 text-left hover:bg-accent/30 transition-colors mb-4"
+          className="w-full rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200 dark:border-purple-800/50 p-3 text-left hover:from-purple-100 hover:to-purple-200/50 dark:hover:from-purple-900/40 dark:hover:to-purple-800/30 transition-all mb-4"
           style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
         >
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs text-muted-foreground">Event sprint</div>
-              <div className="text-sm font-medium truncate max-w-[70%]">{topEvent.eventName}</div>
+              <div className="text-xs text-purple-700 dark:text-purple-300 font-medium">Event sprint</div>
+              <div className="text-sm font-medium truncate max-w-[70%] text-purple-900 dark:text-purple-100">{topEvent.eventName}</div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="text-lg font-semibold">{topEvent.pending}</div>
-              <Calendar className="w-4 h-4 text-muted-foreground" />
+              <div className="text-lg font-semibold text-purple-900 dark:text-purple-100">{topEvent.pending}</div>
+              <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             </div>
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">Tap to review and follow up</div>
+          <div className="mt-2 text-xs text-purple-600 dark:text-purple-400">Tap to review and follow up</div>
         </button>
       )}
 
@@ -190,23 +190,23 @@ export function HomeScoreboard({
       <div className="mb-2">
         <div className="text-sm font-semibold mb-2">Insights</div>
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-2xl bg-card border p-3">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Reconnect</div>
-            <div className="mt-1 text-lg font-semibold">{insights.reconnectCount}</div>
-            <div className="text-xs text-muted-foreground">60+ days</div>
+          <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800/50 p-3">
+            <div className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300 font-semibold">Reconnect</div>
+            <div className="mt-1 text-lg font-semibold text-amber-900 dark:text-amber-100">{insights.reconnectCount}</div>
+            <div className="text-xs text-amber-600 dark:text-amber-400">60+ days</div>
           </div>
-          <div className="rounded-2xl bg-card border p-3">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Data quality</div>
-            <div className="mt-1 text-lg font-semibold">{insights.missingFieldsCount}</div>
-            <div className="text-xs text-muted-foreground">Missing fields</div>
+          <div className="rounded-2xl bg-gradient-to-br from-sky-50 to-blue-50/50 dark:from-sky-950/30 dark:to-blue-900/20 border border-sky-200 dark:border-sky-800/50 p-3">
+            <div className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300 font-semibold">Data quality</div>
+            <div className="mt-1 text-lg font-semibold text-sky-900 dark:text-sky-100">{insights.missingFieldsCount}</div>
+            <div className="text-xs text-sky-600 dark:text-sky-400">Missing fields</div>
           </div>
-          <div className="rounded-2xl bg-card border p-3">
+          <div className="rounded-2xl bg-gradient-to-br from-pink-50 to-purple-50/50 dark:from-pink-950/30 dark:to-purple-900/20 border border-pink-200 dark:border-pink-800/50 p-3">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Momentum</div>
-              <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+              <div className="text-[10px] uppercase tracking-wide text-pink-700 dark:text-pink-300 font-semibold">Momentum</div>
+              <Sparkles className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
             </div>
-            <div className="mt-1 text-lg font-semibold">{insights.weeklyMomentumCount}</div>
-            <div className="text-xs text-muted-foreground">Actions / 7d</div>
+            <div className="mt-1 text-lg font-semibold text-pink-900 dark:text-pink-100">{insights.weeklyMomentumCount}</div>
+            <div className="text-xs text-pink-600 dark:text-pink-400">Actions / 7d</div>
           </div>
         </div>
       </div>
