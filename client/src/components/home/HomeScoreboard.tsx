@@ -91,28 +91,28 @@ export function HomeScoreboard({
       <div className="grid grid-cols-2 gap-3 mb-4">
         <button
           onClick={onPressRelationships}
-          className="rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border border-blue-200 dark:border-blue-800/50 p-3 text-left hover:from-blue-100 hover:to-blue-200/50 dark:hover:from-blue-900/40 dark:hover:to-blue-800/30 transition-all"
+          className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800/50 p-3 text-left hover:from-amber-100 hover:to-orange-100/60 dark:hover:from-amber-900/40 dark:hover:to-orange-800/30 transition-all"
           style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
         >
           <div className="flex items-center justify-between">
-            <div className="text-xs text-blue-700 dark:text-blue-300 font-medium">Follow-ups</div>
-            <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <div className="text-xs text-amber-800 dark:text-amber-300 font-medium">Follow-ups</div>
+            <Users className="w-4 h-4 text-amber-700 dark:text-amber-400" />
           </div>
-          <div className="mt-2 text-2xl font-semibold text-blue-900 dark:text-blue-100">{counts.dueFollowUps}</div>
-          <div className="text-xs text-blue-600 dark:text-blue-400">Due</div>
+          <div className="mt-2 text-3xl font-semibold text-amber-900 dark:text-amber-100">{counts.dueFollowUps}</div>
+          <div className="text-xs text-amber-700 dark:text-amber-400">Due now</div>
         </button>
 
         <button
           onClick={onPressScan}
-          className="rounded-2xl bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border border-green-200 dark:border-green-800/50 p-3 text-left hover:from-green-100 hover:to-green-200/50 dark:hover:from-green-900/40 dark:hover:to-green-800/30 transition-all"
+          className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100/50 dark:from-emerald-950/30 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800/50 p-3 text-left hover:from-emerald-100 hover:to-teal-200/60 dark:hover:from-emerald-900/40 dark:hover:to-teal-800/30 transition-all"
           style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
         >
           <div className="flex items-center justify-between">
-            <div className="text-xs text-green-700 dark:text-green-300 font-medium">New captures</div>
-            <Camera className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <div className="text-xs text-emerald-800 dark:text-emerald-300 font-medium">New captures</div>
+            <Camera className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
           </div>
-          <div className="mt-2 text-2xl font-semibold text-green-900 dark:text-green-100">{counts.newCaptures}</div>
-          <div className="text-xs text-green-600 dark:text-green-400">In last 24h</div>
+          <div className="mt-2 text-3xl font-semibold text-emerald-900 dark:text-emerald-100">{counts.newCaptures}</div>
+          <div className="text-xs text-emerald-700 dark:text-emerald-400">In the last 24h</div>
         </button>
       </div>
 
@@ -152,7 +152,7 @@ export function HomeScoreboard({
               <ContactRow
                 key={c.id}
                 contact={c}
-                ctaLabel="Send"
+                ctaLabel="Send follow-up"
                 onCTA={() => onSelectContact(c, "followup")}
                 onOpen={() => onSelectContact(c)}
               />
@@ -171,7 +171,7 @@ export function HomeScoreboard({
         </div>
         <Card className="p-3">
           {newList.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-2">No new contacts in the last 24h.</div>
+            <div className="text-sm text-muted-foreground py-2">No new captures yet — try scanning a card.</div>
           ) : (
             newList.map((c) => (
               <ContactRow
@@ -200,13 +200,13 @@ export function HomeScoreboard({
             <div className="mt-1 text-lg font-semibold text-sky-900 dark:text-sky-100">{insights.missingFieldsCount}</div>
             <div className="text-xs text-sky-600 dark:text-sky-400">Missing fields</div>
           </div>
-          <div className="rounded-2xl bg-gradient-to-br from-pink-50 to-purple-50/50 dark:from-pink-950/30 dark:to-purple-900/20 border border-pink-200 dark:border-pink-800/50 p-3">
+          <div className="rounded-2xl bg-gradient-to-br from-purple-50 to-fuchsia-50/50 dark:from-purple-950/30 dark:to-fuchsia-900/20 border border-purple-200 dark:border-purple-800/50 p-3">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-wide text-pink-700 dark:text-pink-300 font-semibold">Momentum</div>
-              <Sparkles className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
+              <div className="text-[10px] uppercase tracking-wide text-purple-700 dark:text-purple-300 font-semibold">Momentum</div>
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
             </div>
-            <div className="mt-1 text-lg font-semibold text-pink-900 dark:text-pink-100">{insights.weeklyMomentumCount}</div>
-            <div className="text-xs text-pink-600 dark:text-pink-400">Actions / 7d</div>
+            <div className="mt-1 text-lg font-semibold text-purple-900 dark:text-purple-100">{insights.weeklyMomentumCount}</div>
+            <div className="text-xs text-purple-600 dark:text-purple-400">Actions / 7d</div>
           </div>
         </div>
       </div>
