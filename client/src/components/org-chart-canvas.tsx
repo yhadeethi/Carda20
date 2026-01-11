@@ -1,8 +1,11 @@
 /**
- * OrgChartCanvas v2.1 - Interactive React Flow org chart with dagre layout
- * Changes vs v2:
- * - Nodes are NOT draggable (layout is dagre-driven; dragging feels like a bug)
- * - Grid background removed (clean sheet look)
+ * OrgChartCanvas v3.0 - Modern, clean org chart with tap interactions
+ * Changes vs v2.1:
+ * - Removed drag-to-connect handles (unreliable)
+ * - Tap cards to edit reporting lines
+ * - Modernized card design with better elevation
+ * - Cleaner connection lines
+ * - Micro-interactions and smooth animations
  */
 
 import { useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from "react";
@@ -92,8 +95,8 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
   UNKNOWN: "Unknown",
 };
 
-const NODE_WIDTH = 260;
-const NODE_HEIGHT = 72;
+const NODE_WIDTH = 280;
+const NODE_HEIGHT = 80;
 
 interface ContactNodeData extends Record<string, unknown> {
   contact: StoredContact;
@@ -157,67 +160,67 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   return (
     <div
       className={`
-        group relative rounded-full cursor-pointer overflow-visible
-        transition-all duration-200 ease-out
+        group relative rounded-2xl cursor-pointer overflow-visible
+        transition-all duration-300 ease-out
         ${colors.bg} ${colors.border}
-        ${isDimmed ? "opacity-25 saturate-50" : "opacity-100"}
+        ${isDimmed ? "opacity-30 saturate-50" : "opacity-100"}
         ${
           selected
-            ? "ring-2 ring-primary ring-offset-2 shadow-xl scale-[1.03]"
-            : "shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+            ? "ring-2 ring-primary/60 ring-offset-2 ring-offset-background scale-[1.05]"
+            : "hover:scale-[1.03] active:scale-[0.99]"
         }
       `}
       style={{
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
-        backdropFilter: "blur(12px) saturate(180%)",
-        WebkitBackdropFilter: "blur(12px) saturate(180%)",
-        border: "1px solid rgba(255, 255, 255, 0.2)",
+        backdropFilter: "blur(16px) saturate(180%)",
+        WebkitBackdropFilter: "blur(16px) saturate(180%)",
+        border: "1px solid rgba(255, 255, 255, 0.3)",
         boxShadow: isDimmed
-          ? "0 4px 12px rgba(0, 0, 0, 0.1)"
-          : `0 4px 20px ${getGradientColor(department, "light")}40, 0 2px 8px rgba(0, 0, 0, 0.1)`,
+          ? "0 2px 8px rgba(0, 0, 0, 0.06)"
+          : selected
+          ? `0 8px 24px ${getGradientColor(department, "light")}30, 0 4px 12px rgba(0, 0, 0, 0.08)`
+          : `0 4px 16px ${getGradientColor(department, "light")}20, 0 2px 8px rgba(0, 0, 0, 0.06)`,
       }}
       onClick={handleClick}
       data-testid={`org-node-${contact.id}`}
     >
-      {/* Hover action buttons */}
-      {isFocused && <div className="absolute inset-0 ring-2 ring-primary/60 ring-inset pointer-events-none rounded-full" />}
-      <div className="absolute -right-1 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-2">
+      {/* Focus indicator */}
+      {isFocused && <div className="absolute inset-0 ring-2 ring-primary/60 ring-inset pointer-events-none rounded-2xl" />}
+
+      {/* Hover action buttons - cleaner, modern design */}
+      <div className="absolute -right-1 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-2.5">
         <button
           type="button"
-          className="rounded-full bg-background/95 text-foreground shadow-lg border border-border p-1.5 hover:bg-background hover:scale-110 transition-all duration-200 backdrop-blur-xl"
+          className="rounded-full bg-background/95 text-foreground shadow-md border border-border/50 p-2 hover:bg-primary hover:text-primary-foreground hover:scale-110 hover:shadow-lg transition-all duration-200 backdrop-blur-xl"
           onClick={handleFocusContact}
           aria-label="Focus on contact"
         >
-          <Crosshair className="h-3 w-3" />
+          <Crosshair className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
-          className="rounded-full bg-background/95 text-foreground shadow-lg border border-border p-1.5 hover:bg-background hover:scale-110 transition-all duration-200 backdrop-blur-xl"
+          className="rounded-full bg-background/95 text-foreground shadow-md border border-border/50 p-2 hover:bg-primary hover:text-primary-foreground hover:scale-110 hover:shadow-lg transition-all duration-200 backdrop-blur-xl"
           onClick={handleOpenContact}
           aria-label="Open contact"
         >
-          <ExternalLink className="h-3 w-3" />
+          <ExternalLink className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* Connection Handles */}
+      {/* Connection Handles - HIDDEN (no drag-to-connect) */}
       <Handle
         type="target"
         position={Position.Top}
-        className={`!w-4 !h-4 !border-2 !border-white dark:!border-gray-800 !shadow-lg !-top-2 ${
-          isEditable
-            ? "!bg-primary !animate-pulse !scale-110"
-            : "!bg-gray-400/50 dark:!bg-gray-600/50 !opacity-0 group-hover:!opacity-100"
-        }`}
-        style={{ transition: "all 0.2s ease-out" }}
+        className="!w-0 !h-0 !opacity-0 !pointer-events-none"
+        style={{ display: "none" }}
       />
 
-      {/* Main content - horizontal pill layout */}
-      <div className="flex items-center gap-3 h-full px-3 py-2">
-        {/* Large Avatar */}
+      {/* Main content - horizontal layout */}
+      <div className="flex items-center gap-3.5 h-full px-4 py-3">
+        {/* Larger Avatar with better shadow */}
         <div
-          className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold text-white shrink-0 shadow-lg ring-2 ring-white/20"
+          className="w-14 h-14 rounded-full flex items-center justify-center text-base font-bold text-white shrink-0 shadow-md ring-2 ring-white/30 transition-transform duration-200 group-hover:scale-105"
           style={{
             background: `linear-gradient(135deg, ${getGradientColor(department, "light")} 0%, ${getGradientColor(
               department,
@@ -228,36 +231,33 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
           {getInitials(contact.name || "")}
         </div>
 
-        {/* Name and Title */}
+        {/* Name and Title with better hierarchy */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm truncate text-foreground leading-tight" style={{ fontWeight: 600 }}>
+          <p className="font-semibold text-[15px] truncate text-foreground leading-snug" style={{ fontWeight: 600 }}>
             {contact.name || "Unknown"}
           </p>
           {contact.title && (
-            <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">{contact.title}</p>
+            <p className="text-xs text-muted-foreground truncate leading-snug mt-0.5">{contact.title}</p>
           )}
         </div>
 
-        {/* Department Badge */}
+        {/* Department Badge - cleaner design */}
         {department !== "UNKNOWN" && (
           <Badge
             variant="secondary"
-            className={`text-[9px] px-2 py-0.5 shrink-0 font-medium rounded-full ${colors.text} ${colors.accentLight} border-0`}
+            className={`text-[10px] px-2.5 py-1 shrink-0 font-medium rounded-full ${colors.text} ${colors.accentLight} border-0 shadow-sm`}
           >
             {DEPARTMENT_LABELS[department]}
           </Badge>
         )}
       </div>
 
+      {/* Bottom Handle - HIDDEN (no drag-to-connect) */}
       <Handle
         type="source"
         position={Position.Bottom}
-        className={`!w-4 !h-4 !border-2 !border-white dark:!border-gray-800 !shadow-lg !-bottom-2 ${
-          isEditable
-            ? "!bg-primary !animate-pulse !scale-110"
-            : "!bg-gray-400/50 dark:!bg-gray-600/50 !opacity-0 group-hover:!opacity-100"
-        }`}
-        style={{ transition: "all 0.2s ease-out" }}
+        className="!w-0 !h-0 !opacity-0 !pointer-events-none"
+        style={{ display: "none" }}
       />
     </div>
   );
@@ -341,12 +341,12 @@ function buildGraphWithLayout(
         source: contact.org.reportsToId,
         target: contact.id,
         type: "smoothstep",
-        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "#a78bfa" },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: "#a78bfa" },
         style: {
           stroke: "url(#edge-gradient)",
-          strokeWidth: inFocusEdge ? 3.2 : 2.5,
+          strokeWidth: inFocusEdge ? 2.5 : 1.8,
           strokeLinecap: "round",
-          opacity: !hasFocus ? 1 : inFocusEdge ? 1 : 0.18,
+          opacity: !hasFocus ? 0.85 : inFocusEdge ? 1 : 0.15,
         },
         animated: inFocusEdge,
       });
@@ -459,20 +459,20 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
         minZoom={0.2}
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
-        nodesDraggable={false}          // ✅ key fix
-        nodesConnectable={!!editMode}   // keep connect-on-drag
+        nodesDraggable={false}
+        nodesConnectable={false}        // ✅ Disabled drag-to-connect
         onConnect={handleConnect}
         elementsSelectable
         panOnScroll
         zoomOnPinch
         preventScrolling={false}
       >
-        {/* Gradient definition for edges */}
+        {/* Gradient definition for edges - softer, more subtle */}
         <svg style={{ position: "absolute", width: 0, height: 0 }}>
           <defs>
             <linearGradient id="edge-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#c4b5fd" />
-              <stop offset="100%" stopColor="#a78bfa" />
+              <stop offset="0%" stopColor="#d8b4fe" />
+              <stop offset="100%" stopColor="#c084fc" />
             </linearGradient>
           </defs>
         </svg>
