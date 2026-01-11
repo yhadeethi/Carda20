@@ -1,9 +1,10 @@
 /**
- * Org Map Component v3 - iOS 26 Style
+ * Org Map Component v4 - Modern, Clean Design
  * Features:
  * - Hierarchy-first view (collapsible tree list)
  * - Optional diagram view via modal
- * - Minimal, clean interface
+ * - Tap-to-edit interactions (no drag-to-connect)
+ * - Minimal, clean interface with modern card design
  *
  * IMPORTANT:
  * This version writes org changes via V2 storage (updateContactV2),
@@ -230,22 +231,22 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         </div>
       </div>
 
-      {/* Quick Edit - Bottom Sheet (diagram + list) */}
+      {/* Quick Edit - Modern Bottom Sheet */}
       <Drawer open={showQuickEdit} onOpenChange={setShowQuickEdit}>
         <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="border-b">
-            <DrawerTitle className="text-base font-semibold">{selectedContact?.name || "Edit relationship"}</DrawerTitle>
+          <DrawerHeader className="border-b bg-card">
+            <DrawerTitle className="text-base font-semibold">{selectedContact?.name || "Edit Relationship"}</DrawerTitle>
           </DrawerHeader>
 
-          <div className="p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="p-4 space-y-5 bg-background">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Department</Label>
+                <Label className="text-xs font-medium text-muted-foreground">Department</Label>
                 <Select
                   value={selectedContact?.org?.department || "UNKNOWN"}
                   onValueChange={(v) => handleUpdateOrg({ department: v as Department })}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 rounded-lg transition-all duration-200 hover:border-primary/50">
                     <SelectValue placeholder="Department" />
                   </SelectTrigger>
                   <SelectContent>
@@ -261,12 +262,12 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Reports to</Label>
+                <Label className="text-xs font-medium text-muted-foreground">Reports to</Label>
                 <Select
                   value={selectedContact?.org?.reportsToId || "none"}
                   onValueChange={(v) => handleUpdateOrg({ reportsToId: v === "none" ? null : v })}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 rounded-lg transition-all duration-200 hover:border-primary/50">
                     <SelectValue placeholder="None" />
                   </SelectTrigger>
                   <SelectContent>
@@ -284,21 +285,21 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
             <div className="flex items-center justify-between gap-3">
               <Button
                 variant="outline"
-                className="flex-1"
+                className="flex-1 rounded-full transition-all duration-200"
                 onClick={() => selectedContact && onSelectContact(selectedContact)}
                 disabled={!selectedContact}
               >
                 Open Relationship
               </Button>
               <DrawerClose asChild>
-                <Button className="flex-1">Done</Button>
+                <Button className="flex-1 rounded-full shadow-sm transition-all duration-200">Done</Button>
               </DrawerClose>
             </div>
           </div>
 
-          <DrawerFooter className="border-t">
+          <DrawerFooter className="border-t bg-card">
             <DrawerClose asChild>
-              <Button variant="ghost" className="w-full">
+              <Button variant="ghost" className="w-full rounded-full transition-all duration-200">
                 Close
               </Button>
             </DrawerClose>
@@ -317,9 +318,9 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
             <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <DialogTitle className="text-base font-semibold sm:text-lg">Org Diagram</DialogTitle>
+                  <DialogTitle className="text-base font-semibold sm:text-lg">Organization Chart</DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground sm:text-sm">
-                    Hover over a person, then drag the handles to connect reporting lines
+                    Tap anyone to edit reporting lines and relationships
                   </DialogDescription>
                   {focusMode && focusId && (
                     <div className="mt-1 text-[11px] text-muted-foreground sm:text-xs">
@@ -334,7 +335,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full sm:hidden"
+                  className="h-10 w-10 shrink-0 rounded-full sm:hidden shadow-sm transition-all duration-200 hover:shadow-md hover:bg-destructive hover:text-destructive-foreground"
                   onClick={() => setShowDiagram(false)}
                   data-testid="button-close-diagram-mobile"
                   aria-label="Close diagram"
@@ -346,7 +347,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant={focusMode ? "default" : "outline"}
                   size="sm"
-                  className="rounded-full min-h-9"
+                  className="rounded-full min-h-9 px-4 shadow-sm transition-all duration-200 hover:shadow-md"
                   onClick={() => setFocusMode((v) => !v)}
                   data-testid="button-diagram-focus"
                 >
@@ -355,7 +356,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-full h-9 w-9"
+                  className="rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-accent"
                   onClick={handleZoomOut}
                   aria-label="Zoom out"
                 >
@@ -364,7 +365,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-full h-9 w-9"
+                  className="rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-accent"
                   onClick={handleZoomIn}
                   aria-label="Zoom in"
                 >
@@ -373,7 +374,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-full min-h-9"
+                  className="rounded-full min-h-9 px-4 shadow-sm transition-all duration-200 hover:shadow-md"
                   onClick={handleFitView}
                   data-testid="button-diagram-fit"
                 >
@@ -383,7 +384,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant="outline"
                   size="icon"
-                  className="hidden sm:inline-flex rounded-full h-9 w-9"
+                  className="hidden sm:inline-flex rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-destructive hover:text-destructive-foreground"
                   onClick={() => setShowDiagram(false)}
                   data-testid="button-close-diagram-desktop"
                   aria-label="Close diagram"
@@ -393,16 +394,16 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               </div>
             </div>
             {showInteractionHint && (
-              <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 backdrop-blur-sm px-4 py-3 text-sm text-foreground">
+              <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 backdrop-blur-sm px-4 py-3 text-sm text-foreground shadow-sm">
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 text-primary shrink-0" />
                   <span className="text-xs sm:text-sm">
-                    Tip: Hover over a person to reveal connection handles (circles). Drag from the bottom handle of one person to the top handle of another to set reporting lines.
+                    Tap any person to edit their department and reporting relationships. Use the action buttons on the right to focus or view details.
                   </span>
                 </div>
                 <button
                   type="button"
-                  className="text-xs font-medium text-primary hover:underline shrink-0"
+                  className="text-xs font-medium text-primary hover:underline shrink-0 transition-opacity hover:opacity-80"
                   onClick={handleDismissHint}
                 >
                   Got it
