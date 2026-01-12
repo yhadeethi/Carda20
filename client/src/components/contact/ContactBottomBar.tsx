@@ -77,8 +77,8 @@ export function ContactBottomBar({
 
       {/* Saved Menu Drawer */}
       <Drawer open={showSavedMenu} onOpenChange={setShowSavedMenu}>
-        <DrawerContent className="bg-background/60 backdrop-blur-2xl border-white/10" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-          <DrawerHeader style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
+        <DrawerContent className="bg-background/60 backdrop-blur-2xl border-white/10">
+          <DrawerHeader>
             <DrawerTitle>Contact Options</DrawerTitle>
           </DrawerHeader>
           <div className="px-4 pb-6 space-y-2">

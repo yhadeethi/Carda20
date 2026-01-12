@@ -799,8 +799,8 @@ export function ContactDetailView({
 
       {/* Follow-up Drawer */}
       <Drawer open={showFollowUp} handleOnly onOpenChange={setShowFollowUp}>
-        <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-          <DrawerHeader style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
+        <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
+          <DrawerHeader>
             <DrawerTitle>Follow-up</DrawerTitle>
             <DrawerClose asChild>
               <Button variant="ghost" size="sm">Done</Button>
@@ -900,8 +900,8 @@ export function ContactDetailView({
 
       {/* Meeting Drawer (leave as-is) */}
       <Drawer open={showMeeting} onOpenChange={setShowMeeting}>
-        <DrawerContent style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-          <DrawerHeader style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
+        <DrawerContent>
+          <DrawerHeader>
             <DrawerTitle>Meeting Invite</DrawerTitle>
             <DrawerClose asChild>
               <Button variant="ghost" size="sm">Done</Button>
@@ -967,8 +967,8 @@ export function ContactDetailView({
 
       {/* Intel Drawer */}
       <Drawer open={showIntel} handleOnly onOpenChange={(v) => setShowIntel(v)}>
-        <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-          <DrawerHeader style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
+        <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
+          <DrawerHeader>
             <DrawerTitle>Company Brief</DrawerTitle>
             <DrawerClose asChild>
               <Button variant="ghost" size="sm">Done</Button>
