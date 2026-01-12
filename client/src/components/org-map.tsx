@@ -26,11 +26,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
-import { Info, Users, GitBranch, Maximize2, X, ExternalLink } from "lucide-react";
+import { Users, GitBranch, Maximize2, X, ExternalLink } from "lucide-react";
 import { StoredContact, Department, DEFAULT_ORG } from "@/lib/contactsStorage";
 import { updateContactV2 } from "@/lib/contacts/storage";
 import { useToast } from "@/hooks/use-toast";
@@ -49,7 +47,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [showQuickEdit, setShowQuickEdit] = useState(false);
   const [focusMode, setFocusMode] = useState(true);
-  const [showInteractionHint, setShowInteractionHint] = useState(false);
   const [relayoutKey] = useState(0);
   const canvasRef = useRef<{ fitView: () => void; zoomIn: () => void; zoomOut: () => void } | null>(null);
   const { toast } = useToast();
@@ -90,16 +87,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
       website: companyContact?.website || "",
     };
   }, [contacts]);
-
-  useEffect(() => {
-    if (!showDiagram) return;
-    try {
-      const hasSeenHint = window.localStorage.getItem("carda_org_diagram_hint_v1");
-      if (!hasSeenHint) setShowInteractionHint(true);
-    } catch {
-      setShowInteractionHint(true);
-    }
-  }, [showDiagram]);
 
   useEffect(() => {
     if (!showDiagram || !focusMode || selectedContact || !rootContact) return;
@@ -198,13 +185,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
   const handleFitView = useCallback(() => {
     canvasRef.current?.fitView();
-  }, []);
-
-  const handleDismissHint = useCallback(() => {
-    try {
-      window.localStorage.setItem("carda_org_diagram_hint_v1", "seen");
-    } catch {}
-    setShowInteractionHint(false);
   }, []);
 
   // Empty state
@@ -344,41 +324,25 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
           className="max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] p-0 rounded-none sm:rounded-none"
           hideClose
         >
-          <div className="flex flex-col h-full">
-            {/* Modal Header */}
-            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <DialogTitle className="text-base font-semibold sm:text-lg">Organization Chart</DialogTitle>
-                  <DialogDescription className="text-xs text-muted-foreground sm:text-sm">
-                    Tap anyone to edit reporting lines and relationships
-                  </DialogDescription>
-                  {focusMode && focusId && (
-                    <div className="mt-1 text-[11px] text-muted-foreground sm:text-xs">
-                      Focused on{" "}
-                      <span className="font-medium text-foreground">
-                        {effectiveFocusContact?.name || "contact"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {/* Mobile-only close button - prominent and always visible */}
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full sm:hidden shadow-sm transition-all duration-200 hover:shadow-md hover:bg-destructive hover:text-destructive-foreground"
-                  onClick={() => setShowDiagram(false)}
-                  data-testid="button-close-diagram-mobile"
-                  aria-label="Close diagram"
-                >
-                  <X className="h-5 w-5" />
-                </Button>
+          <div className="flex flex-col h-full" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+            {/* Modal Header - Compact */}
+            <div className="flex items-center justify-between gap-2 border-b bg-background/95 px-3 py-2 backdrop-blur-xl">
+              <div className="flex items-center gap-2 min-w-0">
+                <DialogTitle className="text-sm font-semibold truncate">Org Chart</DialogTitle>
+                {focusMode && focusId && (
+                  <>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {effectiveFocusContact?.name || "contact"}
+                    </span>
+                  </>
+                )}
               </div>
-              <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+              <div className="flex items-center gap-1.5">
                 <Button
                   variant={focusMode ? "default" : "outline"}
                   size="sm"
-                  className="rounded-full min-h-9 px-4 shadow-sm transition-all duration-200 hover:shadow-md"
+                  className="rounded-full h-7 px-3 text-xs"
                   onClick={() => setFocusMode((v) => !v)}
                   data-testid="button-diagram-focus"
                 >
@@ -387,42 +351,24 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-full min-h-9 px-4 shadow-sm transition-all duration-200 hover:shadow-md"
+                  className="rounded-full h-7 px-3 text-xs"
                   onClick={handleFitView}
                   data-testid="button-diagram-fit"
                 >
-                  Fit View
+                  Fit
                 </Button>
-                {/* Desktop-only close button */}
                 <Button
                   variant="outline"
                   size="icon"
-                  className="hidden sm:inline-flex rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-destructive hover:text-destructive-foreground"
+                  className="rounded-full h-7 w-7"
                   onClick={() => setShowDiagram(false)}
-                  data-testid="button-close-diagram-desktop"
-                  aria-label="Close diagram"
+                  data-testid="button-close-diagram"
+                  aria-label="Close"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </Button>
               </div>
             </div>
-            {showInteractionHint && (
-              <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 backdrop-blur-sm px-4 py-3 text-sm text-foreground shadow-sm">
-                <div className="flex items-start gap-2">
-                  <Info className="mt-0.5 h-4 w-4 text-primary shrink-0" />
-                  <span className="text-xs sm:text-sm">
-                    Tap any person to edit their department and reporting relationships. Use pinch to zoom in/out.
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="text-xs font-medium text-primary hover:underline shrink-0 transition-opacity hover:opacity-80"
-                  onClick={handleDismissHint}
-                >
-                  Got it
-                </button>
-              </div>
-            )}
 
             {/* Diagram Canvas */}
             <div className="flex-1 min-h-0 bg-gradient-to-br from-slate-50 to-white dark:from-gray-900 dark:to-gray-950">

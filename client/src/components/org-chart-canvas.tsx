@@ -342,10 +342,12 @@ function buildGraphWithLayout(
         source: contact.org.reportsToId,
         target: contact.id,
         type: "smoothstep",
-        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "#a78bfa" },
+        sourceHandle: "bottom",
+        targetHandle: "top",
+        markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: "#a78bfa" },
         style: {
           stroke: "#a78bfa",
-          strokeWidth: inFocusEdge ? 3 : 2.5,
+          strokeWidth: inFocusEdge ? 2.5 : 2,
           strokeLinecap: "round",
           opacity: !hasFocus ? 0.9 : inFocusEdge ? 1 : 0.5,
         },
@@ -451,22 +453,7 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
   }
 
   return (
-    <div className="h-full w-full relative" data-testid="org-chart-canvas">
-      {/* Company Logo - Floating at top */}
-      {companyName && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-          <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl px-4 py-2.5 rounded-2xl border border-border/60 shadow-lg">
-            <CompanyAvatar
-              name={companyName}
-              domain={companyDomain || undefined}
-              website={companyWebsite || undefined}
-              size="md"
-            />
-            <span className="font-semibold text-sm text-foreground">{companyName}</span>
-          </div>
-        </div>
-      )}
-
+    <div className="h-full w-full" data-testid="org-chart-canvas">
       <ReactFlow
         nodes={nodes}
         edges={edges}
