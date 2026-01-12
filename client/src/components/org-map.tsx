@@ -46,7 +46,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
   const [showDiagram, setShowDiagram] = useState(false);
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [showQuickEdit, setShowQuickEdit] = useState(false);
-  const [focusMode, setFocusMode] = useState(true);
+  const [focusMode, setFocusMode] = useState(false);
   const [relayoutKey] = useState(0);
   const canvasRef = useRef<{ fitView: () => void; zoomIn: () => void; zoomOut: () => void } | null>(null);
   const { toast } = useToast();
@@ -324,25 +324,25 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
           className="max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] p-0 rounded-none sm:rounded-none"
           hideClose
         >
-          <div className="flex flex-col h-full" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-            {/* Modal Header - Compact */}
-            <div className="flex items-center justify-between gap-2 border-b bg-background/95 px-3 py-2 backdrop-blur-xl">
-              <div className="flex items-center gap-2 min-w-0">
-                <DialogTitle className="text-sm font-semibold truncate">Org Chart</DialogTitle>
+          <div className="flex flex-col h-full">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur-xl" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <DialogTitle className="text-base font-semibold">Organization Chart</DialogTitle>
                 {focusMode && focusId && (
                   <>
                     <span className="text-muted-foreground">·</span>
-                    <span className="text-xs text-muted-foreground truncate">
+                    <span className="text-sm text-muted-foreground truncate">
                       {effectiveFocusContact?.name || "contact"}
                     </span>
                   </>
                 )}
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
                   variant={focusMode ? "default" : "outline"}
                   size="sm"
-                  className="rounded-full h-7 px-3 text-xs"
+                  className="rounded-full h-8 px-3 text-xs"
                   onClick={() => setFocusMode((v) => !v)}
                   data-testid="button-diagram-focus"
                 >
@@ -351,16 +351,16 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-full h-7 px-3 text-xs"
+                  className="rounded-full h-8 px-3 text-xs"
                   onClick={handleFitView}
                   data-testid="button-diagram-fit"
                 >
-                  Fit
+                  Fit View
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-full h-7 w-7"
+                  className="rounded-full h-8 w-8"
                   onClick={() => setShowDiagram(false)}
                   data-testid="button-close-diagram"
                   aria-label="Close"

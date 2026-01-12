@@ -209,12 +209,13 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
         </button>
       </div>
 
-      {/* Connection Handles - HIDDEN (no drag-to-connect) */}
+      {/* Connection Handles - Invisible but present for edge routing */}
       <Handle
         type="target"
         position={Position.Top}
-        className="!w-0 !h-0 !opacity-0 !pointer-events-none"
-        style={{ display: "none" }}
+        id="top"
+        className="!w-[1px] !h-[1px] !min-w-0 !min-h-0 !bg-transparent !border-0 !pointer-events-none"
+        style={{ opacity: 0 }}
       />
 
       {/* Main content - horizontal layout */}
@@ -253,12 +254,13 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
         )}
       </div>
 
-      {/* Bottom Handle - HIDDEN (no drag-to-connect) */}
+      {/* Bottom Handle - Invisible but present for edge routing */}
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-0 !h-0 !opacity-0 !pointer-events-none"
-        style={{ display: "none" }}
+        id="bottom"
+        className="!w-[1px] !h-[1px] !min-w-0 !min-h-0 !bg-transparent !border-0 !pointer-events-none"
+        style={{ opacity: 0 }}
       />
     </div>
   );
