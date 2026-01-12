@@ -290,8 +290,8 @@ export function HierarchyList({ contacts, onContactUpdate, onSelectContact }: Hi
       </div>
 
       <Drawer open={!!editingContact} onOpenChange={(open) => !open && setEditingContact(null)}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="pb-4">
+        <DrawerContent className="max-h-[85vh]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+          <DrawerHeader className="pb-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/70 to-primary flex items-center justify-center text-primary-foreground font-bold text-xl shrink-0 shadow-lg shadow-primary/20">
                 {editingContact?.name?.charAt(0)?.toUpperCase() || "?"}

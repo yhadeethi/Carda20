@@ -30,7 +30,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Info, Users, GitBranch, Maximize2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Info, Users, GitBranch, Maximize2, X } from "lucide-react";
 import { StoredContact, Department, DEFAULT_ORG } from "@/lib/contactsStorage";
 import { updateContactV2 } from "@/lib/contacts/storage";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +61,35 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
   const effectiveFocusContact = focusMode ? selectedContact || rootContact || null : null;
   const focusId = effectiveFocusContact?.id || null;
+
+  // Extract company info from contacts for logo display
+  const companyInfo = useMemo(() => {
+    if (contacts.length === 0) return { name: "", domain: "", website: "" };
+
+    // Get the most common company name
+    const companyCounts: Record<string, number> = {};
+    contacts.forEach(c => {
+      if (c.company) companyCounts[c.company] = (companyCounts[c.company] || 0) + 1;
+    });
+
+    let mostCommonCompany = "";
+    let maxCount = 0;
+    for (const [company, count] of Object.entries(companyCounts)) {
+      if (count > maxCount) {
+        mostCommonCompany = company;
+        maxCount = count;
+      }
+    }
+
+    // Find a contact with that company to get website/email
+    const companyContact = contacts.find(c => c.company === mostCommonCompany) || contacts[0];
+
+    return {
+      name: mostCommonCompany || companyContact?.company || "",
+      domain: "",
+      website: companyContact?.website || "",
+    };
+  }, [contacts]);
 
   useEffect(() => {
     if (!showDiagram) return;
@@ -171,14 +200,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     canvasRef.current?.fitView();
   }, []);
 
-  const handleZoomIn = useCallback(() => {
-    canvasRef.current?.zoomIn();
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    canvasRef.current?.zoomOut();
-  }, []);
-
   const handleDismissHint = useCallback(() => {
     try {
       window.localStorage.setItem("carda_org_diagram_hint_v1", "seen");
@@ -233,74 +254,84 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
       {/* Quick Edit - Modern Bottom Sheet */}
       <Drawer open={showQuickEdit} onOpenChange={setShowQuickEdit}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="border-b bg-card">
-            <DrawerTitle className="text-base font-semibold">{selectedContact?.name || "Edit Relationship"}</DrawerTitle>
-          </DrawerHeader>
-
-          <div className="p-4 space-y-5 bg-background">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">Department</Label>
-                <Select
-                  value={selectedContact?.org?.department || "UNKNOWN"}
-                  onValueChange={(v) => handleUpdateOrg({ department: v as Department })}
-                >
-                  <SelectTrigger className="h-11 rounded-lg transition-all duration-200 hover:border-primary/50">
-                    <SelectValue placeholder="Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(["EXEC", "LEGAL", "PROJECT_DELIVERY", "SALES", "FINANCE", "OPS", "UNKNOWN"] as Department[]).map(
-                      (d) => (
-                        <SelectItem key={d} value={d}>
-                          {d.replace("_", " ")}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectContent>
-                </Select>
+        <DrawerContent className="max-h-[85vh]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+          <DrawerHeader className="pb-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/70 to-primary flex items-center justify-center text-primary-foreground font-bold text-xl shrink-0 shadow-lg shadow-primary/20">
+                {selectedContact?.name?.charAt(0)?.toUpperCase() || "?"}
               </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">Reports to</Label>
-                <Select
-                  value={selectedContact?.org?.reportsToId || "none"}
-                  onValueChange={(v) => handleUpdateOrg({ reportsToId: v === "none" ? null : v })}
-                >
-                  <SelectTrigger className="h-11 rounded-lg transition-all duration-200 hover:border-primary/50">
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {managerOptions.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.name || m.email || "Unknown"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="min-w-0 flex-1">
+                <DrawerTitle className="text-xl font-bold truncate">{selectedContact?.name || "Contact"}</DrawerTitle>
+                {selectedContact?.title && (
+                  <p className="text-sm text-muted-foreground truncate mt-0.5">{selectedContact.title}</p>
+                )}
               </div>
             </div>
+          </DrawerHeader>
 
-            <div className="flex items-center justify-between gap-3">
-              <Button
-                variant="outline"
-                className="flex-1 rounded-full transition-all duration-200"
-                onClick={() => selectedContact && onSelectContact(selectedContact)}
-                disabled={!selectedContact}
+          <div className="px-4 pb-4 space-y-5 overflow-y-auto">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</Label>
+              <Select
+                value={selectedContact?.org?.department || "UNKNOWN"}
+                onValueChange={(v) => handleUpdateOrg({ department: v as Department })}
               >
-                Open Relationship
-              </Button>
-              <DrawerClose asChild>
-                <Button className="flex-1 rounded-full shadow-sm transition-all duration-200">Done</Button>
-              </DrawerClose>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(["EXEC", "LEGAL", "PROJECT_DELIVERY", "SALES", "FINANCE", "OPS", "UNKNOWN"] as Department[]).map(
+                    (d) => (
+                      <SelectItem key={d} value={d}>
+                        {d.replace("_", " ")}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reports To</Label>
+              <Select
+                value={selectedContact?.org?.reportsToId || "none"}
+                onValueChange={(v) => handleUpdateOrg({ reportsToId: v === "none" ? null : v })}
+              >
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Select manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground">None</span>
+                  </SelectItem>
+                  {managerOptions.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name || m.email || "Unknown"}
+                      {m.title ? ` · ${m.title}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          <DrawerFooter className="border-t bg-card">
+          <DrawerFooter className="border-t pt-4">
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => {
+                if (selectedContact) {
+                  onSelectContact(selectedContact);
+                  setShowQuickEdit(false);
+                }
+              }}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open Contact
+            </Button>
             <DrawerClose asChild>
-              <Button variant="ghost" className="w-full rounded-full transition-all duration-200">
-                Close
+              <Button variant="ghost" className="w-full">
+                Done
               </Button>
             </DrawerClose>
           </DrawerFooter>
@@ -315,7 +346,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         >
           <div className="flex flex-col h-full">
             {/* Modal Header */}
-            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <DialogTitle className="text-base font-semibold sm:text-lg">Organization Chart</DialogTitle>
@@ -355,24 +386,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 </Button>
                 <Button
                   variant="outline"
-                  size="icon"
-                  className="rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-accent"
-                  onClick={handleZoomOut}
-                  aria-label="Zoom out"
-                >
-                  <ZoomOut className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-accent"
-                  onClick={handleZoomIn}
-                  aria-label="Zoom in"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
                   size="sm"
                   className="rounded-full min-h-9 px-4 shadow-sm transition-all duration-200 hover:shadow-md"
                   onClick={handleFitView}
@@ -398,7 +411,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 text-primary shrink-0" />
                   <span className="text-xs sm:text-sm">
-                    Tap any person to edit their department and reporting relationships. Use the action buttons on the right to focus or view details.
+                    Tap any person to edit their department and reporting relationships. Use pinch to zoom in/out.
                   </span>
                 </div>
                 <button
@@ -424,6 +437,9 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   onSetManager={handleSetManager}
                   editMode={true}
                   focusId={focusId}
+                  companyName={companyInfo.name}
+                  companyDomain={companyInfo.domain}
+                  companyWebsite={companyInfo.website}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
