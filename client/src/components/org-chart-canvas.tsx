@@ -28,6 +28,7 @@ import "@xyflow/react/dist/style.css";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Users, Crosshair } from "lucide-react";
 import { StoredContact, Department } from "@/lib/contactsStorage";
+import { CompanyAvatar } from "@/components/companies/CompanyAvatar";
 
 // Department colors for node styling - Apple-inspired with vibrant accents
 const DEPARTMENT_COLORS: Record<
@@ -341,12 +342,12 @@ function buildGraphWithLayout(
         source: contact.org.reportsToId,
         target: contact.id,
         type: "smoothstep",
-        markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: "#a78bfa" },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "#a78bfa" },
         style: {
-          stroke: "url(#edge-gradient)",
-          strokeWidth: inFocusEdge ? 2.5 : 1.8,
+          stroke: "#a78bfa",
+          strokeWidth: inFocusEdge ? 3 : 2.5,
           strokeLinecap: "round",
-          opacity: !hasFocus ? 0.85 : inFocusEdge ? 1 : 0.15,
+          opacity: !hasFocus ? 0.9 : inFocusEdge ? 1 : 0.5,
         },
         animated: inFocusEdge,
       });
@@ -397,10 +398,13 @@ interface OrgChartCanvasInnerProps {
   onSetManager?: (sourceId: string, targetId: string) => void;
   editMode?: boolean;
   focusId?: string | null;
+  companyName?: string;
+  companyDomain?: string;
+  companyWebsite?: string;
 }
 
 const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInnerProps>(function OrgChartCanvasInner(
-  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode, focusId },
+  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode, focusId, companyName, companyDomain, companyWebsite },
   ref
 ) {
   const { fitView, zoomIn, zoomOut } = useReactFlow();
@@ -447,7 +451,22 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
   }
 
   return (
-    <div className="h-full w-full" data-testid="org-chart-canvas">
+    <div className="h-full w-full relative" data-testid="org-chart-canvas">
+      {/* Company Logo - Floating at top */}
+      {companyName && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl px-4 py-2.5 rounded-2xl border border-border/60 shadow-lg">
+            <CompanyAvatar
+              name={companyName}
+              domain={companyDomain || undefined}
+              website={companyWebsite || undefined}
+              size="md"
+            />
+            <span className="font-semibold text-sm text-foreground">{companyName}</span>
+          </div>
+        </div>
+      )}
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -489,10 +508,13 @@ interface OrgChartCanvasProps {
   onSetManager?: (sourceId: string, targetId: string) => void;
   editMode?: boolean;
   focusId?: string | null;
+  companyName?: string;
+  companyDomain?: string;
+  companyWebsite?: string;
 }
 
 export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasProps>(function OrgChartCanvas(
-  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode = false, focusId },
+  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode = false, focusId, companyName, companyDomain, companyWebsite },
   ref
 ) {
   return (
@@ -506,6 +528,9 @@ export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasPro
         onSetManager={onSetManager}
         editMode={editMode}
         focusId={focusId}
+        companyName={companyName}
+        companyDomain={companyDomain}
+        companyWebsite={companyWebsite}
       />
     </ReactFlowProvider>
   );

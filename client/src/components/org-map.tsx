@@ -30,7 +30,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Info, Users, GitBranch, Maximize2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Info, Users, GitBranch, Maximize2, X } from "lucide-react";
 import { StoredContact, Department, DEFAULT_ORG } from "@/lib/contactsStorage";
 import { updateContactV2 } from "@/lib/contacts/storage";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +61,35 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
   const effectiveFocusContact = focusMode ? selectedContact || rootContact || null : null;
   const focusId = effectiveFocusContact?.id || null;
+
+  // Extract company info from contacts for logo display
+  const companyInfo = useMemo(() => {
+    if (contacts.length === 0) return { name: "", domain: "", website: "" };
+
+    // Get the most common company name
+    const companyCounts: Record<string, number> = {};
+    contacts.forEach(c => {
+      if (c.company) companyCounts[c.company] = (companyCounts[c.company] || 0) + 1;
+    });
+
+    let mostCommonCompany = "";
+    let maxCount = 0;
+    for (const [company, count] of Object.entries(companyCounts)) {
+      if (count > maxCount) {
+        mostCommonCompany = company;
+        maxCount = count;
+      }
+    }
+
+    // Find a contact with that company to get website/email
+    const companyContact = contacts.find(c => c.company === mostCommonCompany) || contacts[0];
+
+    return {
+      name: mostCommonCompany || companyContact?.company || "",
+      domain: "",
+      website: companyContact?.website || "",
+    };
+  }, [contacts]);
 
   useEffect(() => {
     if (!showDiagram) return;
@@ -171,14 +200,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     canvasRef.current?.fitView();
   }, []);
 
-  const handleZoomIn = useCallback(() => {
-    canvasRef.current?.zoomIn();
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    canvasRef.current?.zoomOut();
-  }, []);
-
   const handleDismissHint = useCallback(() => {
     try {
       window.localStorage.setItem("carda_org_diagram_hint_v1", "seen");
@@ -233,8 +254,8 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
       {/* Quick Edit - Modern Bottom Sheet */}
       <Drawer open={showQuickEdit} onOpenChange={setShowQuickEdit}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="border-b bg-card">
+        <DrawerContent className="max-h-[85vh]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+          <DrawerHeader className="border-b bg-card" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
             <DrawerTitle className="text-base font-semibold">{selectedContact?.name || "Edit Relationship"}</DrawerTitle>
           </DrawerHeader>
 
@@ -315,7 +336,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         >
           <div className="flex flex-col h-full">
             {/* Modal Header */}
-            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <DialogTitle className="text-base font-semibold sm:text-lg">Organization Chart</DialogTitle>
@@ -355,24 +376,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 </Button>
                 <Button
                   variant="outline"
-                  size="icon"
-                  className="rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-accent"
-                  onClick={handleZoomOut}
-                  aria-label="Zoom out"
-                >
-                  <ZoomOut className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-accent"
-                  onClick={handleZoomIn}
-                  aria-label="Zoom in"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
                   size="sm"
                   className="rounded-full min-h-9 px-4 shadow-sm transition-all duration-200 hover:shadow-md"
                   onClick={handleFitView}
@@ -398,7 +401,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 text-primary shrink-0" />
                   <span className="text-xs sm:text-sm">
-                    Tap any person to edit their department and reporting relationships. Use the action buttons on the right to focus or view details.
+                    Tap any person to edit their department and reporting relationships. Use pinch to zoom in/out.
                   </span>
                 </div>
                 <button
@@ -424,6 +427,9 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   onSetManager={handleSetManager}
                   editMode={true}
                   focusId={focusId}
+                  companyName={companyInfo.name}
+                  companyDomain={companyInfo.domain}
+                  companyWebsite={companyInfo.website}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
