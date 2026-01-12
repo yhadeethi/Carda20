@@ -255,73 +255,83 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
       {/* Quick Edit - Modern Bottom Sheet */}
       <Drawer open={showQuickEdit} onOpenChange={setShowQuickEdit}>
         <DrawerContent className="max-h-[85vh]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-          <DrawerHeader className="border-b bg-card" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
-            <DrawerTitle className="text-base font-semibold">{selectedContact?.name || "Edit Relationship"}</DrawerTitle>
-          </DrawerHeader>
-
-          <div className="p-4 space-y-5 bg-background">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">Department</Label>
-                <Select
-                  value={selectedContact?.org?.department || "UNKNOWN"}
-                  onValueChange={(v) => handleUpdateOrg({ department: v as Department })}
-                >
-                  <SelectTrigger className="h-11 rounded-lg transition-all duration-200 hover:border-primary/50">
-                    <SelectValue placeholder="Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(["EXEC", "LEGAL", "PROJECT_DELIVERY", "SALES", "FINANCE", "OPS", "UNKNOWN"] as Department[]).map(
-                      (d) => (
-                        <SelectItem key={d} value={d}>
-                          {d.replace("_", " ")}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectContent>
-                </Select>
+          <DrawerHeader className="pb-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/70 to-primary flex items-center justify-center text-primary-foreground font-bold text-xl shrink-0 shadow-lg shadow-primary/20">
+                {selectedContact?.name?.charAt(0)?.toUpperCase() || "?"}
               </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground">Reports to</Label>
-                <Select
-                  value={selectedContact?.org?.reportsToId || "none"}
-                  onValueChange={(v) => handleUpdateOrg({ reportsToId: v === "none" ? null : v })}
-                >
-                  <SelectTrigger className="h-11 rounded-lg transition-all duration-200 hover:border-primary/50">
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {managerOptions.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.name || m.email || "Unknown"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="min-w-0 flex-1">
+                <DrawerTitle className="text-xl font-bold truncate">{selectedContact?.name || "Contact"}</DrawerTitle>
+                {selectedContact?.title && (
+                  <p className="text-sm text-muted-foreground truncate mt-0.5">{selectedContact.title}</p>
+                )}
               </div>
             </div>
+          </DrawerHeader>
 
-            <div className="flex items-center justify-between gap-3">
-              <Button
-                variant="outline"
-                className="flex-1 rounded-full transition-all duration-200"
-                onClick={() => selectedContact && onSelectContact(selectedContact)}
-                disabled={!selectedContact}
+          <div className="px-4 pb-4 space-y-5 overflow-y-auto">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</Label>
+              <Select
+                value={selectedContact?.org?.department || "UNKNOWN"}
+                onValueChange={(v) => handleUpdateOrg({ department: v as Department })}
               >
-                Open Relationship
-              </Button>
-              <DrawerClose asChild>
-                <Button className="flex-1 rounded-full shadow-sm transition-all duration-200">Done</Button>
-              </DrawerClose>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(["EXEC", "LEGAL", "PROJECT_DELIVERY", "SALES", "FINANCE", "OPS", "UNKNOWN"] as Department[]).map(
+                    (d) => (
+                      <SelectItem key={d} value={d}>
+                        {d.replace("_", " ")}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reports To</Label>
+              <Select
+                value={selectedContact?.org?.reportsToId || "none"}
+                onValueChange={(v) => handleUpdateOrg({ reportsToId: v === "none" ? null : v })}
+              >
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Select manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground">None</span>
+                  </SelectItem>
+                  {managerOptions.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name || m.email || "Unknown"}
+                      {m.title ? ` · ${m.title}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          <DrawerFooter className="border-t bg-card">
+          <DrawerFooter className="border-t pt-4">
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => {
+                if (selectedContact) {
+                  onSelectContact(selectedContact);
+                  setShowQuickEdit(false);
+                }
+              }}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open Contact
+            </Button>
             <DrawerClose asChild>
-              <Button variant="ghost" className="w-full rounded-full transition-all duration-200">
-                Close
+              <Button variant="ghost" className="w-full">
+                Done
               </Button>
             </DrawerClose>
           </DrawerFooter>
