@@ -28,7 +28,7 @@ export function QuickActionsSheet({ open, onOpenChange, actions }: QuickActionsS
   return (
     <Drawer open={open} onOpenChange={onOpenChange} repositionInputs>
       <DrawerContent className="rounded-t-3xl" data-testid="quick-actions-sheet">
-        <DrawerHeader className="flex items-center justify-between text-left">
+        <DrawerHeader className="flex items-center justify-between text-left" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
           <DrawerTitle>Quick Actions</DrawerTitle>
           <DrawerClose asChild>
             <Button size="icon" variant="ghost" type="button" className="rounded-full">
