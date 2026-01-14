@@ -85,8 +85,93 @@ export const contacts = pgTable("contacts", {
   rawText: text("raw_text"),
   companyDomain: text("company_domain"),
   companyId: integer("company_id").references(() => companies.id),
+  notes: text("notes"), // Contact notes
+  lastTouchedAt: timestamp("last_touched_at"), // Last interaction timestamp
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Contact Tasks table - stores tasks per contact
+export const contactTasks = pgTable("contact_tasks", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  clientId: text("client_id").notNull(), // Client-generated ID for offline sync
+  title: text("title").notNull(),
+  done: integer("done").notNull().default(0), // 0 = false, 1 = true (SQLite compatibility)
+  dueAt: timestamp("due_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("contact_tasks_contact_idx").on(table.contactId),
+  index("contact_tasks_user_idx").on(table.userId),
+  index("contact_tasks_client_id_idx").on(table.clientId),
+]);
+
+// Contact Reminders table - stores reminders per contact
+export const contactReminders = pgTable("contact_reminders", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  clientId: text("client_id").notNull(), // Client-generated ID for offline sync
+  label: text("label").notNull(),
+  remindAt: timestamp("remind_at").notNull(),
+  done: integer("done").notNull().default(0), // 0 = false, 1 = true
+  doneAt: timestamp("done_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("contact_reminders_contact_idx").on(table.contactId),
+  index("contact_reminders_user_idx").on(table.userId),
+  index("contact_reminders_client_id_idx").on(table.clientId),
+  index("contact_reminders_remind_at_idx").on(table.remindAt),
+]);
+
+// Timeline Events table - stores activity timeline per contact
+export const timelineEvents = pgTable("timeline_events", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  clientId: text("client_id").notNull(), // Client-generated ID for offline sync
+  type: varchar("type", { length: 50 }).notNull(), // e.g., "scan_created", "note_added", etc.
+  summary: text("summary").notNull(),
+  meta: jsonb("meta"), // Additional metadata
+  eventAt: timestamp("event_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("timeline_events_contact_idx").on(table.contactId),
+  index("timeline_events_user_idx").on(table.userId),
+  index("timeline_events_client_id_idx").on(table.clientId),
+  index("timeline_events_event_at_idx").on(table.eventAt),
+]);
+
+// Event Preferences table - stores user preferences for calendar events
+export const eventPreferences = pgTable("event_preferences", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  eventId: text("event_id").notNull(), // External event ID (from calendar)
+  pinned: integer("pinned").notNull().default(0), // 0 = false, 1 = true
+  attending: varchar("attending", { length: 10 }), // 'yes', 'no', 'maybe', null
+  note: text("note"),
+  reminderSet: integer("reminder_set").notNull().default(0),
+  reminderDismissed: integer("reminder_dismissed").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("event_preferences_user_idx").on(table.userId),
+  index("event_preferences_event_idx").on(table.eventId),
+]);
+
+// Merge History table - stores contact merge operations for undo functionality
+export const mergeHistory = pgTable("merge_history", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  primaryContactId: text("primary_contact_id").notNull(), // The contact that was kept
+  mergedContactSnapshots: jsonb("merged_contact_snapshots").notNull(), // Array of merged contact data
+  mergedAt: timestamp("merged_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("merge_history_user_idx").on(table.userId),
+  index("merge_history_merged_at_idx").on(table.mergedAt),
+]);
 
 // Company Intel table - stores cached AI-generated intel
 export const companyIntel = pgTable("company_intel", {
@@ -135,9 +220,14 @@ export interface ApolloEnrichmentData {
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   contacts: many(contacts),
+  contactTasks: many(contactTasks),
+  contactReminders: many(contactReminders),
+  timelineEvents: many(timelineEvents),
+  eventPreferences: many(eventPreferences),
+  mergeHistory: many(mergeHistory),
 }));
 
-export const contactsRelations = relations(contacts, ({ one }) => ({
+export const contactsRelations = relations(contacts, ({ one, many }) => ({
   user: one(users, {
     fields: [contacts.userId],
     references: [users.id],
@@ -145,6 +235,56 @@ export const contactsRelations = relations(contacts, ({ one }) => ({
   company: one(companies, {
     fields: [contacts.companyId],
     references: [companies.id],
+  }),
+  tasks: many(contactTasks),
+  reminders: many(contactReminders),
+  timelineEvents: many(timelineEvents),
+}));
+
+export const contactTasksRelations = relations(contactTasks, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [contactTasks.contactId],
+    references: [contacts.id],
+  }),
+  user: one(users, {
+    fields: [contactTasks.userId],
+    references: [users.id],
+  }),
+}));
+
+export const contactRemindersRelations = relations(contactReminders, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [contactReminders.contactId],
+    references: [contacts.id],
+  }),
+  user: one(users, {
+    fields: [contactReminders.userId],
+    references: [users.id],
+  }),
+}));
+
+export const timelineEventsRelations = relations(timelineEvents, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [timelineEvents.contactId],
+    references: [contacts.id],
+  }),
+  user: one(users, {
+    fields: [timelineEvents.userId],
+    references: [users.id],
+  }),
+}));
+
+export const eventPreferencesRelations = relations(eventPreferences, ({ one }) => ({
+  user: one(users, {
+    fields: [eventPreferences.userId],
+    references: [users.id],
+  }),
+}));
+
+export const mergeHistoryRelations = relations(mergeHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [mergeHistory.userId],
+    references: [users.id],
   }),
 }));
 
@@ -177,6 +317,32 @@ export const insertCompanySchema = createInsertSchema(companies).omit({
 });
 
 export const insertCompanyIntelSchema = createInsertSchema(companyIntel).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertContactTaskSchema = createInsertSchema(contactTasks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertContactReminderSchema = createInsertSchema(contactReminders).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTimelineEventSchema = createInsertSchema(timelineEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEventPreferenceSchema = createInsertSchema(eventPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMergeHistorySchema = createInsertSchema(mergeHistory).omit({
   id: true,
   createdAt: true,
 });
@@ -219,6 +385,17 @@ export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type Company = typeof companies.$inferSelect;
 export type InsertCompanyIntel = z.infer<typeof insertCompanyIntelSchema>;
 export type CompanyIntel = typeof companyIntel.$inferSelect;
+
+export type ContactTask = typeof contactTasks.$inferSelect;
+export type InsertContactTask = z.infer<typeof insertContactTaskSchema>;
+export type ContactReminder = typeof contactReminders.$inferSelect;
+export type InsertContactReminder = z.infer<typeof insertContactReminderSchema>;
+export type TimelineEvent = typeof timelineEvents.$inferSelect;
+export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
+export type EventPreference = typeof eventPreferences.$inferSelect;
+export type InsertEventPreference = z.infer<typeof insertEventPreferenceSchema>;
+export type MergeHistory = typeof mergeHistory.$inferSelect;
+export type InsertMergeHistory = z.infer<typeof insertMergeHistorySchema>;
 
 // Key Development item for historical company events
 export interface KeyDevelopment {

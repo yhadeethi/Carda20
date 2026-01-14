@@ -1,11 +1,17 @@
-import { 
+import {
   users, contacts, companies, companyIntel, hubspotTokens,
+  contactTasks, contactReminders, timelineEvents, eventPreferences, mergeHistory,
   type User, type InsertUser, type UpsertUser,
   type Contact, type InsertContact,
   type Company, type InsertCompany,
   type CompanyIntel, type InsertCompanyIntel,
   type HubspotToken, type InsertHubspotToken,
-  type CompanyIntelData
+  type CompanyIntelData,
+  type ContactTask, type InsertContactTask,
+  type ContactReminder, type InsertContactReminder,
+  type TimelineEvent, type InsertTimelineEvent,
+  type EventPreference, type InsertEventPreference,
+  type MergeHistory, type InsertMergeHistory
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -37,6 +43,37 @@ export interface IStorage {
   getHubspotTokens(userId: number): Promise<HubspotToken | undefined>;
   upsertHubspotTokens(tokens: InsertHubspotToken): Promise<HubspotToken>;
   deleteHubspotTokens(userId: number): Promise<void>;
+
+  // Contact Tasks
+  getContactTasks(contactId: number): Promise<ContactTask[]>;
+  getContactTaskByClientId(clientId: string): Promise<ContactTask | undefined>;
+  createContactTask(task: InsertContactTask): Promise<ContactTask>;
+  updateContactTask(id: number, updates: Partial<ContactTask>): Promise<ContactTask | undefined>;
+  deleteContactTask(id: number): Promise<boolean>;
+
+  // Contact Reminders
+  getContactReminders(contactId: number): Promise<ContactReminder[]>;
+  getContactReminderByClientId(clientId: string): Promise<ContactReminder | undefined>;
+  getUpcomingReminders(userId: number, limit?: number): Promise<ContactReminder[]>;
+  createContactReminder(reminder: InsertContactReminder): Promise<ContactReminder>;
+  updateContactReminder(id: number, updates: Partial<ContactReminder>): Promise<ContactReminder | undefined>;
+  deleteContactReminder(id: number): Promise<boolean>;
+
+  // Timeline Events
+  getTimelineEvents(contactId: number): Promise<TimelineEvent[]>;
+  getTimelineEventByClientId(clientId: string): Promise<TimelineEvent | undefined>;
+  createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent>;
+  deleteTimelineEvent(id: number): Promise<boolean>;
+
+  // Event Preferences
+  getEventPreferences(userId: number, eventId: string): Promise<EventPreference | undefined>;
+  getAllEventPreferences(userId: number): Promise<EventPreference[]>;
+  upsertEventPreference(preference: InsertEventPreference): Promise<EventPreference>;
+
+  // Merge History
+  getMergeHistory(userId: number, limit?: number): Promise<MergeHistory[]>;
+  createMergeHistory(history: InsertMergeHistory): Promise<MergeHistory>;
+  deleteMergeHistory(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -231,6 +268,195 @@ export class DatabaseStorage implements IStorage {
 
   async deleteHubspotTokens(userId: number): Promise<void> {
     await db.delete(hubspotTokens).where(eq(hubspotTokens.userId, userId));
+  }
+
+  // Contact Tasks
+  async getContactTasks(contactId: number): Promise<ContactTask[]> {
+    return db
+      .select()
+      .from(contactTasks)
+      .where(eq(contactTasks.contactId, contactId))
+      .orderBy(desc(contactTasks.createdAt));
+  }
+
+  async getContactTaskByClientId(clientId: string): Promise<ContactTask | undefined> {
+    const [task] = await db
+      .select()
+      .from(contactTasks)
+      .where(eq(contactTasks.clientId, clientId))
+      .limit(1);
+    return task || undefined;
+  }
+
+  async createContactTask(task: InsertContactTask): Promise<ContactTask> {
+    const [created] = await db
+      .insert(contactTasks)
+      .values(task)
+      .returning();
+    return created;
+  }
+
+  async updateContactTask(id: number, updates: Partial<ContactTask>): Promise<ContactTask | undefined> {
+    const [task] = await db
+      .update(contactTasks)
+      .set(updates)
+      .where(eq(contactTasks.id, id))
+      .returning();
+    return task || undefined;
+  }
+
+  async deleteContactTask(id: number): Promise<boolean> {
+    const result = await db.delete(contactTasks).where(eq(contactTasks.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  // Contact Reminders
+  async getContactReminders(contactId: number): Promise<ContactReminder[]> {
+    return db
+      .select()
+      .from(contactReminders)
+      .where(eq(contactReminders.contactId, contactId))
+      .orderBy(desc(contactReminders.remindAt));
+  }
+
+  async getContactReminderByClientId(clientId: string): Promise<ContactReminder | undefined> {
+    const [reminder] = await db
+      .select()
+      .from(contactReminders)
+      .where(eq(contactReminders.clientId, clientId))
+      .limit(1);
+    return reminder || undefined;
+  }
+
+  async getUpcomingReminders(userId: number, limit: number = 20): Promise<ContactReminder[]> {
+    return db
+      .select()
+      .from(contactReminders)
+      .where(and(
+        eq(contactReminders.userId, userId),
+        eq(contactReminders.done, 0)
+      ))
+      .orderBy(contactReminders.remindAt)
+      .limit(limit);
+  }
+
+  async createContactReminder(reminder: InsertContactReminder): Promise<ContactReminder> {
+    const [created] = await db
+      .insert(contactReminders)
+      .values(reminder)
+      .returning();
+    return created;
+  }
+
+  async updateContactReminder(id: number, updates: Partial<ContactReminder>): Promise<ContactReminder | undefined> {
+    const [reminder] = await db
+      .update(contactReminders)
+      .set(updates)
+      .where(eq(contactReminders.id, id))
+      .returning();
+    return reminder || undefined;
+  }
+
+  async deleteContactReminder(id: number): Promise<boolean> {
+    const result = await db.delete(contactReminders).where(eq(contactReminders.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  // Timeline Events
+  async getTimelineEvents(contactId: number): Promise<TimelineEvent[]> {
+    return db
+      .select()
+      .from(timelineEvents)
+      .where(eq(timelineEvents.contactId, contactId))
+      .orderBy(desc(timelineEvents.eventAt));
+  }
+
+  async getTimelineEventByClientId(clientId: string): Promise<TimelineEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(timelineEvents)
+      .where(eq(timelineEvents.clientId, clientId))
+      .limit(1);
+    return event || undefined;
+  }
+
+  async createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent> {
+    const [created] = await db
+      .insert(timelineEvents)
+      .values(event)
+      .returning();
+    return created;
+  }
+
+  async deleteTimelineEvent(id: number): Promise<boolean> {
+    const result = await db.delete(timelineEvents).where(eq(timelineEvents.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  // Event Preferences
+  async getEventPreferences(userId: number, eventId: string): Promise<EventPreference | undefined> {
+    const [preference] = await db
+      .select()
+      .from(eventPreferences)
+      .where(and(
+        eq(eventPreferences.userId, userId),
+        eq(eventPreferences.eventId, eventId)
+      ))
+      .limit(1);
+    return preference || undefined;
+  }
+
+  async getAllEventPreferences(userId: number): Promise<EventPreference[]> {
+    return db
+      .select()
+      .from(eventPreferences)
+      .where(eq(eventPreferences.userId, userId));
+  }
+
+  async upsertEventPreference(preference: InsertEventPreference): Promise<EventPreference> {
+    // Check if preference already exists
+    const existing = await this.getEventPreferences(preference.userId, preference.eventId);
+
+    if (existing) {
+      const [updated] = await db
+        .update(eventPreferences)
+        .set({ ...preference, updatedAt: new Date() })
+        .where(and(
+          eq(eventPreferences.userId, preference.userId),
+          eq(eventPreferences.eventId, preference.eventId)
+        ))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(eventPreferences)
+        .values(preference)
+        .returning();
+      return created;
+    }
+  }
+
+  // Merge History
+  async getMergeHistory(userId: number, limit: number = 10): Promise<MergeHistory[]> {
+    return db
+      .select()
+      .from(mergeHistory)
+      .where(eq(mergeHistory.userId, userId))
+      .orderBy(desc(mergeHistory.mergedAt))
+      .limit(limit);
+  }
+
+  async createMergeHistory(history: InsertMergeHistory): Promise<MergeHistory> {
+    const [created] = await db
+      .insert(mergeHistory)
+      .values(history)
+      .returning();
+    return created;
+  }
+
+  async deleteMergeHistory(id: number): Promise<boolean> {
+    const result = await db.delete(mergeHistory).where(eq(mergeHistory.id, id));
+    return (result as any).rowCount > 0;
   }
 }
 
