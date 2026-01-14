@@ -3,22 +3,33 @@
  * Enhanced with tasks, reminders, timeline, and migration support
  */
 
-import { 
-  ContactTask, 
-  ContactReminder, 
+import {
+  ContactTask,
+  ContactReminder,
   TimelineEvent,
   TimelineEventType,
   MergeHistoryEntry,
   ContactSnapshot
 } from './types';
 import { generateId } from './ids';
-import { 
-  StoredContact, 
+import {
+  StoredContact,
   ContactOrg,
-  loadContacts as loadContactsV1, 
+  loadContacts as loadContactsV1,
   saveContacts as saveContactsV1,
   updateContact as updateContactV1
 } from '../contactsStorage';
+import { addToSyncQueue } from '../syncQueue';
+import {
+  createTaskAPI,
+  updateTaskAPI,
+  deleteTaskAPI,
+  createReminderAPI,
+  updateReminderAPI,
+  deleteReminderAPI,
+  createTimelineEventAPI,
+  createMergeHistoryAPI,
+} from '../api/timeline';
 
 const STORAGE_KEY_V2 = "carda_contacts_v2";
 const MERGE_HISTORY_KEY = "carda_merges_v1";
@@ -216,28 +227,60 @@ export function markLastTouched(contactId: string): void {
 
 // ============ TIMELINE ============
 
-export function addTimelineEvent(
-  contactId: string, 
-  type: TimelineEventType, 
-  summary: string, 
+export async function addTimelineEvent(
+  contactId: string,
+  type: TimelineEventType,
+  summary: string,
   meta?: Record<string, unknown>
-): TimelineEvent | null {
+): Promise<TimelineEvent | null> {
   const contact = getContactById(contactId);
   if (!contact) return null;
 
+  const clientId = generateId();
+  const eventAt = new Date().toISOString();
+
+  // Optimistic update
   const event: TimelineEvent = {
-    id: generateId(),
+    id: clientId,
     type,
-    at: new Date().toISOString(),
+    at: eventAt,
     summary,
     meta,
   };
 
   const timeline = [event, ...(contact.timeline || [])];
-  updateContactV2(contactId, { 
-    timeline, 
-    lastTouchedAt: new Date().toISOString() 
+  updateContactV2(contactId, {
+    timeline,
+    lastTouchedAt: new Date().toISOString()
   });
+
+  // Sync to server
+  try {
+    const serverEvent = await createTimelineEventAPI(contactId, {
+      clientId,
+      type,
+      summary,
+      meta,
+      eventAt,
+    });
+
+    // Update localStorage with server ID
+    const updatedTimeline = timeline.map(e =>
+      e.id === clientId ? { ...e, id: serverEvent.id.toString() } : e
+    );
+    updateContactV2(contactId, { timeline: updatedTimeline });
+
+    return serverEvent;
+  } catch (error) {
+    console.error('[Storage] Failed to sync timeline event:', error);
+    addToSyncQueue('timeline_event', 'create', `/api/contacts/${contactId}/timeline`, 'POST', {
+      clientId,
+      type,
+      summary,
+      meta,
+      eventAt,
+    });
+  }
 
   return event;
 }
@@ -249,12 +292,15 @@ export function getTimeline(contactId: string): TimelineEvent[] {
 
 // ============ TASKS ============
 
-export function addTask(contactId: string, title: string, dueAt?: string): ContactTask | null {
+export async function addTask(contactId: string, title: string, dueAt?: string): Promise<ContactTask | null> {
   const contact = getContactById(contactId);
   if (!contact) return null;
 
+  const clientId = generateId();
+
+  // Optimistic update - save to localStorage first for instant UI
   const task: ContactTask = {
-    id: generateId(),
+    id: clientId,
     title,
     done: false,
     createdAt: new Date().toISOString(),
@@ -262,46 +308,83 @@ export function addTask(contactId: string, title: string, dueAt?: string): Conta
   };
 
   const tasks = [...(contact.tasks || []), task];
-  updateContactV2(contactId, { 
-    tasks, 
-    lastTouchedAt: new Date().toISOString() 
+  updateContactV2(contactId, {
+    tasks,
+    lastTouchedAt: new Date().toISOString()
   });
 
   // Add timeline event
   addTimelineEvent(contactId, 'task_added', `Task added: ${title}`);
 
+  // Sync to server
+  try {
+    const serverTask = await createTaskAPI(contactId, { clientId, title, dueAt });
+
+    // Update localStorage with server ID
+    const updatedTasks = tasks.map(t =>
+      t.id === clientId ? { ...t, id: serverTask.id.toString() } : t
+    );
+    updateContactV2(contactId, { tasks: updatedTasks });
+
+    return serverTask;
+  } catch (error) {
+    console.error('[Storage] Failed to sync task to server:', error);
+    // Queue for retry when back online
+    addToSyncQueue('task', 'create', `/api/contacts/${contactId}/tasks`, 'POST', { clientId, title, dueAt });
+  }
+
   return task;
 }
 
-export function completeTask(contactId: string, taskId: string): boolean {
+export async function completeTask(contactId: string, taskId: string): Promise<boolean> {
   const contact = getContactById(contactId);
   if (!contact) return false;
 
-  const tasks = (contact.tasks || []).map(t => 
-    t.id === taskId 
-      ? { ...t, done: true, completedAt: new Date().toISOString() }
+  const completedAt = new Date().toISOString();
+
+  // Optimistic update
+  const tasks = (contact.tasks || []).map(t =>
+    t.id === taskId
+      ? { ...t, done: true, completedAt }
       : t
   );
 
   const task = tasks.find(t => t.id === taskId);
   if (!task) return false;
 
-  updateContactV2(contactId, { 
-    tasks, 
-    lastTouchedAt: new Date().toISOString() 
+  updateContactV2(contactId, {
+    tasks,
+    lastTouchedAt: new Date().toISOString()
   });
 
   addTimelineEvent(contactId, 'task_done', `Task completed: ${task.title}`);
 
+  // Sync to server
+  try {
+    await updateTaskAPI(contactId, parseInt(taskId), { done: true, completedAt });
+  } catch (error) {
+    console.error('[Storage] Failed to sync task completion:', error);
+    addToSyncQueue('task', 'update', `/api/contacts/${contactId}/tasks/${taskId}`, 'PUT', { done: true, completedAt });
+  }
+
   return true;
 }
 
-export function deleteTask(contactId: string, taskId: string): boolean {
+export async function deleteTask(contactId: string, taskId: string): Promise<boolean> {
   const contact = getContactById(contactId);
   if (!contact) return false;
 
+  // Optimistic delete
   const tasks = (contact.tasks || []).filter(t => t.id !== taskId);
   updateContactV2(contactId, { tasks });
+
+  // Sync to server
+  try {
+    await deleteTaskAPI(contactId, parseInt(taskId));
+  } catch (error) {
+    console.error('[Storage] Failed to delete task from server:', error);
+    addToSyncQueue('task', 'delete', `/api/contacts/${contactId}/tasks/${taskId}`, 'DELETE', null);
+  }
 
   return true;
 }
@@ -313,12 +396,15 @@ export function getTasks(contactId: string): ContactTask[] {
 
 // ============ REMINDERS ============
 
-export function addReminder(contactId: string, label: string, remindAt: string): ContactReminder | null {
+export async function addReminder(contactId: string, label: string, remindAt: string): Promise<ContactReminder | null> {
   const contact = getContactById(contactId);
   if (!contact) return null;
 
+  const clientId = generateId();
+
+  // Optimistic update
   const reminder: ContactReminder = {
-    id: generateId(),
+    id: clientId,
     label,
     remindAt,
     done: false,
@@ -326,45 +412,81 @@ export function addReminder(contactId: string, label: string, remindAt: string):
   };
 
   const reminders = [...(contact.reminders || []), reminder];
-  updateContactV2(contactId, { 
-    reminders, 
-    lastTouchedAt: new Date().toISOString() 
+  updateContactV2(contactId, {
+    reminders,
+    lastTouchedAt: new Date().toISOString()
   });
 
   addTimelineEvent(contactId, 'reminder_set', `Reminder set: ${label}`, { remindAt });
 
+  // Sync to server
+  try {
+    const serverReminder = await createReminderAPI(contactId, { clientId, label, remindAt });
+
+    // Update localStorage with server ID
+    const updatedReminders = reminders.map(r =>
+      r.id === clientId ? { ...r, id: serverReminder.id.toString() } : r
+    );
+    updateContactV2(contactId, { reminders: updatedReminders });
+
+    return serverReminder;
+  } catch (error) {
+    console.error('[Storage] Failed to sync reminder to server:', error);
+    addToSyncQueue('reminder', 'create', `/api/contacts/${contactId}/reminders`, 'POST', { clientId, label, remindAt });
+  }
+
   return reminder;
 }
 
-export function completeReminder(contactId: string, reminderId: string): boolean {
+export async function completeReminder(contactId: string, reminderId: string): Promise<boolean> {
   const contact = getContactById(contactId);
   if (!contact) return false;
 
-  const reminders = (contact.reminders || []).map(r => 
-    r.id === reminderId 
-      ? { ...r, done: true, doneAt: new Date().toISOString() }
+  const doneAt = new Date().toISOString();
+
+  // Optimistic update
+  const reminders = (contact.reminders || []).map(r =>
+    r.id === reminderId
+      ? { ...r, done: true, doneAt }
       : r
   );
 
   const reminder = reminders.find(r => r.id === reminderId);
   if (!reminder) return false;
 
-  updateContactV2(contactId, { 
-    reminders, 
-    lastTouchedAt: new Date().toISOString() 
+  updateContactV2(contactId, {
+    reminders,
+    lastTouchedAt: new Date().toISOString()
   });
 
   addTimelineEvent(contactId, 'reminder_done', `Reminder done: ${reminder.label}`);
 
+  // Sync to server
+  try {
+    await updateReminderAPI(contactId, parseInt(reminderId), { done: true, doneAt });
+  } catch (error) {
+    console.error('[Storage] Failed to sync reminder completion:', error);
+    addToSyncQueue('reminder', 'update', `/api/contacts/${contactId}/reminders/${reminderId}`, 'PUT', { done: true, doneAt });
+  }
+
   return true;
 }
 
-export function deleteReminder(contactId: string, reminderId: string): boolean {
+export async function deleteReminder(contactId: string, reminderId: string): Promise<boolean> {
   const contact = getContactById(contactId);
   if (!contact) return false;
 
+  // Optimistic delete
   const reminders = (contact.reminders || []).filter(r => r.id !== reminderId);
   updateContactV2(contactId, { reminders });
+
+  // Sync to server
+  try {
+    await deleteReminderAPI(contactId, parseInt(reminderId));
+  } catch (error) {
+    console.error('[Storage] Failed to delete reminder from server:', error);
+    addToSyncQueue('reminder', 'delete', `/api/contacts/${contactId}/reminders/${reminderId}`, 'DELETE', null);
+  }
 
   return true;
 }
@@ -446,10 +568,27 @@ export function saveMergeHistory(history: MergeHistoryEntry[]): void {
   localStorage.setItem(MERGE_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_MERGE_HISTORY)));
 }
 
-export function addMergeHistoryEntry(entry: MergeHistoryEntry): void {
+export async function addMergeHistoryEntry(entry: MergeHistoryEntry): Promise<void> {
+  // Save to localStorage
   const history = loadMergeHistory();
   history.unshift(entry);
   saveMergeHistory(history);
+
+  // Sync to server
+  try {
+    await createMergeHistoryAPI({
+      primaryContactId: entry.primaryContactId,
+      mergedContactSnapshots: entry.mergedContactSnapshots,
+      mergedAt: entry.mergedAt,
+    });
+  } catch (error) {
+    console.error('[Storage] Failed to sync merge history:', error);
+    addToSyncQueue('merge_history', 'create', '/api/merge-history', 'POST', {
+      primaryContactId: entry.primaryContactId,
+      mergedContactSnapshots: entry.mergedContactSnapshots,
+      mergedAt: entry.mergedAt,
+    });
+  }
 }
 
 export function undoLastMerge(): boolean {
