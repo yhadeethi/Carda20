@@ -1052,5 +1052,274 @@ Return ONLY valid JSON, no markdown or explanation.`;
     }
   });
 
+  // Database Migration Endpoint - Simple one-click migration
+  app.get("/api/run-migrations", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const results: string[] = [];
+
+      // Migration SQL
+      const migration0001 = `
+        -- Migration 0001: Timeline Tables
+        ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "notes" text;
+        ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "last_touched_at" timestamp;
+
+        CREATE TABLE IF NOT EXISTS "contact_tasks" (
+          "id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+          "contact_id" integer NOT NULL,
+          "user_id" integer NOT NULL,
+          "client_id" text NOT NULL,
+          "title" text NOT NULL,
+          "done" integer DEFAULT 0 NOT NULL,
+          "due_at" timestamp,
+          "completed_at" timestamp,
+          "created_at" timestamp DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS "contact_reminders" (
+          "id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+          "contact_id" integer NOT NULL,
+          "user_id" integer NOT NULL,
+          "client_id" text NOT NULL,
+          "label" text NOT NULL,
+          "remind_at" timestamp NOT NULL,
+          "done" integer DEFAULT 0 NOT NULL,
+          "done_at" timestamp,
+          "created_at" timestamp DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS "timeline_events" (
+          "id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+          "contact_id" integer NOT NULL,
+          "user_id" integer NOT NULL,
+          "client_id" text NOT NULL,
+          "type" varchar(50) NOT NULL,
+          "summary" text NOT NULL,
+          "meta" jsonb,
+          "event_at" timestamp NOT NULL,
+          "created_at" timestamp DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS "event_preferences" (
+          "id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+          "user_id" integer NOT NULL,
+          "event_id" text NOT NULL,
+          "pinned" integer DEFAULT 0 NOT NULL,
+          "attending" varchar(10),
+          "note" text,
+          "reminder_set" integer DEFAULT 0 NOT NULL,
+          "reminder_dismissed" integer DEFAULT 0 NOT NULL,
+          "created_at" timestamp DEFAULT now(),
+          "updated_at" timestamp DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS "merge_history" (
+          "id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+          "user_id" integer NOT NULL,
+          "primary_contact_id" text NOT NULL,
+          "merged_contact_snapshots" jsonb NOT NULL,
+          "merged_at" timestamp NOT NULL,
+          "created_at" timestamp DEFAULT now()
+        );
+
+        DO $$ BEGIN
+          ALTER TABLE "contact_tasks" ADD CONSTRAINT "contact_tasks_contact_id_contacts_id_fk"
+            FOREIGN KEY ("contact_id") REFERENCES "contacts"("id") ON DELETE cascade ON UPDATE no action;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        DO $$ BEGIN
+          ALTER TABLE "contact_tasks" ADD CONSTRAINT "contact_tasks_user_id_users_id_fk"
+            FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        DO $$ BEGIN
+          ALTER TABLE "contact_reminders" ADD CONSTRAINT "contact_reminders_contact_id_contacts_id_fk"
+            FOREIGN KEY ("contact_id") REFERENCES "contacts"("id") ON DELETE cascade ON UPDATE no action;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        DO $$ BEGIN
+          ALTER TABLE "contact_reminders" ADD CONSTRAINT "contact_reminders_user_id_users_id_fk"
+            FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        DO $$ BEGIN
+          ALTER TABLE "timeline_events" ADD CONSTRAINT "timeline_events_contact_id_contacts_id_fk"
+            FOREIGN KEY ("contact_id") REFERENCES "contacts"("id") ON DELETE cascade ON UPDATE no action;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        DO $$ BEGIN
+          ALTER TABLE "timeline_events" ADD CONSTRAINT "timeline_events_user_id_users_id_fk"
+            FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        DO $$ BEGIN
+          ALTER TABLE "event_preferences" ADD CONSTRAINT "event_preferences_user_id_users_id_fk"
+            FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        DO $$ BEGIN
+          ALTER TABLE "merge_history" ADD CONSTRAINT "merge_history_user_id_users_id_fk"
+            FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE no action ON UPDATE no action;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        CREATE INDEX IF NOT EXISTS "contact_tasks_contact_idx" ON "contact_tasks" ("contact_id");
+        CREATE INDEX IF NOT EXISTS "contact_tasks_user_idx" ON "contact_tasks" ("user_id");
+        CREATE INDEX IF NOT EXISTS "contact_tasks_client_id_idx" ON "contact_tasks" ("client_id");
+        CREATE INDEX IF NOT EXISTS "contact_reminders_contact_idx" ON "contact_reminders" ("contact_id");
+        CREATE INDEX IF NOT EXISTS "contact_reminders_user_idx" ON "contact_reminders" ("user_id");
+        CREATE INDEX IF NOT EXISTS "contact_reminders_client_id_idx" ON "contact_reminders" ("client_id");
+        CREATE INDEX IF NOT EXISTS "contact_reminders_remind_at_idx" ON "contact_reminders" ("remind_at");
+        CREATE INDEX IF NOT EXISTS "timeline_events_contact_idx" ON "timeline_events" ("contact_id");
+        CREATE INDEX IF NOT EXISTS "timeline_events_user_idx" ON "timeline_events" ("user_id");
+        CREATE INDEX IF NOT EXISTS "timeline_events_client_id_idx" ON "timeline_events" ("client_id");
+        CREATE INDEX IF NOT EXISTS "timeline_events_event_at_idx" ON "timeline_events" ("event_at");
+        CREATE INDEX IF NOT EXISTS "event_preferences_user_idx" ON "event_preferences" ("user_id");
+        CREATE INDEX IF NOT EXISTS "event_preferences_event_idx" ON "event_preferences" ("event_id");
+        CREATE INDEX IF NOT EXISTS "merge_history_user_idx" ON "merge_history" ("user_id");
+        CREATE INDEX IF NOT EXISTS "merge_history_merged_at_idx" ON "merge_history" ("merged_at");
+      `;
+
+      const migration0002 = `
+        -- Migration 0002: Org Chart Fields
+        ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "org_department" varchar(50);
+        ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "org_role" varchar(50);
+        ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "org_reports_to_id" integer;
+        ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "org_influence" varchar(50);
+        ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "org_relationship_strength" varchar(50);
+
+        CREATE INDEX IF NOT EXISTS "contacts_org_reports_to_idx" ON "contacts" ("org_reports_to_id");
+        CREATE INDEX IF NOT EXISTS "contacts_org_department_idx" ON "contacts" ("org_department");
+      `;
+
+      // Run migrations
+      results.push("🚀 Running Migration 0001: Timeline Tables...");
+      await storage.db.execute(migration0001);
+      results.push("✅ Migration 0001 completed successfully!");
+
+      results.push("🚀 Running Migration 0002: Org Chart Fields...");
+      await storage.db.execute(migration0002);
+      results.push("✅ Migration 0002 completed successfully!");
+
+      results.push("🎉 All migrations completed! Your database is ready.");
+
+      // Return HTML response
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Database Migrations</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              max-width: 800px;
+              margin: 50px auto;
+              padding: 20px;
+              background: #f5f5f5;
+            }
+            .container {
+              background: white;
+              padding: 30px;
+              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            h1 { color: #2d3748; margin-top: 0; }
+            .result {
+              padding: 10px;
+              margin: 10px 0;
+              background: #f7fafc;
+              border-left: 3px solid #4299e1;
+              border-radius: 4px;
+            }
+            .success { border-left-color: #48bb78; }
+            .link {
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #e2e8f0;
+            }
+            a { color: #4299e1; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>✅ Database Migrations Complete</h1>
+            ${results.map(r => `<div class="result ${r.includes('✅') ? 'success' : ''}">${r}</div>`).join('')}
+            <div class="link">
+              <a href="/">← Back to Carda</a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      res.send(html);
+    } catch (error: any) {
+      console.error("[Migrations] Error running migrations:", error);
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Migration Error</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              max-width: 800px;
+              margin: 50px auto;
+              padding: 20px;
+              background: #f5f5f5;
+            }
+            .container {
+              background: white;
+              padding: 30px;
+              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            h1 { color: #e53e3e; margin-top: 0; }
+            .error {
+              padding: 15px;
+              background: #fff5f5;
+              border-left: 3px solid #e53e3e;
+              border-radius: 4px;
+              margin: 20px 0;
+              color: #742a2a;
+            }
+            pre {
+              background: #f7fafc;
+              padding: 15px;
+              border-radius: 4px;
+              overflow-x: auto;
+            }
+            .link { margin-top: 30px; }
+            a { color: #4299e1; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>❌ Migration Error</h1>
+            <div class="error">
+              <strong>An error occurred while running migrations:</strong>
+              <pre>${error.message || String(error)}</pre>
+            </div>
+            <div class="link">
+              <a href="/">← Back to Carda</a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      res.status(500).send(html);
+    }
+  });
+
   return httpServer;
 }
