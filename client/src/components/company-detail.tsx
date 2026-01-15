@@ -206,13 +206,13 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   }, []);
 
   // Quick edit org field handlers
-  const handleQuickEditField = useCallback((field: 'department' | 'role' | 'reportsToId', value: string | null) => {
+  const handleQuickEditField = useCallback(async (field: 'department' | 'role' | 'reportsToId', value: string | null) => {
     if (!quickEditContact) return;
-    
+
     const currentOrg = quickEditContact.org || { ...DEFAULT_ORG };
     const updatedOrg = { ...currentOrg, [field]: value };
 
-    updateContactV2(quickEditContact.id, { org: updatedOrg });
+    await updateContactV2(quickEditContact.id, { org: updatedOrg });
     setQuickEditContact({ ...quickEditContact, org: updatedOrg });
     refreshContacts();
   }, [quickEditContact, refreshContacts]);
