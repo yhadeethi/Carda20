@@ -50,8 +50,6 @@ import {
 } from "@/lib/companiesStorage";
 import {
   StoredContact,
-  loadContacts,
-  updateContact,
   OrgRole,
   Department,
   DEFAULT_ORG,
@@ -59,6 +57,7 @@ import {
   batchUpdateContacts,
   revertAutoGroup,
 } from "@/lib/contactsStorage";
+import { loadContactsV2, updateContactV2, type ContactV2 } from "@/lib/contacts/storage";
 import { useToast } from "@/hooks/use-toast";
 import { OrgMap } from "@/components/org-map";
 import { CompanyAvatar } from "@/components/companies/CompanyAvatar";
@@ -84,7 +83,7 @@ const DEPARTMENT_LABELS: Record<Department, string> = {
 const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
 
 // Company Header with Logo using shared CompanyAvatar
-function CompanyHeader({ company, contactCount, contacts }: { company: Company; contactCount: number; contacts: StoredContact[] }) {
+function CompanyHeader({ company, contactCount, contacts }: { company: Company; contactCount: number; contacts: ContactV2[] }) {
   const contactEmails = contacts.map(c => c.email).filter(Boolean);
   
   return (
@@ -112,7 +111,7 @@ function CompanyHeader({ company, contactCount, contacts }: { company: Company; 
 
 export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab = 'orgmap' }: CompanyDetailProps) {
   const [company, setCompany] = useState<Company | null>(null);
-  const [contacts, setContacts] = useState<StoredContact[]>([]);
+  const [contacts, setContacts] = useState<ContactV2[]>([]);
   const [activeTab, setActiveTab] = useState(initialTab);
   const reduceMotion = useReducedMotion();
   const tabIndex = activeTab === "contacts" ? 0 : activeTab === "orgmap" ? 1 : 2;
@@ -121,7 +120,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'ALL'>('ALL');
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [undoState, setUndoState] = useState<Map<string, Department> | null>(null);
-  const [quickEditContact, setQuickEditContact] = useState<StoredContact | null>(null);
+  const [quickEditContact, setQuickEditContact] = useState<ContactV2 | null>(null);
   const { toast } = useToast();
 
   // Load company and contacts
@@ -129,9 +128,9 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     const loadedCompany = getCompanyById(companyId);
     setCompany(loadedCompany || null);
     setNotes(loadedCompany?.notes || "");
-    
+
     // Load all contacts and filter by company
-    const allContacts = loadContacts();
+    const allContacts = loadContactsV2();
     if (loadedCompany) {
       const companyContacts = allContacts.filter((c) => {
         if (c.companyId === companyId) return true;
@@ -147,7 +146,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   }, [companyId]);
 
   const refreshContacts = useCallback(() => {
-    const allContacts = loadContacts();
+    const allContacts = loadContactsV2();
     if (company) {
       const companyContacts = allContacts.filter((c) => {
         if (c.companyId === companyId) return true;
@@ -212,8 +211,8 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     
     const currentOrg = quickEditContact.org || { ...DEFAULT_ORG };
     const updatedOrg = { ...currentOrg, [field]: value };
-    
-    updateContact(quickEditContact.id, { org: updatedOrg });
+
+    updateContactV2(quickEditContact.id, { org: updatedOrg });
     setQuickEditContact({ ...quickEditContact, org: updatedOrg });
     refreshContacts();
   }, [quickEditContact, refreshContacts]);
