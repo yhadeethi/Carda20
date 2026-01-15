@@ -11,6 +11,7 @@ import { generateIntelV2 } from "./intelV2Service";
 import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
+import { db } from "./db";
 import OpenAI from "openai";
 
 // Type definitions for authenticated requests
@@ -1200,11 +1201,11 @@ Return ONLY valid JSON, no markdown or explanation.`;
 
       // Run migrations
       results.push("🚀 Running Migration 0001: Timeline Tables...");
-      await storage.db.execute(migration0001);
+      await db.execute(migration0001);
       results.push("✅ Migration 0001 completed successfully!");
 
       results.push("🚀 Running Migration 0002: Org Chart Fields...");
-      await storage.db.execute(migration0002);
+      await db.execute(migration0002);
       results.push("✅ Migration 0002 completed successfully!");
 
       results.push("🎉 All migrations completed! Your database is ready.");
