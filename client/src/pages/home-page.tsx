@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import { useAuth } from "@/hooks/useAuth";
+import { useTimelineSetup } from "@/hooks/useTimelineSetup";
 import { ScanTab } from "@/components/scan-tab";
 import { RelationshipDetailView } from "@/components/relationship/RelationshipDetailView";
 import { ContactsHub } from "@/components/contacts-hub";
@@ -54,6 +55,10 @@ export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
   const { isHidden, isCompact } = useScrollDirectionNav();
   const { user } = useAuth();
+
+  // Setup timeline data sync and migration
+  useTimelineSetup();
+
   const [activeTab, setActiveTab] = useState<TabMode>("home");
   const [viewMode, setViewMode] = useState<ViewMode>("home");
 

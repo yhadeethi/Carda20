@@ -676,5 +676,375 @@ Return ONLY valid JSON, no markdown or explanation.`;
     }
   });
 
+  // ============================================
+  // Timeline Data API Endpoints
+  // ============================================
+
+  // Contact Tasks - GET all tasks for a contact
+  app.get("/api/contacts/:contactId/tasks", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const contactId = parseInt(req.params.contactId);
+
+      if (isNaN(contactId)) {
+        return res.status(400).json({ error: "Invalid contact ID" });
+      }
+
+      const tasks = await storage.getContactTasks(contactId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("[Tasks] Error fetching tasks:", error);
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+  });
+
+  // Contact Tasks - CREATE a new task
+  app.post("/api/contacts/:contactId/tasks", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const contactId = parseInt(req.params.contactId);
+
+      if (isNaN(contactId)) {
+        return res.status(400).json({ error: "Invalid contact ID" });
+      }
+
+      const { clientId, title, dueAt } = req.body;
+
+      if (!clientId || !title) {
+        return res.status(400).json({ error: "Missing required fields: clientId, title" });
+      }
+
+      // Check if task with this clientId already exists (idempotency)
+      const existing = await storage.getContactTaskByClientId(clientId);
+      if (existing) {
+        return res.json(existing);
+      }
+
+      const task = await storage.createContactTask({
+        contactId,
+        userId,
+        clientId,
+        title,
+        dueAt: dueAt ? new Date(dueAt) : undefined,
+        done: 0,
+      });
+
+      res.json(task);
+    } catch (error) {
+      console.error("[Tasks] Error creating task:", error);
+      res.status(500).json({ error: "Failed to create task" });
+    }
+  });
+
+  // Contact Tasks - UPDATE a task
+  app.put("/api/contacts/:contactId/tasks/:taskId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const taskId = parseInt(req.params.taskId);
+
+      if (isNaN(taskId)) {
+        return res.status(400).json({ error: "Invalid task ID" });
+      }
+
+      const { done, completedAt, title, dueAt } = req.body;
+      const updates: any = {};
+
+      if (done !== undefined) updates.done = done ? 1 : 0;
+      if (completedAt !== undefined) updates.completedAt = completedAt ? new Date(completedAt) : null;
+      if (title !== undefined) updates.title = title;
+      if (dueAt !== undefined) updates.dueAt = dueAt ? new Date(dueAt) : null;
+
+      const task = await storage.updateContactTask(taskId, updates);
+
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      res.json(task);
+    } catch (error) {
+      console.error("[Tasks] Error updating task:", error);
+      res.status(500).json({ error: "Failed to update task" });
+    }
+  });
+
+  // Contact Tasks - DELETE a task
+  app.delete("/api/contacts/:contactId/tasks/:taskId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const taskId = parseInt(req.params.taskId);
+
+      if (isNaN(taskId)) {
+        return res.status(400).json({ error: "Invalid task ID" });
+      }
+
+      const deleted = await storage.deleteContactTask(taskId);
+
+      if (!deleted) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Tasks] Error deleting task:", error);
+      res.status(500).json({ error: "Failed to delete task" });
+    }
+  });
+
+  // Contact Reminders - GET all reminders for a contact
+  app.get("/api/contacts/:contactId/reminders", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const contactId = parseInt(req.params.contactId);
+
+      if (isNaN(contactId)) {
+        return res.status(400).json({ error: "Invalid contact ID" });
+      }
+
+      const reminders = await storage.getContactReminders(contactId);
+      res.json(reminders);
+    } catch (error) {
+      console.error("[Reminders] Error fetching reminders:", error);
+      res.status(500).json({ error: "Failed to fetch reminders" });
+    }
+  });
+
+  // Contact Reminders - CREATE a new reminder
+  app.post("/api/contacts/:contactId/reminders", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const contactId = parseInt(req.params.contactId);
+
+      if (isNaN(contactId)) {
+        return res.status(400).json({ error: "Invalid contact ID" });
+      }
+
+      const { clientId, label, remindAt } = req.body;
+
+      if (!clientId || !label || !remindAt) {
+        return res.status(400).json({ error: "Missing required fields: clientId, label, remindAt" });
+      }
+
+      // Check if reminder with this clientId already exists (idempotency)
+      const existing = await storage.getContactReminderByClientId(clientId);
+      if (existing) {
+        return res.json(existing);
+      }
+
+      const reminder = await storage.createContactReminder({
+        contactId,
+        userId,
+        clientId,
+        label,
+        remindAt: new Date(remindAt),
+        done: 0,
+      });
+
+      res.json(reminder);
+    } catch (error) {
+      console.error("[Reminders] Error creating reminder:", error);
+      res.status(500).json({ error: "Failed to create reminder" });
+    }
+  });
+
+  // Contact Reminders - UPDATE a reminder
+  app.put("/api/contacts/:contactId/reminders/:reminderId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const reminderId = parseInt(req.params.reminderId);
+
+      if (isNaN(reminderId)) {
+        return res.status(400).json({ error: "Invalid reminder ID" });
+      }
+
+      const { done, doneAt, label, remindAt } = req.body;
+      const updates: any = {};
+
+      if (done !== undefined) updates.done = done ? 1 : 0;
+      if (doneAt !== undefined) updates.doneAt = doneAt ? new Date(doneAt) : null;
+      if (label !== undefined) updates.label = label;
+      if (remindAt !== undefined) updates.remindAt = new Date(remindAt);
+
+      const reminder = await storage.updateContactReminder(reminderId, updates);
+
+      if (!reminder) {
+        return res.status(404).json({ error: "Reminder not found" });
+      }
+
+      res.json(reminder);
+    } catch (error) {
+      console.error("[Reminders] Error updating reminder:", error);
+      res.status(500).json({ error: "Failed to update reminder" });
+    }
+  });
+
+  // Contact Reminders - DELETE a reminder
+  app.delete("/api/contacts/:contactId/reminders/:reminderId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const reminderId = parseInt(req.params.reminderId);
+
+      if (isNaN(reminderId)) {
+        return res.status(400).json({ error: "Invalid reminder ID" });
+      }
+
+      const deleted = await storage.deleteContactReminder(reminderId);
+
+      if (!deleted) {
+        return res.status(404).json({ error: "Reminder not found" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Reminders] Error deleting reminder:", error);
+      res.status(500).json({ error: "Failed to delete reminder" });
+    }
+  });
+
+  // Timeline Events - GET all events for a contact
+  app.get("/api/contacts/:contactId/timeline", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const contactId = parseInt(req.params.contactId);
+
+      if (isNaN(contactId)) {
+        return res.status(400).json({ error: "Invalid contact ID" });
+      }
+
+      const events = await storage.getTimelineEvents(contactId);
+      res.json(events);
+    } catch (error) {
+      console.error("[Timeline] Error fetching events:", error);
+      res.status(500).json({ error: "Failed to fetch timeline events" });
+    }
+  });
+
+  // Timeline Events - CREATE a new event
+  app.post("/api/contacts/:contactId/timeline", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const contactId = parseInt(req.params.contactId);
+
+      if (isNaN(contactId)) {
+        return res.status(400).json({ error: "Invalid contact ID" });
+      }
+
+      const { clientId, type, summary, meta, eventAt } = req.body;
+
+      if (!clientId || !type || !summary || !eventAt) {
+        return res.status(400).json({ error: "Missing required fields: clientId, type, summary, eventAt" });
+      }
+
+      // Check if event with this clientId already exists (idempotency)
+      const existing = await storage.getTimelineEventByClientId(clientId);
+      if (existing) {
+        return res.json(existing);
+      }
+
+      const event = await storage.createTimelineEvent({
+        contactId,
+        userId,
+        clientId,
+        type,
+        summary,
+        meta: meta || null,
+        eventAt: new Date(eventAt),
+      });
+
+      res.json(event);
+    } catch (error) {
+      console.error("[Timeline] Error creating event:", error);
+      res.status(500).json({ error: "Failed to create timeline event" });
+    }
+  });
+
+  // Event Preferences - GET preferences for a specific event
+  app.get("/api/events/:eventId/preferences", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = req.params.eventId;
+
+      const preferences = await storage.getEventPreferences(userId, eventId);
+      res.json(preferences || null);
+    } catch (error) {
+      console.error("[EventPreferences] Error fetching preferences:", error);
+      res.status(500).json({ error: "Failed to fetch event preferences" });
+    }
+  });
+
+  // Event Preferences - GET all preferences for the user
+  app.get("/api/events/preferences", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const preferences = await storage.getAllEventPreferences(userId);
+      res.json(preferences);
+    } catch (error) {
+      console.error("[EventPreferences] Error fetching all preferences:", error);
+      res.status(500).json({ error: "Failed to fetch event preferences" });
+    }
+  });
+
+  // Event Preferences - UPSERT preferences
+  app.post("/api/events/:eventId/preferences", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = req.params.eventId;
+
+      const { pinned, attending, note, reminderSet, reminderDismissed } = req.body;
+
+      const preference = await storage.upsertEventPreference({
+        userId,
+        eventId,
+        pinned: pinned ? 1 : 0,
+        attending: attending || null,
+        note: note || null,
+        reminderSet: reminderSet ? 1 : 0,
+        reminderDismissed: reminderDismissed ? 1 : 0,
+      });
+
+      res.json(preference);
+    } catch (error) {
+      console.error("[EventPreferences] Error upserting preferences:", error);
+      res.status(500).json({ error: "Failed to save event preferences" });
+    }
+  });
+
+  // Merge History - GET merge history for user
+  app.get("/api/merge-history", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const limit = parseInt(req.query.limit as string) || 10;
+
+      const history = await storage.getMergeHistory(userId, limit);
+      res.json(history);
+    } catch (error) {
+      console.error("[MergeHistory] Error fetching history:", error);
+      res.status(500).json({ error: "Failed to fetch merge history" });
+    }
+  });
+
+  // Merge History - CREATE new merge history entry
+  app.post("/api/merge-history", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const { primaryContactId, mergedContactSnapshots, mergedAt } = req.body;
+
+      if (!primaryContactId || !mergedContactSnapshots || !mergedAt) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const history = await storage.createMergeHistory({
+        userId,
+        primaryContactId,
+        mergedContactSnapshots,
+        mergedAt: new Date(mergedAt),
+      });
+
+      res.json(history);
+    } catch (error) {
+      console.error("[MergeHistory] Error creating history:", error);
+      res.status(500).json({ error: "Failed to create merge history" });
+    }
+  });
+
   return httpServer;
 }
