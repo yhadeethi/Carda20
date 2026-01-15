@@ -189,3 +189,25 @@ export async function getMergeHistoryAPI(limit: number = 10): Promise<any[]> {
 
   return response.json();
 }
+
+// Contact Org Fields API
+export async function updateContactOrgAPI(contactId: string | number, orgData: {
+  orgDepartment?: string | null;
+  orgRole?: string | null;
+  orgReportsToId?: number | null;
+  orgInfluence?: string | null;
+  orgRelationshipStrength?: string | null;
+}): Promise<any> {
+  const response = await fetch(`/api/contacts/${contactId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(orgData),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update contact org fields: ${response.statusText}`);
+  }
+
+  return response.json();
+}

@@ -69,6 +69,12 @@ const contactInputSchema = z.object({
   linkedinUrl: z.string().nullable().optional(),
   rawText: z.string().nullable().optional(),
   companyDomain: z.string().nullable().optional(),
+  // Org chart fields
+  orgDepartment: z.string().nullable().optional(),
+  orgRole: z.string().nullable().optional(),
+  orgReportsToId: z.number().nullable().optional(),
+  orgInfluence: z.string().nullable().optional(),
+  orgRelationshipStrength: z.string().nullable().optional(),
 });
 
 // Allowed MIME types for business card images

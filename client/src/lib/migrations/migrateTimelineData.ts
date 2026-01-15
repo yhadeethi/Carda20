@@ -72,6 +72,8 @@ export async function migrateExistingDataToServer(userId: number): Promise<Migra
       totalItems += (contact.tasks || []).length;
       totalItems += (contact.reminders || []).length;
       totalItems += (contact.timeline || []).filter(e => e.type !== 'scan_created').length; // Skip auto-generated scan events
+      // Count org data if present
+      if (contact.org) totalItems += 1;
     });
     totalItems += Object.keys(eventPrefs).length;
     totalItems += mergeHistory.length;
@@ -146,6 +148,29 @@ export async function migrateExistingDataToServer(userId: number): Promise<Migra
           uploaded++;
         } catch (error) {
           const msg = `Failed to upload timeline event for contact ${contact.name}: ${error}`;
+          console.error('[Migration]', msg);
+          errors.push(msg);
+        }
+      }
+
+      // Upload org field data if present
+      if (contact.org) {
+        try {
+          await fetch(`/api/contacts/${contact.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orgDepartment: contact.org.department || null,
+              orgRole: contact.org.role || null,
+              orgReportsToId: contact.org.reportsToId ? parseInt(contact.org.reportsToId) : null,
+              orgInfluence: contact.org.influence || null,
+              orgRelationshipStrength: contact.org.relationshipStrength || null,
+            }),
+            credentials: 'include',
+          });
+          uploaded++;
+        } catch (error) {
+          const msg = `Failed to upload org data for contact ${contact.name}: ${error}`;
           console.error('[Migration]', msg);
           errors.push(msg);
         }
