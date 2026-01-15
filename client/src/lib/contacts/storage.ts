@@ -29,6 +29,7 @@ import {
   deleteReminderAPI,
   createTimelineEventAPI,
   createMergeHistoryAPI,
+  updateContactOrgAPI,
 } from '../api/timeline';
 
 const STORAGE_KEY_V2 = "carda_contacts_v2";
@@ -204,7 +205,7 @@ export function upsertContact(contact: ContactV2): ContactV2 {
 }
 
 // Update contact by ID
-export function updateContactV2(id: string, updates: Partial<ContactV2>): ContactV2 | null {
+export async function updateContactV2(id: string, updates: Partial<ContactV2>): Promise<ContactV2 | null> {
   const contacts = loadContactsV2();
   const index = contacts.findIndex(c => c.id === id);
 
@@ -217,12 +218,31 @@ export function updateContactV2(id: string, updates: Partial<ContactV2>): Contac
   // Also sync to v1
   updateContactV1(id, updates);
 
+  // If org fields were updated, sync to server
+  if (updates.org) {
+    const orgData = {
+      orgDepartment: updates.org.department || null,
+      orgRole: updates.org.role || null,
+      orgReportsToId: updates.org.reportsToId ? parseInt(updates.org.reportsToId) : null,
+      orgInfluence: updates.org.influence || null,
+      orgRelationshipStrength: updates.org.relationshipStrength || null,
+    };
+
+    try {
+      await updateContactOrgAPI(id, orgData);
+    } catch (error) {
+      console.error('[Storage] Failed to sync org fields to server:', error);
+      // Queue for retry when back online
+      addToSyncQueue('contact_org', 'update', `/api/contacts/${id}`, 'PATCH', orgData);
+    }
+  }
+
   return updated;
 }
 
 // Mark contact as last touched
-export function markLastTouched(contactId: string): void {
-  updateContactV2(contactId, { lastTouchedAt: new Date().toISOString() });
+export async function markLastTouched(contactId: string): Promise<void> {
+  await updateContactV2(contactId, { lastTouchedAt: new Date().toISOString() });
 }
 
 // ============ TIMELINE ============

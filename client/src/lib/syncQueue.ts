@@ -7,10 +7,10 @@ const SYNC_QUEUE_KEY = 'carda_sync_queue_v1';
 
 export interface QueuedChange {
   id: string;
-  type: 'task' | 'reminder' | 'timeline_event' | 'event_preference' | 'merge_history';
+  type: 'task' | 'reminder' | 'timeline_event' | 'event_preference' | 'merge_history' | 'contact_org';
   action: 'create' | 'update' | 'delete';
   endpoint: string;
-  method: 'POST' | 'PUT' | 'DELETE';
+  method: 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   data: any;
   timestamp: string;
   retryCount: number;

@@ -87,6 +87,12 @@ export const contacts = pgTable("contacts", {
   companyId: integer("company_id").references(() => companies.id),
   notes: text("notes"), // Contact notes
   lastTouchedAt: timestamp("last_touched_at"), // Last interaction timestamp
+  // Org chart fields
+  orgDepartment: varchar("org_department", { length: 50 }),
+  orgRole: varchar("org_role", { length: 50 }),
+  orgReportsToId: integer("org_reports_to_id"), // Self-referencing for manager relationship
+  orgInfluence: varchar("org_influence", { length: 50 }),
+  orgRelationshipStrength: varchar("org_relationship_strength", { length: 50 }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
