@@ -1053,8 +1053,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
     }
   });
 
-  // Database Migration Endpoint - Simple one-click migration
-  app.get("/api/run-migrations", isAuthenticated, async (req: Request, res: Response) => {
+  // Database Migration Endpoint - Simple one-click migration (no auth for initial setup)
+  app.get("/api/run-migrations", async (req: Request, res: Response) => {
     try {
       const results: string[] = [];
 
