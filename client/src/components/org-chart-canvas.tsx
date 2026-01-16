@@ -28,7 +28,6 @@ import "@xyflow/react/dist/style.css";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Users, Crosshair } from "lucide-react";
 import { StoredContact, Department } from "@/lib/contactsStorage";
-import { CompanyAvatar } from "@/components/companies/CompanyAvatar";
 
 // Department colors for node styling - Apple-inspired with vibrant accents
 const DEPARTMENT_COLORS: Record<
@@ -398,13 +397,10 @@ interface OrgChartCanvasInnerProps {
   onSetManager?: (sourceId: string, targetId: string) => void;
   editMode?: boolean;
   focusId?: string | null;
-  companyName?: string;
-  companyDomain?: string;
-  companyWebsite?: string;
 }
 
 const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInnerProps>(function OrgChartCanvasInner(
-  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode, focusId, companyName, companyDomain, companyWebsite },
+  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode, focusId },
   ref
 ) {
   const { fitView, zoomIn, zoomOut } = useReactFlow();
@@ -452,21 +448,6 @@ const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInner
 
   return (
     <div className="h-full w-full relative" data-testid="org-chart-canvas">
-      {/* Company Logo - Floating at top */}
-      {companyName && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-          <div className="flex items-center gap-3 bg-background/95 backdrop-blur-xl px-4 py-2.5 rounded-2xl border border-border/60 shadow-lg">
-            <CompanyAvatar
-              name={companyName}
-              domain={companyDomain || undefined}
-              website={companyWebsite || undefined}
-              size="md"
-            />
-            <span className="font-semibold text-sm text-foreground">{companyName}</span>
-          </div>
-        </div>
-      )}
-
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -508,13 +489,10 @@ interface OrgChartCanvasProps {
   onSetManager?: (sourceId: string, targetId: string) => void;
   editMode?: boolean;
   focusId?: string | null;
-  companyName?: string;
-  companyDomain?: string;
-  companyWebsite?: string;
 }
 
 export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasProps>(function OrgChartCanvas(
-  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode = false, focusId, companyName, companyDomain, companyWebsite },
+  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode = false, focusId },
   ref
 ) {
   return (
@@ -528,9 +506,6 @@ export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasPro
         onSetManager={onSetManager}
         editMode={editMode}
         focusId={focusId}
-        companyName={companyName}
-        companyDomain={companyDomain}
-        companyWebsite={companyWebsite}
       />
     </ReactFlowProvider>
   );
