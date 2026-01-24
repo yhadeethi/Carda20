@@ -1,220 +1,214 @@
 import { useMemo, useEffect } from "react";
-import { Camera, Calendar, Plus, Sparkles, Users } from "lucide-react";
+import { Bell, TrendingUp, UserPlus, AlertCircle, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useScoreboard } from "@/hooks/useScoreboard";
-import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
+import { useUnifiedContacts } from "@/hooks/useUnifiedContacts";
 
 type HomeScoreboardProps = {
   refreshKey: number;
-  onPressScan: () => void;
-  onPressRelationships: () => void;
-  onPressEvents: () => void;
-  onSelectContact: (contact: UnifiedContact, initialAction?: "followup") => void;
+  onCreateContact: () => void;
+  onViewReminders: () => void;
+  onViewCompanies: () => void;
+  onViewDataQuality: () => void;
 };
-
-function initials(name?: string | null): string {
-  const n = (name || "").trim();
-  if (!n) return "?";
-  const parts = n.split(/\s+/).filter(Boolean);
-  const a = parts[0]?.[0] || "";
-  const b = parts.length > 1 ? parts[parts.length - 1]?.[0] || "" : "";
-  return (a + b).toUpperCase();
-}
-
-function ContactRow({
-  contact,
-  ctaLabel,
-  onCTA,
-  onOpen,
-}: {
-  contact: UnifiedContact;
-  ctaLabel: string;
-  onCTA: () => void;
-  onOpen: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-3 py-2">
-      <button
-        onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-        style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-      >
-        <div className="h-9 w-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
-          {initials(contact.name)}
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{contact.name || "Unnamed"}</div>
-          <div className="truncate text-xs text-muted-foreground">
-            {contact.company || "No company"}{contact.title ? ` • ${contact.title}` : ""}
-          </div>
-        </div>
-      </button>
-      <Button size="sm" variant="secondary" onClick={onCTA}>
-        {ctaLabel}
-      </Button>
-    </div>
-  );
-}
 
 export function HomeScoreboard({
   refreshKey,
-  onPressScan,
-  onPressRelationships,
-  onPressEvents,
-  onSelectContact,
+  onCreateContact,
+  onViewReminders,
+  onViewCompanies,
+  onViewDataQuality,
 }: HomeScoreboardProps) {
   const { contacts, refreshLocal } = useUnifiedContacts();
-  
+
   useEffect(() => {
     refreshLocal();
   }, [refreshKey, refreshLocal]);
-  
-  const { dueFollowUps, newCaptures, eventSprints, counts, insights } = useScoreboard(contacts, refreshKey);
 
-  const topEvent = eventSprints[0] || null;
-  const showEventTile = counts.eventSprints > 0 && !!topEvent;
+  const { counts, insights } = useScoreboard(contacts, refreshKey);
 
-  const doNowList = useMemo(() => dueFollowUps.slice(0, 3), [dueFollowUps]);
-  const newList = useMemo(() => newCaptures.slice(0, 3), [newCaptures]);
+  // Format today's date
+  const today = useMemo(() => {
+    const now = new Date();
+    return now.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }, []);
 
   return (
-    <div className="p-4 max-w-2xl mx-auto">
-      <div className="mb-3">
-        <div className="text-xl font-semibold">Today</div>
-        <div className="text-xs text-muted-foreground">
-          {counts.dueFollowUps} due • {counts.newCaptures} new{showEventTile ? ` • ${counts.eventSprints} event pending` : ""}
-        </div>
+    <div className="p-4 max-w-2xl mx-auto space-y-4">
+      {/* Header with date */}
+      <div>
+        <h1 className="text-2xl font-semibold">Home</h1>
+        <p className="text-sm text-muted-foreground">{today}</p>
       </div>
 
-      {/* Hero tiles */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      {/* Reminders Section - only show if there are reminders */}
+      {counts.remindersCount > 0 && (
         <button
-          onClick={onPressRelationships}
-          className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800/50 p-3 text-left hover:from-amber-100 hover:to-orange-100/60 dark:hover:from-amber-900/40 dark:hover:to-orange-800/30 transition-all"
+          onClick={onViewReminders}
+          className="w-full rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 p-4 text-left hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
           style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
         >
           <div className="flex items-center justify-between">
-            <div className="text-xs text-amber-800 dark:text-amber-300 font-medium">Follow-ups</div>
-            <Users className="w-4 h-4 text-amber-700 dark:text-amber-400" />
-          </div>
-          <div className="mt-2 text-3xl font-semibold text-amber-900 dark:text-amber-100">{counts.dueFollowUps}</div>
-          <div className="text-xs text-amber-700 dark:text-amber-400">Due now</div>
-        </button>
-
-        <button
-          onClick={onPressScan}
-          className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100/50 dark:from-emerald-950/30 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800/50 p-3 text-left hover:from-emerald-100 hover:to-teal-200/60 dark:hover:from-emerald-900/40 dark:hover:to-teal-800/30 transition-all"
-          style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-emerald-800 dark:text-emerald-300 font-medium">New captures</div>
-            <Camera className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-          </div>
-          <div className="mt-2 text-3xl font-semibold text-emerald-900 dark:text-emerald-100">{counts.newCaptures}</div>
-          <div className="text-xs text-emerald-700 dark:text-emerald-400">In the last 24h</div>
-        </button>
-      </div>
-
-      {showEventTile && topEvent && (
-        <button
-          onClick={onPressEvents}
-          className="w-full rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200 dark:border-purple-800/50 p-3 text-left hover:from-purple-100 hover:to-purple-200/50 dark:hover:from-purple-900/40 dark:hover:to-purple-800/30 transition-all mb-4"
-          style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs text-purple-700 dark:text-purple-300 font-medium">Event sprint</div>
-              <div className="text-sm font-medium truncate max-w-[70%] text-purple-900 dark:text-purple-100">{topEvent.eventName}</div>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  You have {counts.remindersCount} reminder{counts.remindersCount !== 1 ? 's' : ''}
+                </div>
+                <div className="text-xs text-blue-700 dark:text-blue-300">
+                  Tap to view
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-lg font-semibold text-purple-900 dark:text-purple-100">{topEvent.pending}</div>
-              <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              {counts.remindersCount}
             </div>
           </div>
-          <div className="mt-2 text-xs text-purple-600 dark:text-purple-400">Tap to review and follow up</div>
         </button>
       )}
 
-      {/* Do now */}
-      <div className="mb-4">
+      {/* Network Overview */}
+      <div>
         <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-semibold">Do now</div>
-          <Button variant="ghost" size="sm" onClick={onPressRelationships}>
+          <h2 className="text-sm font-semibold">Network Overview</h2>
+          <Button variant="ghost" size="sm" onClick={onViewCompanies}>
             View all
           </Button>
         </div>
-        <Card className="p-3">
-          {doNowList.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-2">No urgent follow-ups. You’re on top of it.</div>
-          ) : (
-            doNowList.map((c) => (
-              <ContactRow
-                key={c.id}
-                contact={c}
-                ctaLabel="Send follow-up"
-                onCTA={() => onSelectContact(c, "followup")}
-                onOpen={() => onSelectContact(c)}
-              />
-            ))
-          )}
-        </Card>
-      </div>
+        <Card className="p-4">
+          <div className="grid grid-cols-2 gap-6">
+            <button
+              onClick={onViewCompanies}
+              className="text-center group"
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            >
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="text-3xl font-bold text-foreground group-hover:text-blue-600 transition-colors">
+                {insights.companiesCount}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Companies
+              </div>
+            </button>
 
-      {/* New captures */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-semibold">New captures</div>
-          <Button variant="ghost" size="sm" onClick={onPressScan}>
-            Add
-          </Button>
-        </div>
-        <Card className="p-3">
-          {newList.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-2">No new captures yet — try scanning a card.</div>
-          ) : (
-            newList.map((c) => (
-              <ContactRow
-                key={c.id}
-                contact={c}
-                ctaLabel="Follow-up"
-                onCTA={() => onSelectContact(c, "followup")}
-                onOpen={() => onSelectContact(c)}
-              />
-            ))
-          )}
-        </Card>
-      </div>
-
-      {/* Insights (non-duplicative) */}
-      <div className="mb-2">
-        <div className="text-sm font-semibold mb-2">Insights</div>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800/50 p-3">
-            <div className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300 font-semibold">Reconnect</div>
-            <div className="mt-1 text-lg font-semibold text-amber-900 dark:text-amber-100">{insights.reconnectCount}</div>
-            <div className="text-xs text-amber-600 dark:text-amber-400">60+ days</div>
-          </div>
-          <div className="rounded-2xl bg-gradient-to-br from-sky-50 to-blue-50/50 dark:from-sky-950/30 dark:to-blue-900/20 border border-sky-200 dark:border-sky-800/50 p-3">
-            <div className="text-[10px] uppercase tracking-wide text-sky-700 dark:text-sky-300 font-semibold">Data quality</div>
-            <div className="mt-1 text-lg font-semibold text-sky-900 dark:text-sky-100">{insights.missingFieldsCount}</div>
-            <div className="text-xs text-sky-600 dark:text-sky-400">Missing fields</div>
-          </div>
-          <div className="rounded-2xl bg-gradient-to-br from-purple-50 to-fuchsia-50/50 dark:from-purple-950/30 dark:to-fuchsia-900/20 border border-purple-200 dark:border-purple-800/50 p-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-wide text-purple-700 dark:text-purple-300 font-semibold">Momentum</div>
-              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <TrendingUp className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="text-3xl font-bold text-muted-foreground">
+                0
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Industries
+              </div>
+              <div className="text-[10px] text-blue-600 dark:text-blue-400 mt-1">
+                Coming soon
+              </div>
             </div>
-            <div className="mt-1 text-lg font-semibold text-purple-900 dark:text-purple-100">{insights.weeklyMomentumCount}</div>
-            <div className="text-xs text-purple-600 dark:text-purple-400">Actions / 7d</div>
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Quick add */}
-      <div className="mt-6">
-        <Button onClick={onPressScan} className="w-full rounded-2xl">
-          <Plus className="w-4 h-4 mr-2" /> Add a contact
+      {/* Recent Activity */}
+      <div>
+        <h2 className="text-sm font-semibold mb-2">Recent Activity</h2>
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <div>
+                <div className="text-sm font-medium">Contacts Scanned</div>
+                <div className="text-xs text-muted-foreground">Last 7 days</div>
+              </div>
+            </div>
+            <div className="text-2xl font-bold">
+              {counts.recentScans}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Data Quality - only show if there are issues */}
+      {insights.missingFieldsCount > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold mb-2">Data Quality</h2>
+          <button
+            onClick={onViewDataQuality}
+            className="w-full"
+            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+          >
+            <Card className="p-4 text-left hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-950/30 flex items-center justify-center">
+                    <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">Missing Information</div>
+                    <div className="text-xs text-muted-foreground">
+                      {insights.missingFieldsCount} field{insights.missingFieldsCount !== 1 ? 's' : ''} need attention
+                    </div>
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                  {insights.missingFieldsCount}
+                </div>
+              </div>
+
+              {insights.dataQualityBreakdown && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {insights.dataQualityBreakdown.missingCompany > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Missing company:</span>
+                      <span className="font-medium">{insights.dataQualityBreakdown.missingCompany}</span>
+                    </div>
+                  )}
+                  {insights.dataQualityBreakdown.missingTitle > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Missing title:</span>
+                      <span className="font-medium">{insights.dataQualityBreakdown.missingTitle}</span>
+                    </div>
+                  )}
+                  {insights.dataQualityBreakdown.missingEmail > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Missing email:</span>
+                      <span className="font-medium">{insights.dataQualityBreakdown.missingEmail}</span>
+                    </div>
+                  )}
+                  {insights.dataQualityBreakdown.missingPhone > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Missing phone:</span>
+                      <span className="font-medium">{insights.dataQualityBreakdown.missingPhone}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          </button>
+        </div>
+      )}
+
+      {/* Quick Create Contact */}
+      <div className="pt-2">
+        <Button
+          onClick={onCreateContact}
+          className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+          size="lg"
+        >
+          <UserPlus className="w-5 h-5 mr-2" />
+          Create Contact
         </Button>
       </div>
     </div>
