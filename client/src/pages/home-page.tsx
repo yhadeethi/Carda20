@@ -10,6 +10,7 @@ import { EventsHub } from "@/components/events-hub";
 import { CompanyDetail } from "@/components/company-detail";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { HomeScoreboard } from "@/components/home/HomeScoreboard";
+import { CreateContactDrawer } from "@/components/create-contact-drawer";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -71,6 +72,7 @@ export default function HomePage() {
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
+  const [showCreateContactDrawer, setShowCreateContactDrawer] = useState(false);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -293,7 +295,7 @@ export default function HomePage() {
             >
               <HomeScoreboard
                 refreshKey={contactsVersion}
-                onCreateContact={() => handleTabChange("scan")}
+                onCreateContact={() => setShowCreateContactDrawer(true)}
                 onViewReminders={() => handleTabChange("contacts")}
                 onViewCompanies={() => handleTabChange("contacts")}
                 onViewDataQuality={() => handleTabChange("contacts")}
@@ -456,6 +458,13 @@ export default function HomePage() {
           </div>
         </nav>
       )}
+
+      {/* Create Contact Drawer */}
+      <CreateContactDrawer
+        open={showCreateContactDrawer}
+        onOpenChange={setShowCreateContactDrawer}
+        onContactCreated={refreshContacts}
+      />
     </div>
   );
 }
