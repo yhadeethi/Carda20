@@ -140,11 +140,95 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
     return count;
   }, [enriched]);
 
+  // Get reminder objects with contact info
+  const reminders = useMemo(() => {
+    const now = new Date();
+    const reminderList: Array<{
+      id: string;
+      time: string;
+      label: string;
+      contactName: string;
+      contact: UnifiedContact;
+      done: boolean;
+      remindAt: Date;
+    }> = [];
+
+    enriched.forEach(({ c }) => {
+      if (Array.isArray(c.reminders)) {
+        c.reminders.forEach(r => {
+          if (!r.done && r.remindAt) {
+            const remindAt = new Date(r.remindAt);
+            reminderList.push({
+              id: r.id,
+              time: remindAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+              label: r.label,
+              contactName: c.name || 'Unknown',
+              contact: c,
+              done: r.done,
+              remindAt,
+            });
+          }
+        });
+      }
+    });
+
+    return reminderList.sort((a, b) => a.remindAt.getTime() - b.remindAt.getTime());
+  }, [enriched]);
+
+  // Get new companies in last 7 days
+  const newCompaniesCount = useMemo(() => {
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const companies = new Set<string>();
+
+    enriched.forEach(({ c, createdAt }) => {
+      if (createdAt >= sevenDaysAgo && c.company?.trim()) {
+        companies.add(c.company.trim().toLowerCase());
+      }
+    });
+
+    return companies.size;
+  }, [enriched, now]);
+
+  // Detect duplicates (contacts with same name or email)
+  const duplicates = useMemo(() => {
+    const nameMap = new Map<string, UnifiedContact[]>();
+    const emailMap = new Map<string, UnifiedContact[]>();
+
+    enriched.forEach(({ c }) => {
+      if (c.name?.trim()) {
+        const normalized = c.name.trim().toLowerCase();
+        if (!nameMap.has(normalized)) nameMap.set(normalized, []);
+        nameMap.get(normalized)!.push(c);
+      }
+      if (c.email?.trim()) {
+        const normalized = c.email.trim().toLowerCase();
+        if (!emailMap.has(normalized)) emailMap.set(normalized, []);
+        emailMap.get(normalized)!.push(c);
+      }
+    });
+
+    const dupes: UnifiedContact[] = [];
+    nameMap.forEach((contacts) => {
+      if (contacts.length > 1) dupes.push(...contacts);
+    });
+    emailMap.forEach((contacts) => {
+      if (contacts.length > 1) {
+        contacts.forEach(c => {
+          if (!dupes.find(d => d.id === c.id)) dupes.push(c);
+        });
+      }
+    });
+
+    return dupes;
+  }, [enriched]);
+
   return {
     contacts,
     dueFollowUps,
     newCaptures,
     eventSprints,
+    reminders,
+    duplicates,
     counts: {
       dueFollowUps: dueFollowUps.length,
       newCaptures: newCaptures.length,
@@ -158,6 +242,7 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
       reconnectCount,
       weeklyMomentumCount,
       companiesCount,
+      newCompaniesCount,
     },
   };
 }
