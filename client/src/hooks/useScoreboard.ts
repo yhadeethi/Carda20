@@ -65,31 +65,9 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
       .sort((a, b) => b.pending - a.pending);
   }, [enriched]);
 
-  // Insights: non-duplicative "leverage" indicators.
+  // Insights: non-duplicative “leverage” indicators.
   const missingFieldsCount = useMemo(() => {
-    return enriched.filter(({ c }) => !c.company?.trim() || !c.title?.trim() || !c.email?.trim() || !c.phone?.trim()).length;
-  }, [enriched]);
-
-  // Data quality breakdown
-  const dataQualityBreakdown = useMemo(() => {
-    let missingCompany = 0;
-    let missingTitle = 0;
-    let missingEmail = 0;
-    let missingPhone = 0;
-
-    enriched.forEach(({ c }) => {
-      if (!c.company?.trim()) missingCompany++;
-      if (!c.title?.trim()) missingTitle++;
-      if (!c.email?.trim()) missingEmail++;
-      if (!c.phone?.trim()) missingPhone++;
-    });
-
-    return {
-      missingCompany,
-      missingTitle,
-      missingEmail,
-      missingPhone,
-    };
+    return enriched.filter(({ c }) => !c.company?.trim() || !c.title?.trim()).length;
   }, [enriched]);
 
   const reconnectCount = useMemo(() => {
@@ -111,35 +89,6 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
     return count;
   }, [enriched, now]);
 
-  // Get contacts scanned in last 7 days
-  const recentScans = useMemo(() => {
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    return enriched.filter(({ createdAt }) => createdAt >= sevenDaysAgo).length;
-  }, [enriched, now]);
-
-  // Count unique companies
-  const companiesCount = useMemo(() => {
-    const companies = new Set<string>();
-    enriched.forEach(({ c }) => {
-      if (c.company?.trim()) {
-        companies.add(c.company.trim().toLowerCase());
-      }
-    });
-    return companies.size;
-  }, [enriched]);
-
-  // Count active reminders
-  const remindersCount = useMemo(() => {
-    let count = 0;
-    enriched.forEach(({ c }) => {
-      if (Array.isArray(c.reminders)) {
-        const activeReminders = c.reminders.filter(r => !r.done);
-        count += activeReminders.length;
-      }
-    });
-    return count;
-  }, [enriched]);
-
   return {
     contacts,
     dueFollowUps,
@@ -149,15 +98,11 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
       dueFollowUps: dueFollowUps.length,
       newCaptures: newCaptures.length,
       eventSprints: eventSprints.reduce((sum, e) => sum + e.pending, 0),
-      recentScans,
-      remindersCount,
     },
     insights: {
       missingFieldsCount,
-      dataQualityBreakdown,
       reconnectCount,
       weeklyMomentumCount,
-      companiesCount,
     },
   };
 }
