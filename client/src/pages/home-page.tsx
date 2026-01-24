@@ -293,10 +293,10 @@ export default function HomePage() {
             >
               <HomeScoreboard
                 refreshKey={contactsVersion}
-                onPressScan={() => handleTabChange("scan")}
-                onPressRelationships={() => handleTabChange("contacts")}
-                onPressEvents={() => handleTabChange("events")}
-                onSelectContact={(c, action) => handleSelectUnifiedContact(c, action)}
+                onCreateContact={() => handleTabChange("scan")}
+                onViewReminders={() => handleTabChange("contacts")}
+                onViewCompanies={() => handleTabChange("contacts")}
+                onViewDataQuality={() => handleTabChange("contacts")}
               />
             </motion.div>
           )}
