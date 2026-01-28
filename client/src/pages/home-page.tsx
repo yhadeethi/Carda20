@@ -299,6 +299,7 @@ export default function HomePage() {
                 onViewReminders={() => handleTabChange("contacts")}
                 onViewCompanies={() => handleTabChange("contacts")}
                 onViewDataQuality={() => handleTabChange("contacts")}
+                onSelectContact={handleSelectUnifiedContact}
               />
             </motion.div>
           )}
