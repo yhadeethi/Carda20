@@ -51,6 +51,7 @@ interface ContactsHubProps {
   refreshKey?: number;
   onContactDeleted?: () => void;
   onSelectCompany?: (companyId: string) => void;
+  initialTab?: TabMode;
 }
 
 export function ContactsHub({
@@ -59,8 +60,9 @@ export function ContactsHub({
   refreshKey,
   onContactDeleted,
   onSelectCompany,
+  initialTab = "people",
 }: ContactsHubProps) {
-  const [activeTab, setActiveTab] = useState<TabMode>("people");
+  const [activeTab, setActiveTab] = useState<TabMode>(initialTab);
   const reduceMotion = useReducedMotion();
   const [peopleSubView, setPeopleSubView] = useState<PeopleSubView>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -85,6 +87,11 @@ export function ContactsHub({
     const updatedCompanies = autoGenerateCompaniesFromContacts(loadedContacts);
     setCompanies(updatedCompanies);
   }, [refreshKey]);
+
+  // Sync activeTab with initialTab when it changes
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const eventNames = useMemo(() => getUniqueEventNames(), [contacts]);
 

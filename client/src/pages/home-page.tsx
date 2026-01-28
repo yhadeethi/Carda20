@@ -69,6 +69,7 @@ export default function HomePage() {
   const [contactInitialAction, setContactInitialAction] = useState<"followup" | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [companyDetailTab, setCompanyDetailTab] = useState<'contacts' | 'orgmap' | 'notes'>('orgmap');
+  const [contactsHubTab, setContactsHubTab] = useState<'people' | 'companies'>('people');
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
@@ -119,6 +120,24 @@ export default function HomePage() {
   const handleTabChange = (tab: TabMode) => {
     setActiveTab(tab);
     setViewMode(tab);
+    setSelectedContact(null);
+    setContactInitialAction(null);
+    setSelectedCompanyId(null);
+  };
+
+  const handleViewPeople = () => {
+    setContactsHubTab('people');
+    setActiveTab('contacts');
+    setViewMode('contacts');
+    setSelectedContact(null);
+    setContactInitialAction(null);
+    setSelectedCompanyId(null);
+  };
+
+  const handleViewCompanies = () => {
+    setContactsHubTab('companies');
+    setActiveTab('contacts');
+    setViewMode('contacts');
     setSelectedContact(null);
     setContactInitialAction(null);
     setSelectedCompanyId(null);
@@ -296,9 +315,9 @@ export default function HomePage() {
               <HomeScoreboard
                 refreshKey={contactsVersion}
                 onCreateContact={() => setShowCreateContactDrawer(true)}
-                onViewReminders={() => handleTabChange("contacts")}
-                onViewCompanies={() => handleTabChange("contacts")}
-                onViewDataQuality={() => handleTabChange("contacts")}
+                onViewReminders={handleViewPeople}
+                onViewPeople={handleViewPeople}
+                onViewCompanies={handleViewCompanies}
                 onSelectContact={handleSelectUnifiedContact}
               />
             </motion.div>
@@ -337,6 +356,7 @@ export default function HomePage() {
                   refreshKey={contactsVersion}
                   onContactDeleted={refreshContacts}
                   onSelectCompany={handleSelectCompany}
+                  initialTab={contactsHubTab}
                 />
               </div>
             </motion.div>
