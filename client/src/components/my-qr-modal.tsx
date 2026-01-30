@@ -84,8 +84,8 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
               onClick={() => setActiveTab("qr")}
               className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === "qr"
-                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
               }`}
               data-testid="tab-my-qr"
             >
@@ -97,8 +97,8 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
               onClick={() => setActiveTab("edit")}
               className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === "edit"
-                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
               }`}
               data-testid="tab-edit-profile"
             >
@@ -237,10 +237,10 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                 {/* LinkedIn */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
-                    <SiLinkedin className="w-3 h-3 text-[#0A66C2]" /> LinkedIn
+                    <SiLinkedin className="w-3 h-3 text-primary" /> LinkedIn
                   </Label>
                   <div className="relative">
-                    <SiLinkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0A66C2]" />
+                    <SiLinkedin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
                     <Input
                       type="url"
                       value={formData.linkedinUrl}
@@ -300,15 +300,15 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
 
           {/* Footer with Save button – ONLY when Edit tab is active */}
           {activeTab === "edit" && (
-            <footer 
-              className="shrink-0 border-t px-4 py-3 bg-white dark:bg-slate-900"
+            <footer
+              className="shrink-0 border-t px-4 py-3 bg-card"
               style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
             >
               <button
                 type="button"
                 onClick={handleSave}
                 disabled={!formData.fullName && !formData.email && !formData.phone}
-                className="w-full rounded-xl py-3 text-base font-medium bg-slate-900 text-white dark:bg-white dark:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full rounded-xl py-3 text-base font-medium bg-primary text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="button-save-my-card"
               >
                 {saved ? (

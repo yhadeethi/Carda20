@@ -135,7 +135,7 @@ export function ContactHeroCard({
   if (contact.phone) {
     rows.push({
       icon: Phone,
-      iconClassName: "text-green-500",
+      iconClassName: "text-primary",
       label: "Phone",
       value: contact.phone,
       onClick: onCall,
@@ -145,7 +145,7 @@ export function ContactHeroCard({
   if (contact.email) {
     rows.push({
       icon: Mail,
-      iconClassName: "text-blue-500",
+      iconClassName: "text-primary",
       label: "Email",
       value: contact.email,
       onClick: onEmail,
@@ -155,7 +155,7 @@ export function ContactHeroCard({
   if (contact.address) {
     rows.push({
       icon: MapPin,
-      iconClassName: "text-orange-500",
+      iconClassName: "text-primary",
       label: "Address",
       value: contact.address,
       onClick: () => window.open(getMapsUrl(contact.address!), "_blank", "noopener,noreferrer"),
@@ -166,7 +166,7 @@ export function ContactHeroCard({
   // LinkedIn (profile if we have it, otherwise search)
   rows.push({
     icon: SiLinkedin as unknown as IconType,
-    iconClassName: contact.linkedinUrl ? "text-[#0A66C2]" : "text-muted-foreground",
+    iconClassName: contact.linkedinUrl ? "text-primary" : "text-muted-foreground",
     label: "LinkedIn",
     value: contact.linkedinUrl ? "View profile" : "Find on LinkedIn",
     onClick: contact.linkedinUrl
@@ -178,7 +178,7 @@ export function ContactHeroCard({
   if (contact.website) {
     rows.push({
       icon: Globe,
-      iconClassName: "text-purple-500",
+      iconClassName: "text-primary",
       label: "Website",
       value: contact.website.replace(/^https?:\/\//, ""),
       onClick: onOpenWebsite,
@@ -191,7 +191,7 @@ export function ContactHeroCard({
 
   return (
     <div
-      className="rounded-2xl bg-background/50 backdrop-blur-xl border border-white/10 shadow-lg overflow-hidden"
+      className="rounded-2xl glass overflow-hidden"
       data-testid="contact-hero-card"
     >
       {/* Header (no avatar = no wasted space) */}

@@ -429,8 +429,8 @@ export default function HomePage() {
             {/* Home (standalone circle) */}
             <button
               onClick={() => handleTabChange("home")}
-              className={`h-12 w-12 rounded-full backdrop-blur-sm shadow-xl border transition-all duration-200 flex items-center justify-center ${
-                activeTab === "home" ? "bg-white/95 dark:bg-slate-900/95 text-foreground" : "bg-white/80 dark:bg-slate-900/80 text-foreground/60 hover:text-foreground"
+              className={`h-12 w-12 rounded-full glass shadow-xl transition-all duration-200 flex items-center justify-center ${
+                activeTab === "home" ? "text-foreground" : "text-foreground/60 hover:text-foreground"
               }`}
               style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
               aria-label="Home"
@@ -441,7 +441,7 @@ export default function HomePage() {
 
             {/* Pill group */}
             <div
-              className={`inline-flex items-center h-12 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-xl border transition-all duration-300 ease-out ${
+              className={`inline-flex items-center h-12 rounded-full glass shadow-xl transition-all duration-300 ease-out ${
                 isCompact ? "gap-4 px-4" : "gap-6 px-5"
               }`}
             >
