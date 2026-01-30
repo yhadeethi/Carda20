@@ -20,6 +20,26 @@ export type EventSprintSummary = {
   pending: number;
 };
 
+export type WeeklySeriesPoint = {
+  /** Local day label, e.g. Mon */
+  day: string;
+  /** Local date key YYYY-MM-DD */
+  dateKey: string;
+  /** Count for that day */
+  count: number;
+};
+
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
 export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: number) {
   const now = useMemo(() => new Date(), [refreshKey]);
 
@@ -111,6 +131,31 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
     return count;
   }, [enriched, now]);
 
+  // Weekly captures series (last 7 local days incl. today)
+  const weeklyCapturesSeries: WeeklySeriesPoint[] = useMemo(() => {
+    const end = startOfLocalDay(now);
+    const start = new Date(end.getTime() - 6 * 24 * 60 * 60 * 1000);
+
+    const buckets = new Map<string, number>();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+      buckets.set(localDateKey(d), 0);
+    }
+
+    enriched.forEach(({ createdAt }) => {
+      const day = startOfLocalDay(createdAt);
+      if (day < start || day > end) return;
+      const key = localDateKey(day);
+      buckets.set(key, (buckets.get(key) || 0) + 1);
+    });
+
+    return Array.from(buckets.entries()).map(([dateKey, count]) => {
+      const d = new Date(dateKey + "T00:00:00");
+      const day = d.toLocaleDateString("en-US", { weekday: "short" });
+      return { day, dateKey, count };
+    });
+  }, [enriched, now]);
+
   // Get contacts scanned in last 7 days
   const recentScans = useMemo(() => {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -145,6 +190,7 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
     dueFollowUps,
     newCaptures,
     eventSprints,
+    weeklyCapturesSeries,
     counts: {
       dueFollowUps: dueFollowUps.length,
       newCaptures: newCaptures.length,
