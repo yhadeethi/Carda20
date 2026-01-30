@@ -87,16 +87,18 @@ export function HomeScoreboard({
         {counts.remindersCount > 0 ? (
           <button
             onClick={onViewReminders}
-            className="w-full rounded-2xl glass p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 active:scale-[0.98]"
+            className="w-full rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 hover:bg-card/90 active:scale-[0.98]"
             style={{
               touchAction: "manipulation",
-              WebkitTapHighlightColor: "transparent"
+              WebkitTapHighlightColor: "transparent",
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)"
             }}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/25">
-                  <Bell className="w-5 h-5 text-primary-foreground" />
+                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                  <Bell className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <div className="text-sm font-semibold">
@@ -111,7 +113,13 @@ export function HomeScoreboard({
             </div>
           </button>
         ) : (
-          <div className="rounded-2xl glass-subtle p-4">
+          <div
+            className="rounded-2xl bg-card/60 backdrop-blur-xl border border-border/30 p-4"
+            style={{
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)"
+            }}
+          >
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center">
                 <Bell className="w-5 h-5 text-muted-foreground/50" />
@@ -142,7 +150,13 @@ export function HomeScoreboard({
         </div>
 
         {dueFollowUps.length > 0 ? (
-          <div className="rounded-2xl glass divide-y divide-border/50 overflow-hidden">
+          <div
+            className="rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 divide-y divide-border/50 overflow-hidden"
+            style={{
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)"
+            }}
+          >
             {dueFollowUps.slice(0, 3).map((contact) => (
               <button
                 key={contact.id}
@@ -163,10 +177,16 @@ export function HomeScoreboard({
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl glass-subtle p-4">
+          <div
+            className="rounded-2xl bg-card/60 backdrop-blur-xl border border-border/30 p-4"
+            style={{
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)"
+            }}
+          >
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-accent/10 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-accent" />
+              <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
               </div>
               <div>
                 <div className="text-sm font-medium text-muted-foreground">All caught up</div>
@@ -194,7 +214,13 @@ export function HomeScoreboard({
         </div>
 
         {newCaptures.length > 0 ? (
-          <div className="rounded-2xl glass divide-y divide-border/50 overflow-hidden">
+          <div
+            className="rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 divide-y divide-border/50 overflow-hidden"
+            style={{
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)"
+            }}
+          >
             {newCaptures.slice(0, 3).map((contact) => (
               <button
                 key={contact.id}
@@ -215,7 +241,13 @@ export function HomeScoreboard({
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl glass-subtle p-4">
+          <div
+            className="rounded-2xl bg-card/60 backdrop-blur-xl border border-border/30 p-4"
+            style={{
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)"
+            }}
+          >
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center">
                 <Sparkles className="w-5 h-5 text-muted-foreground/50" />
@@ -238,42 +270,46 @@ export function HomeScoreboard({
           {/* Contacts Scanned */}
           <button
             onClick={onViewPeople}
-            className="group rounded-2xl glass p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/30 active:scale-[0.98]"
+            className="group rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/10 hover:border-blue-500/30 hover:bg-card/90 active:scale-[0.98]"
             style={{
               touchAction: "manipulation",
-              WebkitTapHighlightColor: "transparent"
+              WebkitTapHighlightColor: "transparent",
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)"
             }}
           >
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-primary/20">
-                <Users className="w-5 h-5 text-primary transition-transform duration-300 group-hover:scale-105" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-blue-500/20">
+                <Users className="w-5 h-5 text-blue-500 transition-transform duration-300 group-hover:scale-105" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-2xl font-bold tracking-tight tabular-nums">{counts.recentScans}</div>
                 <div className="text-xs text-muted-foreground">Contacts scanned</div>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground/30 transition-all duration-200 group-hover:text-primary/50 group-hover:translate-x-0.5" />
+              <ChevronRight className="w-4 h-4 text-muted-foreground/30 transition-all duration-200 group-hover:text-blue-500/50 group-hover:translate-x-0.5" />
             </div>
           </button>
 
           {/* Companies */}
           <button
             onClick={onViewCompanies}
-            className="group rounded-2xl glass p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/30 active:scale-[0.98]"
+            className="group rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 p-4 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/10 hover:border-purple-500/30 hover:bg-card/90 active:scale-[0.98]"
             style={{
               touchAction: "manipulation",
-              WebkitTapHighlightColor: "transparent"
+              WebkitTapHighlightColor: "transparent",
+              backdropFilter: "blur(20px) saturate(180%)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)"
             }}
           >
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-secondary flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-primary/20">
-                <Building2 className="w-5 h-5 text-secondary-foreground transition-transform duration-300 group-hover:scale-105" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-purple-500/20">
+                <Building2 className="w-5 h-5 text-purple-500 transition-transform duration-300 group-hover:scale-105" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-2xl font-bold tracking-tight tabular-nums">{insights.companiesCount}</div>
                 <div className="text-xs text-muted-foreground">Companies</div>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground/30 transition-all duration-200 group-hover:text-primary/50 group-hover:translate-x-0.5" />
+              <ChevronRight className="w-4 h-4 text-muted-foreground/30 transition-all duration-200 group-hover:text-purple-500/50 group-hover:translate-x-0.5" />
             </div>
           </button>
         </div>
@@ -283,7 +319,7 @@ export function HomeScoreboard({
       <section className="pt-2">
         <Button
           onClick={onCreateContact}
-          className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 transition-all duration-300 active:scale-[0.98]"
+          className="w-full h-12 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg shadow-blue-500/25 transition-all duration-300 active:scale-[0.98]"
           size="lg"
         >
           <UserPlus className="w-5 h-5 mr-2" />
