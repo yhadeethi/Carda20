@@ -30,7 +30,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Info, Users, GitBranch, Maximize2, X } from "lucide-react";
+import { Info, Users, GitBranch, Maximize2, X, ExternalLink } from "lucide-react";
 import { StoredContact, Department, DEFAULT_ORG } from "@/lib/contactsStorage";
 import { updateContactV2 } from "@/lib/contacts/storage";
 import { useToast } from "@/hooks/use-toast";
@@ -61,35 +61,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
   const effectiveFocusContact = focusMode ? selectedContact || rootContact || null : null;
   const focusId = effectiveFocusContact?.id || null;
-
-  // Extract company info from contacts for logo display
-  const companyInfo = useMemo(() => {
-    if (contacts.length === 0) return { name: "", domain: "", website: "" };
-
-    // Get the most common company name
-    const companyCounts: Record<string, number> = {};
-    contacts.forEach(c => {
-      if (c.company) companyCounts[c.company] = (companyCounts[c.company] || 0) + 1;
-    });
-
-    let mostCommonCompany = "";
-    let maxCount = 0;
-    for (const [company, count] of Object.entries(companyCounts)) {
-      if (count > maxCount) {
-        mostCommonCompany = company;
-        maxCount = count;
-      }
-    }
-
-    // Find a contact with that company to get website/email
-    const companyContact = contacts.find(c => c.company === mostCommonCompany) || contacts[0];
-
-    return {
-      name: mostCommonCompany || companyContact?.company || "",
-      domain: "",
-      website: companyContact?.website || "",
-    };
-  }, [contacts]);
 
   useEffect(() => {
     if (!showDiagram) return;
@@ -437,9 +408,6 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   onSetManager={handleSetManager}
                   editMode={true}
                   focusId={focusId}
-                  companyName={companyInfo.name}
-                  companyDomain={companyInfo.domain}
-                  companyWebsite={companyInfo.website}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
