@@ -34,8 +34,8 @@ function base64ToFile(base64: string, filename: string): File {
   return new File([u8arr], filename, { type: mime });
 }
 
-// Process a single image through OCR (exported for Events tab background extraction)
-export async function processImageData(imageData: string): Promise<ScanResult> {
+// Process a single image through OCR
+async function processImage(imageData: string): Promise<ScanResult> {
   const file = base64ToFile(imageData, "scan.jpg");
   const formData = new FormData();
   formData.append("image", file);
@@ -104,7 +104,7 @@ export async function processBatchQueue(callbacks?: BatchProcessorCallbacks): Pr
     updateQueueItem(item.id, { status: "processing" });
 
     try {
-      const result = await processImageData(item.imageData);
+      const result = await processImage(item.imageData);
       
       updateQueueItem(item.id, {
         status: "completed",

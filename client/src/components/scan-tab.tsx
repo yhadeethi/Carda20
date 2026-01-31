@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// NOTE: Event Mode toggle intentionally removed from Scan.
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,8 +21,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { StoredContact, loadContacts } from "@/lib/contactsStorage";
-import { loadContactsV2, ContactV2 } from "@/lib/contacts/storage";
+import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
+import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
+import { generateId as generateTimelineId } from "@/lib/contacts/ids";
 import {
   getContactCountForCompany,
   findCompanyByName,
@@ -30,14 +31,20 @@ import {
   findCompanyByDomain,
 } from "@/lib/companiesStorage";
 
-import { Camera, FileText, Loader2, Upload, X, Download, Check } from "lucide-react";
+import { Camera, FileText, Loader2, Upload, X, Download, Check, Layers, Calendar } from "lucide-react";
 import { SiHubspot } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
+import { BatchScanMode } from "@/components/batch-scan-mode";
+import { BatchReview } from "@/components/batch-review";
 import { ContactDetailView } from "@/components/contact";
-import { saveUnifiedContactFromParsed } from "@/lib/contacts/saveUnifiedContact";
+import { QueuedScan, getAllQueueItems, clearBatchSession } from "@/lib/batchScanStorage";
+import { processBatchQueue } from "@/lib/batchProcessor";
+import { addTimelineEvent } from "@/lib/contacts/storage";
 
 type ScanMode = "scan" | "paste";
+type BatchState = "idle" | "capturing" | "processing" | "reviewing";
+
 interface ParsedContact {
   fullName?: string;
   jobTitle?: string;
@@ -60,6 +67,10 @@ interface ScanTabProps {
   viewingContact?: StoredContact;
   onBackToContacts?: () => void;
   onDeleteContact?: (id: string) => void;
+  eventModeEnabled: boolean;
+  currentEventName: string | null;
+  onEventModeChange: (enabled: boolean) => void;
+  onEventNameChange: (name: string | null) => void;
   onContactSaved?: () => void;
   onContactUpdated?: (contactId: string) => void;
   onViewInOrgMap?: (companyId: string) => void;
@@ -169,6 +180,10 @@ export function ScanTab({
   viewingContact,
   onBackToContacts,
   onDeleteContact,
+  eventModeEnabled,
+  currentEventName,
+  onEventModeChange,
+  onEventNameChange,
   onContactSaved,
   onContactUpdated,
   onViewInOrgMap,
@@ -190,12 +205,24 @@ export function ScanTab({
 
   const [isCompressing, setIsCompressing] = useState(false);
 
+  const [tempEventName, setTempEventName] = useState("");
+  const [pendingEventName, setPendingEventName] = useState<string | null>(null);
+  const [isEditingEventName, setIsEditingEventName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
   const [v2RefreshKey, setV2RefreshKey] = useState(0);
 
-  // Scan is intentionally single-contact only (events live in the Events tab).
+  // Batch scan state
+  const [batchState, setBatchState] = useState<BatchState>("idle");
+  const [batchItems, setBatchItems] = useState<QueuedScan[]>([]);
+
+  const effectiveEventName = currentEventName || pendingEventName;
+
+  // Clear pending when parent event name arrives
+  useEffect(() => {
+    if (currentEventName && pendingEventName) setPendingEventName(null);
+  }, [currentEventName, pendingEventName]);
 
   // When navigating in from Relationships (hub)
   useEffect(() => {
@@ -229,17 +256,79 @@ export function ScanTab({
     setRawText(null);
     setPastedText("");
     clearImage();
+    setBatchState("idle");
+    setBatchItems([]);
   };
 
   const saveContactToStorage = (parsedContact: ParsedContact): StoredContact | null => {
     try {
-      const saved = saveUnifiedContactFromParsed(parsedContact, {
-        eventName: null,
-        source: "scan",
-      });
-      if (saved?.v2) setContactV2(saved.v2);
+      const contactData = {
+        name: parsedContact.fullName || "",
+        company: parsedContact.companyName || "",
+        title: parsedContact.jobTitle || "",
+        email: parsedContact.email || "",
+        phone: parsedContact.phone || "",
+        website: parsedContact.website || "",
+        linkedinUrl: parsedContact.linkedinUrl || "",
+        address: parsedContact.address || "",
+      };
+
+      const eventNameToUse = eventModeEnabled ? effectiveEventName : null;
+      const savedContact = saveContact(contactData, eventNameToUse);
+      if (!savedContact) return null;
+
+      const existingV2Contacts = loadContactsV2();
+      const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
+
+      let v2Contact: ContactV2;
+
+      if (existingV2) {
+        v2Contact = {
+          ...existingV2,
+          name: savedContact.name,
+          company: savedContact.company,
+          title: savedContact.title,
+          email: savedContact.email,
+          phone: savedContact.phone,
+          website: savedContact.website,
+          linkedinUrl: savedContact.linkedinUrl,
+          address: savedContact.address,
+          eventName: savedContact.eventName,
+          companyId: savedContact.companyId,
+          timeline: [
+            ...existingV2.timeline,
+            {
+              id: generateTimelineId(),
+              type: "contact_updated" as const,
+              at: new Date().toISOString(),
+              summary: "Contact updated via scan",
+            },
+          ],
+          lastTouchedAt: new Date().toISOString(),
+        };
+      } else {
+        v2Contact = {
+          ...savedContact,
+          tasks: [],
+          reminders: [],
+          timeline: [
+            {
+              id: generateTimelineId(),
+              type: "scan_created" as const,
+              at: savedContact.createdAt || new Date().toISOString(),
+              summary: "Contact created via scan",
+            },
+          ],
+          lastTouchedAt: savedContact.createdAt,
+          notes: "",
+        };
+      }
+
+      upsertContactV2(v2Contact);
+      setContactV2(v2Contact);
+
       onContactSaved?.();
-      return saved?.v1 || null;
+      return savedContact;
     } catch (e) {
       console.error("[ScanTab] Failed to save contact to storage:", e);
       return null;
@@ -352,6 +441,87 @@ export function ScanTab({
     if (pastedText.trim()) parseTextMutation.mutate(pastedText);
   };
 
+  // Event mode: compact “iOS-like” input bar
+  const shouldShowEventInput = eventModeEnabled && (isEditingEventName || !effectiveEventName);
+
+  const handleEventModeToggle = (enabled: boolean) => {
+    if (enabled) {
+      onEventModeChange(true);
+
+      // If already have an event, jump straight into batch capture
+      if (effectiveEventName) {
+        setBatchState("capturing");
+        return;
+      }
+
+      // Otherwise show the input bar
+      setTempEventName("");
+      setIsEditingEventName(true);
+      return;
+    }
+
+    // OFF: clear everything
+    onEventModeChange(false);
+    onEventNameChange(null);
+    setPendingEventName(null);
+    setTempEventName("");
+    setIsEditingEventName(false);
+    setBatchState("idle");
+    clearBatchSession();
+  };
+
+  const handleEventNameSubmit = () => {
+    const name = tempEventName.trim();
+    if (!name) return;
+
+    // Set pending to avoid state lag while parent updates
+    setPendingEventName(name);
+    onEventNameChange(name);
+    onEventModeChange(true);
+    setIsEditingEventName(false);
+
+    // Immediately activate batch scan
+    setBatchState("capturing");
+  };
+
+  const handleChangeEvent = () => {
+    setTempEventName(effectiveEventName || "");
+    setIsEditingEventName(true);
+  };
+
+  // Batch scan handlers
+  const handleStartBatchMode = () => setBatchState("capturing");
+
+  const handleExitBatchMode = () => {
+    setBatchState("idle");
+    clearBatchSession();
+  };
+
+  const handleBatchProcess = async (items: QueuedScan[]) => {
+    setBatchState("processing");
+    setBatchItems(items);
+
+    await processBatchQueue({
+      onComplete: ({ successful, failed }) => {
+        const updatedItems = getAllQueueItems();
+        setBatchItems(updatedItems);
+        setBatchState("reviewing");
+        toast({
+          title: "Processing complete",
+          description: `${successful} successful, ${failed} failed`,
+        });
+      },
+    });
+  };
+
+  const handleBatchComplete = () => {
+    setBatchState("idle");
+    setBatchItems([]);
+    onContactSaved?.();
+  };
+
+  const handleBatchBack = () => setBatchState("capturing");
+
   const isProcessing = isCompressing || scanCardMutation.isPending || parseTextMutation.isPending;
 
   // Helper to find company ID for org map
@@ -414,6 +584,21 @@ export function ScanTab({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Batch Scan Mode */}
+      {batchState === "capturing" && effectiveEventName && (
+        <BatchScanMode eventName={effectiveEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
+      )}
+
+      {/* Batch Processing / Review */}
+      {(batchState === "processing" || batchState === "reviewing") && effectiveEventName && (
+        <BatchReview
+          items={batchItems}
+          eventName={effectiveEventName}
+          onComplete={handleBatchComplete}
+          onBack={handleBatchBack}
+        />
+      )}
+
       {/* Contact detail view */}
       {activeStoredContact && (
         <div className="space-y-4">
@@ -437,7 +622,7 @@ export function ScanTab({
       )}
 
       {/* Normal Scan UI */}
-      {!activeStoredContact && (
+      {!activeStoredContact && batchState === "idle" && (
         <Card className="glass">
           <CardContent className="space-y-4 pt-4">
             {/* Small subheader (like Contacts Hub) */}
@@ -478,6 +663,79 @@ export function ScanTab({
               </TabsList>
 
               <TabsContent value="scan" className="mt-4 space-y-4">
+                {/* Event Mode (only in Scan mode, under tabs) */}
+                <div className="rounded-2xl border bg-muted/30 p-3" data-testid="event-mode-row">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={eventModeEnabled}
+                        onCheckedChange={handleEventModeToggle}
+                        data-testid="switch-event-mode"
+                      />
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        <span>Event mode</span>
+                      </div>
+                    </div>
+
+                    {eventModeEnabled && effectiveEventName && (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-sm bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium"
+                          data-testid="current-event-name"
+                        >
+                          {effectiveEventName}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={handleChangeEvent}
+                          data-testid="button-change-event"
+                        >
+                          Change
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Apple-like event input bar (no X; toggle OFF exits) */}
+                  {shouldShowEventInput && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        placeholder="e.g. All-Energy 2025"
+                        value={tempEventName}
+                        onChange={(e) => setTempEventName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
+                        autoFocus
+                        className="h-11 rounded-full flex-1"
+                        data-testid="input-event-name"
+                      />
+                      <Button
+                        onClick={handleEventNameSubmit}
+                        disabled={!tempEventName.trim()}
+                        className="h-11 rounded-full px-4"
+                        data-testid="button-save-event"
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* If user exits batch and wants to restart without toggling */}
+                  {eventModeEnabled && effectiveEventName && batchState === "idle" && (
+                    <Button
+                      variant="outline"
+                      className="w-full mt-3 gap-2 rounded-full h-11"
+                      onClick={handleStartBatchMode}
+                      data-testid="button-batch-scan"
+                    >
+                      <Layers className="w-4 h-4" />
+                      Batch Scan
+                    </Button>
+                  )}
+                </div>
+
                 {/* One-tap native iOS sheet */}
                 <input
                   ref={fileInputRef}
