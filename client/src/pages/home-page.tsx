@@ -70,8 +70,6 @@ export default function HomePage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [companyDetailTab, setCompanyDetailTab] = useState<'contacts' | 'orgmap' | 'notes'>('orgmap');
   const [contactsHubTab, setContactsHubTab] = useState<'people' | 'companies'>('people');
-  const [eventModeEnabled, setEventModeEnabled] = useState(false);
-  const [currentEventName, setCurrentEventName] = useState<string | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
   const [showCreateContactDrawer, setShowCreateContactDrawer] = useState(false);
 
@@ -314,16 +312,10 @@ export default function HomePage() {
             >
               <HomeScoreboard
                 refreshKey={contactsVersion}
-                onStartScan={() => {
-                  setActiveTab('scan');
-                  setViewMode('scan');
-                }}
                 onCreateContact={() => setShowCreateContactDrawer(true)}
                 onViewPeople={handleViewPeople}
                 onViewCompanies={handleViewCompanies}
                 onSelectContact={handleSelectUnifiedContact}
-                onSelectCompany={handleSelectCompany}
-                onRefresh={refreshContacts}
               />
             </motion.div>
           )}
@@ -336,10 +328,6 @@ export default function HomePage() {
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
               <ScanTab
-                eventModeEnabled={eventModeEnabled}
-                currentEventName={currentEventName}
-                onEventModeChange={setEventModeEnabled}
-                onEventNameChange={setCurrentEventName}
                 onContactSaved={refreshContacts}
                 onViewInOrgMap={(companyId) => handleSelectCompany(companyId, 'orgmap')}
                 onShowingContactChange={setScanShowingContact}
@@ -408,14 +396,7 @@ export default function HomePage() {
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <EventsHub 
-                onScanAtEvent={(eventName) => {
-                  setCurrentEventName(eventName);
-                  setEventModeEnabled(true);
-                  setActiveTab("scan");
-                  setViewMode("scan");
-                }}
-              />
+              <EventsHub onContactsCreated={refreshContacts} />
             </motion.div>
           )}
         </AnimatePresence>
