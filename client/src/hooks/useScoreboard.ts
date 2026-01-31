@@ -1,5 +1,14 @@
 import { useMemo } from "react";
 import type { UnifiedContact } from "./useUnifiedContacts";
+import {
+  autoGenerateCompaniesFromContacts,
+  getCompanyById,
+  resolveCompanyIdForContact,
+  extractDomainFromEmail,
+  extractDomainFromWebsite,
+  normalizeCompanyName,
+} from "@/lib/companiesStorage";
+import type { ContactReminder } from "@/lib/contacts/types";
 
 const FOLLOWUP_DUE_AFTER_DAYS = 3;
 const NEW_CAPTURE_HOURS = 24;
@@ -21,23 +30,38 @@ export type EventSprintSummary = {
 };
 
 export type WeeklySeriesPoint = {
-  /** Local day label, e.g. Mon */
-  day: string;
-  /** Local date key YYYY-MM-DD */
-  dateKey: string;
-  /** Count for that day */
-  count: number;
+  dayLabel: string; // Mon
+  isoDate: string; // YYYY-MM-DD (local)
+  captures: number;
 };
 
-function localDateKey(d: Date): string {
+export type CompanySummary = {
+  companyId: string;
+  name: string;
+  domain?: string | null;
+  contactsCount: number;
+  lastTouchedAt: string;
+  completeness: number; // 0-100
+  hasNotes: boolean;
+};
+
+export type SuggestedCompany = CompanySummary & {
+  nextAction: "finish_profile" | "add_intel";
+};
+
+function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+function toLocalISODate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
-function startOfLocalDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+function dayLabel(d: Date): string {
+  return d.toLocaleDateString("en-US", { weekday: "short" });
 }
 
 export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: number) {
@@ -131,31 +155,6 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
     return count;
   }, [enriched, now]);
 
-  // Weekly captures series (last 7 local days incl. today)
-  const weeklyCapturesSeries: WeeklySeriesPoint[] = useMemo(() => {
-    const end = startOfLocalDay(now);
-    const start = new Date(end.getTime() - 6 * 24 * 60 * 60 * 1000);
-
-    const buckets = new Map<string, number>();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
-      buckets.set(localDateKey(d), 0);
-    }
-
-    enriched.forEach(({ createdAt }) => {
-      const day = startOfLocalDay(createdAt);
-      if (day < start || day > end) return;
-      const key = localDateKey(day);
-      buckets.set(key, (buckets.get(key) || 0) + 1);
-    });
-
-    return Array.from(buckets.entries()).map(([dateKey, count]) => {
-      const d = new Date(dateKey + "T00:00:00");
-      const day = d.toLocaleDateString("en-US", { weekday: "short" });
-      return { day, dateKey, count };
-    });
-  }, [enriched, now]);
-
   // Get contacts scanned in last 7 days
   const recentScans = useMemo(() => {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -185,12 +184,168 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
     return count;
   }, [enriched]);
 
+  // Active reminders list (includes overdue) sorted by remindAt
+  const activeReminders = useMemo(() => {
+    const list: Array<{ contact: UnifiedContact; reminder: ContactReminder }> = [];
+    for (const { c } of enriched) {
+      if (!Array.isArray(c.reminders)) continue;
+      for (const r of c.reminders) {
+        if (r?.done) continue;
+        if (!r?.remindAt) continue;
+        list.push({ contact: c, reminder: r as ContactReminder });
+      }
+    }
+    list.sort((a, b) => String(a.reminder.remindAt).localeCompare(String(b.reminder.remindAt)));
+    return list;
+  }, [enriched]);
+
+  // Weekly captures (last 7 local days including today)
+  const weeklyCapturesSeries: WeeklySeriesPoint[] = useMemo(() => {
+    const end = startOfLocalDay(now);
+    const days: Date[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(end);
+      d.setDate(end.getDate() - i);
+      days.push(d);
+    }
+
+    const countsByDate = new Map<string, number>();
+    for (const { createdAt } of enriched) {
+      const d = startOfLocalDay(createdAt);
+      const key = toLocalISODate(d);
+      countsByDate.set(key, (countsByDate.get(key) || 0) + 1);
+    }
+
+    return days.map((d) => {
+      const iso = toLocalISODate(d);
+      return {
+        dayLabel: dayLabel(d),
+        isoDate: iso,
+        captures: countsByDate.get(iso) || 0,
+      };
+    });
+  }, [enriched, now]);
+
+  // Company summaries for "Recent companies" strip
+  const recentCompanies: CompanySummary[] = useMemo(() => {
+    // Ensure companies exist (idempotent)
+    try {
+      autoGenerateCompaniesFromContacts(
+        enriched.map(({ c }) => ({
+          company: c.company || "",
+          email: c.email || "",
+          website: c.website || "",
+          companyId: c.companyId || null,
+        }))
+      );
+    } catch {
+      // ignore (e.g., during SSR)
+    }
+
+    const map = new Map<string, {
+      companyId: string;
+      name: string;
+      domain?: string | null;
+      contactsCount: number;
+      lastTouchedAt: Date;
+      hasNotes: boolean;
+      hasLocation: boolean;
+    }>();
+
+    const computeCompleteness = (hasDomain: boolean, hasNotes: boolean, hasLocation: boolean, contactsCount: number) => {
+      let score = 0;
+      if (hasDomain) score += 25;
+      if (hasNotes) score += 25;
+      if (hasLocation) score += 25;
+      if (contactsCount >= 3) score += 25;
+      return score;
+    };
+
+    for (const { c, createdAt, lastTouchedAt } of enriched) {
+      const companyName = (c.company || "").trim();
+      if (!companyName) continue;
+
+      const resolvedId = resolveCompanyIdForContact({
+        companyId: c.companyId || null,
+        company: companyName,
+        email: c.email || "",
+      });
+
+      if (!resolvedId) continue;
+
+      const company = getCompanyById(resolvedId);
+      const name = company?.name || normalizeCompanyName(companyName);
+      const domain = company?.domain || extractDomainFromWebsite(c.website || "") || extractDomainFromEmail(c.email || "");
+      const hasNotes = !!company?.notes?.trim();
+      const hasLocation = !!(company?.city || company?.state || company?.country);
+
+      const key = resolvedId;
+      const existing = map.get(key);
+      const touched = parseIso(c.lastTouchedAt) || lastTouchedAt || createdAt;
+
+      if (!existing) {
+        map.set(key, {
+          companyId: resolvedId,
+          name,
+          domain,
+          contactsCount: 1,
+          lastTouchedAt: touched,
+          hasNotes,
+          hasLocation,
+        });
+      } else {
+        existing.contactsCount += 1;
+        if (touched > existing.lastTouchedAt) existing.lastTouchedAt = touched;
+        if (!existing.domain && domain) existing.domain = domain;
+        existing.hasNotes = existing.hasNotes || hasNotes;
+        existing.hasLocation = existing.hasLocation || hasLocation;
+      }
+    }
+
+    const list = Array.from(map.values())
+      .map((v) => {
+        const completeness = computeCompleteness(!!v.domain, v.hasNotes, v.hasLocation, v.contactsCount);
+        return {
+          companyId: v.companyId,
+          name: v.name,
+          domain: v.domain || null,
+          contactsCount: v.contactsCount,
+          lastTouchedAt: v.lastTouchedAt.toISOString(),
+          completeness,
+          hasNotes: v.hasNotes,
+        } satisfies CompanySummary;
+      })
+      .sort((a, b) => b.lastTouchedAt.localeCompare(a.lastTouchedAt));
+
+    return list;
+  }, [enriched]);
+
+  const suggestedCompany: SuggestedCompany | null = useMemo(() => {
+    if (!recentCompanies.length) return null;
+
+    // Pick the lowest completeness among the most recent 10, tie-break by contactsCount then recency
+    const pool = recentCompanies.slice(0, 10);
+    const sorted = [...pool].sort((a, b) => {
+      if (a.completeness !== b.completeness) return a.completeness - b.completeness;
+      if (a.contactsCount !== b.contactsCount) return b.contactsCount - a.contactsCount;
+      return b.lastTouchedAt.localeCompare(a.lastTouchedAt);
+    });
+    const best = sorted[0];
+    return {
+      ...best,
+      nextAction: best.completeness < 75 ? "finish_profile" : "add_intel",
+    };
+  }, [recentCompanies]);
+
   return {
     contacts,
     dueFollowUps,
     newCaptures,
     eventSprints,
+    activeReminders,
     weeklyCapturesSeries,
+    recentCompanies,
+    suggestedCompany,
     counts: {
       dueFollowUps: dueFollowUps.length,
       newCaptures: newCaptures.length,

@@ -314,13 +314,16 @@ export default function HomePage() {
             >
               <HomeScoreboard
                 refreshKey={contactsVersion}
-                onRefresh={refreshContacts}
-                onScan={() => handleTabChange("scan")}
+                onStartScan={() => {
+                  setActiveTab('scan');
+                  setViewMode('scan');
+                }}
                 onCreateContact={() => setShowCreateContactDrawer(true)}
                 onViewPeople={handleViewPeople}
                 onViewCompanies={handleViewCompanies}
-                onSelectCompany={(companyId) => handleSelectCompany(companyId, "orgmap")}
                 onSelectContact={handleSelectUnifiedContact}
+                onSelectCompany={handleSelectCompany}
+                onRefresh={refreshContacts}
               />
             </motion.div>
           )}
