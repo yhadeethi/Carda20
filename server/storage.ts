@@ -1,6 +1,7 @@
 import {
   users, contacts, companies, companyIntel, hubspotTokens,
   contactTasks, contactReminders, timelineEvents, eventPreferences, mergeHistory,
+  userEvents, userEventContacts,
   type User, type InsertUser, type UpsertUser,
   type Contact, type InsertContact,
   type Company, type InsertCompany,
@@ -11,7 +12,9 @@ import {
   type ContactReminder, type InsertContactReminder,
   type TimelineEvent, type InsertTimelineEvent,
   type EventPreference, type InsertEventPreference,
-  type MergeHistory, type InsertMergeHistory
+  type MergeHistory, type InsertMergeHistory,
+  type UserEvent, type InsertUserEvent,
+  type UserEventContact, type InsertUserEventContact
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -74,6 +77,19 @@ export interface IStorage {
   getMergeHistory(userId: number, limit?: number): Promise<MergeHistory[]>;
   createMergeHistory(history: InsertMergeHistory): Promise<MergeHistory>;
   deleteMergeHistory(id: number): Promise<boolean>;
+
+  // User Events
+  getUserEvents(userId: number, limit?: number): Promise<UserEvent[]>;
+  getUserEvent(userId: number, eventId: number): Promise<UserEvent | undefined>;
+  createUserEvent(event: InsertUserEvent): Promise<UserEvent>;
+  updateUserEvent(id: number, updates: Partial<UserEvent>): Promise<UserEvent | undefined>;
+  deleteUserEvent(id: number): Promise<boolean>;
+  getOrCreateDraftEvent(userId: number): Promise<UserEvent>;
+  finalizeDraftEvent(userId: number, eventId: number, payload: { title: string; notes?: string; tags?: string[]; locationLabel?: string }): Promise<UserEvent | undefined>;
+
+  // User Event Contacts
+  getUserEventContacts(userId: number, eventId: number): Promise<UserEventContact[]>;
+  attachContactsToEvent(userId: number, eventId: number, contactRefs: Array<{ contactIdV1?: string; contactIdV2?: number }>): Promise<UserEventContact[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -457,6 +473,142 @@ export class DatabaseStorage implements IStorage {
   async deleteMergeHistory(id: number): Promise<boolean> {
     const result = await db.delete(mergeHistory).where(eq(mergeHistory.id, id));
     return (result as any).rowCount > 0;
+  }
+
+  // User Events
+  async getUserEvents(userId: number, limit: number = 50): Promise<UserEvent[]> {
+    return db
+      .select()
+      .from(userEvents)
+      .where(eq(userEvents.userId, userId))
+      .orderBy(desc(userEvents.startAt))
+      .limit(limit);
+  }
+
+  async getUserEvent(userId: number, eventId: number): Promise<UserEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(userEvents)
+      .where(and(
+        eq(userEvents.id, eventId),
+        eq(userEvents.userId, userId)
+      ))
+      .limit(1);
+    return event || undefined;
+  }
+
+  async createUserEvent(event: InsertUserEvent): Promise<UserEvent> {
+    const [created] = await db
+      .insert(userEvents)
+      .values(event)
+      .returning();
+    return created;
+  }
+
+  async updateUserEvent(id: number, updates: Partial<UserEvent>): Promise<UserEvent | undefined> {
+    const [updated] = await db
+      .update(userEvents)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userEvents.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteUserEvent(id: number): Promise<boolean> {
+    const result = await db.delete(userEvents).where(eq(userEvents.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  async getOrCreateDraftEvent(userId: number): Promise<UserEvent> {
+    // Check for existing draft
+    const [existingDraft] = await db
+      .select()
+      .from(userEvents)
+      .where(and(
+        eq(userEvents.userId, userId),
+        eq(userEvents.isDraft, 1)
+      ))
+      .orderBy(desc(userEvents.createdAt))
+      .limit(1);
+
+    if (existingDraft) {
+      return existingDraft;
+    }
+
+    // Create new draft
+    const today = new Date();
+    const title = `Event Draft — ${today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+    const [newDraft] = await db
+      .insert(userEvents)
+      .values({
+        userId,
+        title,
+        startAt: today,
+        source: 'scan_draft',
+        isDraft: 1,
+        tags: [],
+      })
+      .returning();
+
+    return newDraft;
+  }
+
+  async finalizeDraftEvent(
+    userId: number,
+    eventId: number,
+    payload: { title: string; notes?: string; tags?: string[]; locationLabel?: string }
+  ): Promise<UserEvent | undefined> {
+    const [updated] = await db
+      .update(userEvents)
+      .set({
+        title: payload.title,
+        notes: payload.notes || null,
+        tags: payload.tags || [],
+        locationLabel: payload.locationLabel || null,
+        isDraft: 0,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(userEvents.id, eventId),
+        eq(userEvents.userId, userId)
+      ))
+      .returning();
+    return updated || undefined;
+  }
+
+  // User Event Contacts
+  async getUserEventContacts(userId: number, eventId: number): Promise<UserEventContact[]> {
+    return db
+      .select()
+      .from(userEventContacts)
+      .where(and(
+        eq(userEventContacts.userId, userId),
+        eq(userEventContacts.eventId, eventId)
+      ))
+      .orderBy(desc(userEventContacts.createdAt));
+  }
+
+  async attachContactsToEvent(
+    userId: number,
+    eventId: number,
+    contactRefs: Array<{ contactIdV1?: string; contactIdV2?: number }>
+  ): Promise<UserEventContact[]> {
+    if (contactRefs.length === 0) return [];
+
+    const values = contactRefs.map(ref => ({
+      userId,
+      eventId,
+      contactIdV1: ref.contactIdV1 || null,
+      contactIdV2: ref.contactIdV2 || null,
+    }));
+
+    const created = await db
+      .insert(userEventContacts)
+      .values(values)
+      .returning();
+
+    return created;
   }
 }
 

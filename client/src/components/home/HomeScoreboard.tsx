@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   Bell,
   UserPlus,
@@ -6,11 +6,23 @@ import {
   ChevronRight,
   Users,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Globe,
+  Mail,
+  Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useScoreboard } from "@/hooks/useScoreboard";
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
+
+interface CompanyOverview {
+  id: string;
+  name: string;
+  domain?: string;
+  contactCount: number;
+  lastActivity?: string;
+}
 
 type HomeScoreboardProps = {
   refreshKey: number;
@@ -19,6 +31,7 @@ type HomeScoreboardProps = {
   onViewPeople: () => void;
   onViewCompanies: () => void;
   onSelectContact?: (contact: UnifiedContact, action?: "followup") => void;
+  onSelectCompany?: (companyId: string) => void;
 };
 
 export function HomeScoreboard({
@@ -28,9 +41,78 @@ export function HomeScoreboard({
   onViewPeople,
   onViewCompanies,
   onSelectContact,
+  onSelectCompany,
 }: HomeScoreboardProps) {
   const { contacts } = useUnifiedContacts();
   const { counts, insights, dueFollowUps, newCaptures } = useScoreboard(contacts, refreshKey);
+
+  // Selected company for inline overview
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+
+  // Compute recent companies from contacts
+  const recentCompanies = useMemo(() => {
+    const companyMap = new Map<string, CompanyOverview>();
+
+    contacts.forEach((contact) => {
+      const companyName = contact.company?.trim();
+      if (!companyName) return;
+
+      const companyId = contact.companyId || companyName.toLowerCase().replace(/\s+/g, '-');
+      const existing = companyMap.get(companyId);
+
+      if (existing) {
+        existing.contactCount++;
+        // Update last activity if this contact is newer
+        if (contact.createdAt && (!existing.lastActivity || contact.createdAt > existing.lastActivity)) {
+          existing.lastActivity = contact.createdAt;
+        }
+      } else {
+        // Extract domain from email
+        let domain: string | undefined;
+        if (contact.email) {
+          const match = contact.email.match(/@([^@]+)$/);
+          if (match && !match[1].includes('gmail') && !match[1].includes('yahoo') && !match[1].includes('hotmail')) {
+            domain = match[1];
+          }
+        }
+
+        companyMap.set(companyId, {
+          id: companyId,
+          name: companyName,
+          domain,
+          contactCount: 1,
+          lastActivity: contact.createdAt,
+        });
+      }
+    });
+
+    // Sort by last activity and take top 5
+    return Array.from(companyMap.values())
+      .sort((a, b) => {
+        if (!a.lastActivity) return 1;
+        if (!b.lastActivity) return -1;
+        return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
+      })
+      .slice(0, 5);
+  }, [contacts]);
+
+  // Get selected company overview
+  const selectedCompanyOverview = useMemo(() => {
+    if (!selectedCompanyId) return null;
+    return recentCompanies.find((c) => c.id === selectedCompanyId) || null;
+  }, [selectedCompanyId, recentCompanies]);
+
+  // Handle company chip click
+  const handleCompanyClick = useCallback((companyId: string) => {
+    if (selectedCompanyId === companyId) {
+      // Second tap - navigate to company page
+      onSelectCompany?.(companyId);
+      setSelectedCompanyId(null);
+    } else {
+      // First tap - select and show overview
+      setSelectedCompanyId(companyId);
+    }
+  }, [selectedCompanyId, onSelectCompany]);
 
   // Format today's date - Apple style
   const today = useMemo(() => {
@@ -314,6 +396,100 @@ export function HomeScoreboard({
           </button>
         </div>
       </section>
+
+      {/* Recent Companies Section */}
+      {recentCompanies.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Recent companies
+            </h2>
+            <button
+              onClick={onViewCompanies}
+              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              View all
+            </button>
+          </div>
+
+          {/* Company Chips */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {recentCompanies.map((company) => (
+              <button
+                key={company.id}
+                onClick={() => handleCompanyClick(company.id)}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border text-sm font-medium transition-all duration-200 active:scale-95 ${
+                  selectedCompanyId === company.id
+                    ? "bg-primary/10 border-primary/30 text-primary ring-2 ring-primary/20"
+                    : "bg-card/80 border-border/50 text-foreground hover:bg-card hover:border-primary/20"
+                }`}
+                style={{
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)"
+                }}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span className="truncate max-w-[120px]">{company.name}</span>
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] rounded-full">
+                  {company.contactCount}
+                </Badge>
+              </button>
+            ))}
+          </div>
+
+          {/* Inline Company Overview Panel */}
+          {selectedCompanyOverview && (
+            <div
+              className="rounded-2xl bg-card/80 backdrop-blur-xl border border-primary/20 p-4 transition-all duration-300"
+              style={{
+                backdropFilter: "blur(20px) saturate(180%)",
+                WebkitBackdropFilter: "blur(20px) saturate(180%)"
+              }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-base">{selectedCompanyOverview.name}</h3>
+                  {selectedCompanyOverview.domain && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                      <Globe className="w-3 h-3" />
+                      <span>{selectedCompanyOverview.domain}</span>
+                    </div>
+                  )}
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  <Users className="w-3 h-3 mr-1" />
+                  {selectedCompanyOverview.contactCount} contact{selectedCompanyOverview.contactCount !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+
+              {selectedCompanyOverview.lastActivity && (
+                <p className="text-xs text-muted-foreground mb-3">
+                  Last activity: {formatRelativeTime(selectedCompanyOverview.lastActivity)}
+                </p>
+              )}
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full rounded-full"
+                onClick={() => {
+                  onSelectCompany?.(selectedCompanyOverview.id);
+                  setSelectedCompanyId(null);
+                }}
+              >
+                View company
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+
+              <p className="text-[10px] text-center text-muted-foreground/60 mt-2">
+                Tap company chip again to open
+              </p>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Create Contact Button - at the bottom */}
       <section className="pt-2">

@@ -30,6 +30,18 @@ import {
   extractDomainFromEmail,
   findCompanyByDomain,
 } from "@/lib/companiesStorage";
+import {
+  getActiveEventId,
+  setActiveEventId,
+  markCaptureSaved,
+  ensureEventTarget,
+} from "@/lib/eventCaptureQueue";
+import {
+  attachContactsToEvent,
+  getOrCreateDraftEvent,
+  getUserEvent,
+  type UserEvent,
+} from "@/lib/userEventsApi";
 
 import { Camera, FileText, Loader2, Upload, X, Download, Check, Layers, Calendar } from "lucide-react";
 import { SiHubspot } from "react-icons/si";
@@ -69,12 +81,15 @@ interface ScanTabProps {
   onDeleteContact?: (id: string) => void;
   eventModeEnabled: boolean;
   currentEventName: string | null;
+  currentEventId?: number | null;
   onEventModeChange: (enabled: boolean) => void;
   onEventNameChange: (name: string | null) => void;
+  onEventIdChange?: (id: number | null) => void;
   onContactSaved?: () => void;
   onContactUpdated?: (contactId: string) => void;
   onViewInOrgMap?: (companyId: string) => void;
   onShowingContactChange?: (showing: boolean) => void;
+  onNavigateToEvents?: () => void;
 }
 
 interface HubSpotSyncButtonProps {
@@ -182,12 +197,15 @@ export function ScanTab({
   onDeleteContact,
   eventModeEnabled,
   currentEventName,
+  currentEventId,
   onEventModeChange,
   onEventNameChange,
+  onEventIdChange,
   onContactSaved,
   onContactUpdated,
   onViewInOrgMap,
   onShowingContactChange,
+  onNavigateToEvents,
 }: ScanTabProps) {
   const { toast } = useToast();
   const reduceMotion = useReducedMotion();
@@ -200,13 +218,14 @@ export function ScanTab({
 
   const [rawText, setRawText] = useState<string | null>(null);
 
-  // Local “scanned contact” that we show via ContactDetailView immediately
+  // Local "scanned contact" that we show via ContactDetailView immediately
   const [scannedStoredContact, setScannedStoredContact] = useState<StoredContact | null>(null);
 
   const [isCompressing, setIsCompressing] = useState(false);
 
   const [tempEventName, setTempEventName] = useState("");
   const [pendingEventName, setPendingEventName] = useState<string | null>(null);
+  const [pendingEventId, setPendingEventId] = useState<number | null>(null);
   const [isEditingEventName, setIsEditingEventName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -218,6 +237,7 @@ export function ScanTab({
   const [batchItems, setBatchItems] = useState<QueuedScan[]>([]);
 
   const effectiveEventName = currentEventName || pendingEventName;
+  const effectiveEventId = currentEventId || pendingEventId || getActiveEventId();
 
   // Clear pending when parent event name arrives
   useEffect(() => {
@@ -316,7 +336,9 @@ export function ScanTab({
               id: generateTimelineId(),
               type: "scan_created" as const,
               at: savedContact.createdAt || new Date().toISOString(),
-              summary: "Contact created via scan",
+              summary: eventModeEnabled && effectiveEventName
+                ? `Contact created at event: ${effectiveEventName}`
+                : "Contact created via scan",
             },
           ],
           lastTouchedAt: savedContact.createdAt,
@@ -326,6 +348,22 @@ export function ScanTab({
 
       upsertContactV2(v2Contact);
       setContactV2(v2Contact);
+
+      // Async event attachment (non-blocking)
+      if (eventModeEnabled && effectiveEventId) {
+        attachContactsToEvent(effectiveEventId, [{ contactIdV1: savedContact.id }])
+          .then(() => {
+            console.log("[ScanTab] Contact attached to event", effectiveEventId);
+          })
+          .catch((err) => {
+            console.warn("[ScanTab] Failed to attach contact to event:", err);
+            // Non-blocking - show subtle toast for retry option
+            toast({
+              title: "Event sync pending",
+              description: "Contact saved. Event sync will retry.",
+            });
+          });
+      }
 
       onContactSaved?.();
       return savedContact;
@@ -444,14 +482,34 @@ export function ScanTab({
   // Event mode: compact “iOS-like” input bar
   const shouldShowEventInput = eventModeEnabled && (isEditingEventName || !effectiveEventName);
 
-  const handleEventModeToggle = (enabled: boolean) => {
+  const handleEventModeToggle = async (enabled: boolean) => {
     if (enabled) {
       onEventModeChange(true);
 
       // If already have an event, jump straight into batch capture
-      if (effectiveEventName) {
+      if (effectiveEventName && effectiveEventId) {
         setBatchState("capturing");
         return;
+      }
+
+      // Check if there's an active event we can use
+      const activeId = getActiveEventId();
+      if (activeId) {
+        // Try to load the event details
+        try {
+          const event = await getUserEvent(activeId);
+          if (event) {
+            setPendingEventName(event.title);
+            setPendingEventId(event.id);
+            onEventNameChange(event.title);
+            onEventIdChange?.(event.id);
+            setBatchState("capturing");
+            return;
+          }
+        } catch {
+          // Event no longer exists, clear active ID
+          setActiveEventId(null);
+        }
       }
 
       // Otherwise show the input bar
@@ -463,14 +521,16 @@ export function ScanTab({
     // OFF: clear everything
     onEventModeChange(false);
     onEventNameChange(null);
+    onEventIdChange?.(null);
     setPendingEventName(null);
+    setPendingEventId(null);
     setTempEventName("");
     setIsEditingEventName(false);
     setBatchState("idle");
     clearBatchSession();
   };
 
-  const handleEventNameSubmit = () => {
+  const handleEventNameSubmit = async () => {
     const name = tempEventName.trim();
     if (!name) return;
 
@@ -479,6 +539,26 @@ export function ScanTab({
     onEventNameChange(name);
     onEventModeChange(true);
     setIsEditingEventName(false);
+
+    // Create or get a draft event in Neon
+    try {
+      const draft = await getOrCreateDraftEvent();
+      setPendingEventId(draft.id);
+      onEventIdChange?.(draft.id);
+      setActiveEventId(draft.id);
+
+      // Update the event title if different from default
+      if (draft.title !== name) {
+        // Note: We'll finalize with the proper name later, or update title
+        // For now, just use the draft
+      }
+    } catch (err) {
+      console.warn("[ScanTab] Failed to create draft event:", err);
+      toast({
+        title: "Event sync pending",
+        description: "Captures will be saved locally and synced later.",
+      });
+    }
 
     // Immediately activate batch scan
     setBatchState("capturing");
@@ -733,6 +813,23 @@ export function ScanTab({
                       <Layers className="w-4 h-4" />
                       Batch Scan
                     </Button>
+                  )}
+
+                  {/* Event capture hint */}
+                  {eventModeEnabled && effectiveEventName && (
+                    <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2">
+                      <span>
+                        Capturing to: <span className="font-medium text-foreground">{effectiveEventName}</span>
+                      </span>
+                      {onNavigateToEvents && (
+                        <button
+                          onClick={onNavigateToEvents}
+                          className="text-primary hover:underline"
+                        >
+                          View event
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
