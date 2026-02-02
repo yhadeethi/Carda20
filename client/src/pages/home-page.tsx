@@ -1,4 +1,3 @@
-// Home page with Events system
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
