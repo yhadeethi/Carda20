@@ -195,43 +195,6 @@ export const apolloCache = pgTable("apollo_cache", {
   cachedAt: timestamp("cached_at").defaultNow(),
 });
 
-// User Events table - stores user-created events (from scan mode, manual creation, or calendar import)
-export const userEvents = pgTable("user_events", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  startAt: timestamp("start_at").defaultNow().notNull(),
-  endAt: timestamp("end_at"),
-  locationLabel: text("location_label"),
-  lat: text("lat"), // stored as text, parsed to double
-  lng: text("lng"), // stored as text, parsed to double
-  tags: jsonb("tags").default([]).$type<string[]>(),
-  notes: text("notes"),
-  source: varchar("source", { length: 50 }).default("manual").notNull(), // 'manual', 'calendar_import', 'scan_draft'
-  isDraft: integer("is_draft").default(0).notNull(), // 0 = false, 1 = true
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  userIdx: index("user_events_user_idx").on(table.userId),
-  startAtIdx: index("user_events_start_at_idx").on(table.startAt),
-  isDraftIdx: index("user_events_is_draft_idx").on(table.isDraft),
-}));
-
-// User Event Contacts table - links contacts to events
-export const userEventContacts = pgTable("user_event_contacts", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  eventId: integer("event_id").notNull().references(() => userEvents.id, { onDelete: "cascade" }),
-  contactIdV1: text("contact_id_v1"), // LocalStorage contact ID (v1 format)
-  contactIdV2: integer("contact_id_v2"), // Database contact ID (v2 format)
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => ({
-  userIdx: index("user_event_contacts_user_idx").on(table.userId),
-  eventIdx: index("user_event_contacts_event_idx").on(table.eventId),
-  contactV1Idx: index("user_event_contacts_contact_v1_idx").on(table.contactIdV1),
-  contactV2Idx: index("user_event_contacts_contact_v2_idx").on(table.contactIdV2),
-}));
-
 // Apollo enrichment data structure
 export interface ApolloEnrichmentData {
   name?: string | null;
@@ -343,25 +306,6 @@ export const companyIntelRelations = relations(companyIntel, ({ one }) => ({
   }),
 }));
 
-export const userEventsRelations = relations(userEvents, ({ one, many }) => ({
-  user: one(users, {
-    fields: [userEvents.userId],
-    references: [users.id],
-  }),
-  eventContacts: many(userEventContacts),
-}));
-
-export const userEventContactsRelations = relations(userEventContacts, ({ one }) => ({
-  user: one(users, {
-    fields: [userEventContacts.userId],
-    references: [users.id],
-  }),
-  event: one(userEvents, {
-    fields: [userEventContacts.eventId],
-    references: [userEvents.id],
-  }),
-}));
-
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -405,17 +349,6 @@ export const insertEventPreferenceSchema = createInsertSchema(eventPreferences).
 });
 
 export const insertMergeHistorySchema = createInsertSchema(mergeHistory).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertUserEventSchema = createInsertSchema(userEvents).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertUserEventContactSchema = createInsertSchema(userEventContacts).omit({
   id: true,
   createdAt: true,
 });
@@ -469,10 +402,6 @@ export type EventPreference = typeof eventPreferences.$inferSelect;
 export type InsertEventPreference = z.infer<typeof insertEventPreferenceSchema>;
 export type MergeHistory = typeof mergeHistory.$inferSelect;
 export type InsertMergeHistory = z.infer<typeof insertMergeHistorySchema>;
-export type UserEvent = typeof userEvents.$inferSelect;
-export type InsertUserEvent = z.infer<typeof insertUserEventSchema>;
-export type UserEventContact = typeof userEventContacts.$inferSelect;
-export type InsertUserEventContact = z.infer<typeof insertUserEventContactSchema>;
 
 // Key Development item for historical company events
 export interface KeyDevelopment {
