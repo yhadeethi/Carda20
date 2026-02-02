@@ -1,3 +1,4 @@
+// Home scoreboard with recent companies
 import { useMemo, useState, useCallback } from "react";
 import {
   Bell,
