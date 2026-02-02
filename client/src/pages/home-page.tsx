@@ -72,6 +72,7 @@ export default function HomePage() {
   const [contactsHubTab, setContactsHubTab] = useState<'people' | 'companies'>('people');
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
+  const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
   const [showCreateContactDrawer, setShowCreateContactDrawer] = useState(false);
 
@@ -314,16 +315,12 @@ export default function HomePage() {
             >
               <HomeScoreboard
                 refreshKey={contactsVersion}
-                onStartScan={() => {
-                  setActiveTab('scan');
-                  setViewMode('scan');
-                }}
                 onCreateContact={() => setShowCreateContactDrawer(true)}
+                onViewReminders={handleViewPeople}
                 onViewPeople={handleViewPeople}
                 onViewCompanies={handleViewCompanies}
                 onSelectContact={handleSelectUnifiedContact}
                 onSelectCompany={handleSelectCompany}
-                onRefresh={refreshContacts}
               />
             </motion.div>
           )}
@@ -338,11 +335,17 @@ export default function HomePage() {
               <ScanTab
                 eventModeEnabled={eventModeEnabled}
                 currentEventName={currentEventName}
+                currentEventId={currentEventId}
                 onEventModeChange={setEventModeEnabled}
                 onEventNameChange={setCurrentEventName}
+                onEventIdChange={setCurrentEventId}
                 onContactSaved={refreshContacts}
                 onViewInOrgMap={(companyId) => handleSelectCompany(companyId, 'orgmap')}
                 onShowingContactChange={setScanShowingContact}
+                onNavigateToEvents={() => {
+                  setActiveTab("events");
+                  setViewMode("events");
+                }}
               />
             </motion.div>
           )}
@@ -408,13 +411,15 @@ export default function HomePage() {
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <EventsHub 
-                onScanAtEvent={(eventName) => {
+              <EventsHub
+                onScanAtEvent={(eventName, eventId) => {
                   setCurrentEventName(eventName);
+                  setCurrentEventId(eventId || null);
                   setEventModeEnabled(true);
                   setActiveTab("scan");
                   setViewMode("scan");
                 }}
+                onSelectContact={handleSelectContact}
               />
             </motion.div>
           )}
