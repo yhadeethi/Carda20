@@ -1,6 +1,7 @@
 import {
   users, contacts, companies, companyIntel, hubspotTokens,
   contactTasks, contactReminders, timelineEvents, eventPreferences, mergeHistory,
+  userEvents, userEventContacts, userEventPhotos,
   type User, type InsertUser, type UpsertUser,
   type Contact, type InsertContact,
   type Company, type InsertCompany,
@@ -11,7 +12,10 @@ import {
   type ContactReminder, type InsertContactReminder,
   type TimelineEvent, type InsertTimelineEvent,
   type EventPreference, type InsertEventPreference,
-  type MergeHistory, type InsertMergeHistory
+  type MergeHistory, type InsertMergeHistory,
+  type UserEvent, type InsertUserEvent,
+  type UserEventContact, type InsertUserEventContact,
+  type UserEventPhoto, type InsertUserEventPhoto
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -74,6 +78,25 @@ export interface IStorage {
   getMergeHistory(userId: number, limit?: number): Promise<MergeHistory[]>;
   createMergeHistory(history: InsertMergeHistory): Promise<MergeHistory>;
   deleteMergeHistory(id: number): Promise<boolean>;
+
+  // User Events
+  getUserEvents(userId: number, limit?: number): Promise<UserEvent[]>;
+  getUserEvent(id: number): Promise<UserEvent | undefined>;
+  getActiveUserEvent(userId: number): Promise<UserEvent | undefined>;
+  createUserEvent(event: InsertUserEvent): Promise<UserEvent>;
+  updateUserEvent(id: number, updates: Partial<UserEvent>): Promise<UserEvent | undefined>;
+  deleteUserEvent(id: number): Promise<boolean>;
+
+  // User Event Contacts
+  getUserEventContacts(eventId: number): Promise<UserEventContact[]>;
+  getContactsForUserEvent(eventId: number): Promise<Contact[]>;
+  attachContactToEvent(eventContact: InsertUserEventContact): Promise<UserEventContact>;
+  detachContactFromEvent(eventId: number, contactId: number): Promise<boolean>;
+
+  // User Event Photos
+  getUserEventPhotos(eventId: number): Promise<UserEventPhoto[]>;
+  createUserEventPhoto(photo: InsertUserEventPhoto): Promise<UserEventPhoto>;
+  deleteUserEventPhoto(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -456,6 +479,127 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMergeHistory(id: number): Promise<boolean> {
     const result = await db.delete(mergeHistory).where(eq(mergeHistory.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  // User Events
+  async getUserEvents(userId: number, limit: number = 50): Promise<UserEvent[]> {
+    return db
+      .select()
+      .from(userEvents)
+      .where(eq(userEvents.userId, userId))
+      .orderBy(desc(userEvents.createdAt))
+      .limit(limit);
+  }
+
+  async getUserEvent(id: number): Promise<UserEvent | undefined> {
+    const [event] = await db.select().from(userEvents).where(eq(userEvents.id, id));
+    return event || undefined;
+  }
+
+  async getActiveUserEvent(userId: number): Promise<UserEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(userEvents)
+      .where(and(
+        eq(userEvents.userId, userId),
+        eq(userEvents.isActive, 1)
+      ))
+      .orderBy(desc(userEvents.createdAt))
+      .limit(1);
+    return event || undefined;
+  }
+
+  async createUserEvent(event: InsertUserEvent): Promise<UserEvent> {
+    const [created] = await db
+      .insert(userEvents)
+      .values(event)
+      .returning();
+    return created;
+  }
+
+  async updateUserEvent(id: number, updates: Partial<UserEvent>): Promise<UserEvent | undefined> {
+    const [event] = await db
+      .update(userEvents)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userEvents.id, id))
+      .returning();
+    return event || undefined;
+  }
+
+  async deleteUserEvent(id: number): Promise<boolean> {
+    const result = await db.delete(userEvents).where(eq(userEvents.id, id));
+    return (result as any).rowCount > 0;
+  }
+
+  // User Event Contacts
+  async getUserEventContacts(eventId: number): Promise<UserEventContact[]> {
+    return db
+      .select()
+      .from(userEventContacts)
+      .where(eq(userEventContacts.eventId, eventId))
+      .orderBy(desc(userEventContacts.createdAt));
+  }
+
+  async getContactsForUserEvent(eventId: number): Promise<Contact[]> {
+    const eventContactLinks = await db
+      .select()
+      .from(userEventContacts)
+      .where(eq(userEventContacts.eventId, eventId));
+
+    if (eventContactLinks.length === 0) return [];
+
+    const contactIds = eventContactLinks.map(ec => ec.contactId);
+    const result: Contact[] = [];
+
+    for (const contactId of contactIds) {
+      const [contact] = await db
+        .select()
+        .from(contacts)
+        .where(eq(contacts.id, contactId));
+      if (contact) result.push(contact);
+    }
+
+    return result;
+  }
+
+  async attachContactToEvent(eventContact: InsertUserEventContact): Promise<UserEventContact> {
+    const [created] = await db
+      .insert(userEventContacts)
+      .values(eventContact)
+      .returning();
+    return created;
+  }
+
+  async detachContactFromEvent(eventId: number, contactId: number): Promise<boolean> {
+    const result = await db
+      .delete(userEventContacts)
+      .where(and(
+        eq(userEventContacts.eventId, eventId),
+        eq(userEventContacts.contactId, contactId)
+      ));
+    return (result as any).rowCount > 0;
+  }
+
+  // User Event Photos
+  async getUserEventPhotos(eventId: number): Promise<UserEventPhoto[]> {
+    return db
+      .select()
+      .from(userEventPhotos)
+      .where(eq(userEventPhotos.eventId, eventId))
+      .orderBy(desc(userEventPhotos.createdAt));
+  }
+
+  async createUserEventPhoto(photo: InsertUserEventPhoto): Promise<UserEventPhoto> {
+    const [created] = await db
+      .insert(userEventPhotos)
+      .values(photo)
+      .returning();
+    return created;
+  }
+
+  async deleteUserEventPhoto(id: number): Promise<boolean> {
+    const result = await db.delete(userEventPhotos).where(eq(userEventPhotos.id, id));
     return (result as any).rowCount > 0;
   }
 }

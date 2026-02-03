@@ -188,32 +188,7 @@ export function HomeScoreboard({
         </div>
       </section>
 
-      {/* Inbox summary card (opens drawer) */}
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground mb-2 px-1">Inbox</h2>
-        <button
-          onClick={() => setInboxOpen(true)}
-          className="w-full rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 p-4 text-left transition-all duration-200 hover:bg-card/90 active:scale-[0.99]"
-          style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent", backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-                <Bell className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold">
-                  {counts.remindersCount} reminder{counts.remindersCount !== 1 ? "s" : ""} · {counts.dueFollowUps} follow-up{counts.dueFollowUps !== 1 ? "s" : ""}
-                </div>
-                <div className="text-xs text-muted-foreground">Tap to view and act</div>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground/50" />
-          </div>
-        </button>
-      </section>
-
-      {/* Recent companies */}
+      {/* Recent companies (two-tap: suggested + recent list) */}
       {onSelectCompany && (
         <RecentCompanies
           companies={recentCompanies}

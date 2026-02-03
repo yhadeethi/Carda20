@@ -7,6 +7,8 @@ import { ScanTab } from "@/components/scan-tab";
 import { RelationshipDetailView } from "@/components/relationship/RelationshipDetailView";
 import { ContactsHub } from "@/components/contacts-hub";
 import { EventsHub } from "@/components/events-hub";
+import { EventsTab } from "@/components/events/EventsTab";
+import { EventDetail } from "@/components/events/EventDetail";
 import { CompanyDetail } from "@/components/company-detail";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { HomeScoreboard } from "@/components/home/HomeScoreboard";
@@ -26,7 +28,7 @@ import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedConta
 import { motion, AnimatePresence } from "framer-motion";
 
 type TabMode = "home" | "scan" | "contacts" | "events";
-type ViewMode = "home" | "scan" | "contacts" | "contact-detail" | "company-detail" | "events";
+type ViewMode = "home" | "scan" | "contacts" | "contact-detail" | "company-detail" | "events" | "event-detail";
 
 interface RecentAccount {
   email: string;
@@ -64,7 +66,7 @@ export default function HomePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("home");
 
   const [scanShowingContact, setScanShowingContact] = useState(false);
-  const showBottomNav = viewMode !== "contact-detail" && !scanShowingContact;
+  const showBottomNav = viewMode !== "contact-detail" && viewMode !== "event-detail" && !scanShowingContact;
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [contactInitialAction, setContactInitialAction] = useState<"followup" | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export default function HomePage() {
   const [contactsHubTab, setContactsHubTab] = useState<'people' | 'companies'>('people');
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
+  const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
   const [showCreateContactDrawer, setShowCreateContactDrawer] = useState(false);
 
@@ -211,6 +214,31 @@ export default function HomePage() {
     }
     refreshContacts();
   }, [refreshContacts]);
+
+  const handleSelectUserEvent = (eventId: number) => {
+    setCurrentEventId(eventId);
+    setViewMode("event-detail");
+    setActiveTab("events");
+  };
+
+  const handleBackToEvents = () => {
+    setCurrentEventId(null);
+    setViewMode("events");
+    setActiveTab("events");
+  };
+
+  const handleScanAtUserEvent = (eventId: number) => {
+    setCurrentEventId(eventId);
+    setEventModeEnabled(true);
+    setActiveTab("scan");
+    setViewMode("scan");
+  };
+
+  const handleContactSelectedFromEvent = (contact: StoredContact) => {
+    setSelectedContact(contact);
+    setContactInitialAction(null);
+    setViewMode("contact-detail");
+  };
 
   const tabs = [
     { id: "scan" as TabMode, label: "Scan", icon: Camera },
@@ -408,13 +436,25 @@ export default function HomePage() {
               exit={{ x: -40, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <EventsHub 
-                onScanAtEvent={(eventName) => {
-                  setCurrentEventName(eventName);
-                  setEventModeEnabled(true);
-                  setActiveTab("scan");
-                  setViewMode("scan");
-                }}
+              <EventsTab
+                onSelectEvent={handleSelectUserEvent}
+                onContinueEvent={handleSelectUserEvent}
+              />
+            </motion.div>
+          )}
+          {viewMode === "event-detail" && currentEventId && (
+            <motion.div
+              key="event-detail"
+              initial={{ x: 40, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -40, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <EventDetail
+                eventId={currentEventId}
+                onBack={handleBackToEvents}
+                onScanAtEvent={handleScanAtUserEvent}
+                onSelectContact={handleContactSelectedFromEvent}
               />
             </motion.div>
           )}

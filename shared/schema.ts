@@ -166,6 +166,51 @@ export const eventPreferences = pgTable("event_preferences", {
   index("event_preferences_event_idx").on(table.eventId),
 ]);
 
+// User Events table - stores user-created events for contact capture
+export const userEvents = pgTable("user_events", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  locationLabel: text("location_label"), // e.g., "Sydney"
+  latitude: text("latitude"), // Store as text for precision
+  longitude: text("longitude"),
+  tags: text("tags").array(), // ["Sydney", "Tech", "Networking"]
+  notes: text("notes"),
+  eventLink: text("event_link"), // Optional URL for the event
+  isActive: integer("is_active").notNull().default(1), // 1 = active, 0 = closed
+  startedAt: timestamp("started_at").defaultNow(),
+  endedAt: timestamp("ended_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("user_events_user_idx").on(table.userId),
+  index("user_events_active_idx").on(table.isActive),
+]);
+
+// User Event Contacts table - junction table linking events to contacts
+export const userEventContacts = pgTable("user_event_contacts", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  eventId: integer("event_id").notNull().references(() => userEvents.id, { onDelete: "cascade" }),
+  contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("user_event_contacts_event_idx").on(table.eventId),
+  index("user_event_contacts_contact_idx").on(table.contactId),
+]);
+
+// User Event Photos table - stores photos attached to events
+export const userEventPhotos = pgTable("user_event_photos", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  eventId: integer("event_id").notNull().references(() => userEvents.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  caption: text("caption"),
+  mimeType: text("mime_type"),
+  size: integer("size"), // File size in bytes
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("user_event_photos_event_idx").on(table.eventId),
+]);
+
 // Merge History table - stores contact merge operations for undo functionality
 export const mergeHistory = pgTable("merge_history", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -231,6 +276,34 @@ export const usersRelations = relations(users, ({ many }) => ({
   timelineEvents: many(timelineEvents),
   eventPreferences: many(eventPreferences),
   mergeHistory: many(mergeHistory),
+  userEvents: many(userEvents),
+}));
+
+export const userEventsRelations = relations(userEvents, ({ one, many }) => ({
+  user: one(users, {
+    fields: [userEvents.userId],
+    references: [users.id],
+  }),
+  eventContacts: many(userEventContacts),
+  photos: many(userEventPhotos),
+}));
+
+export const userEventContactsRelations = relations(userEventContacts, ({ one }) => ({
+  event: one(userEvents, {
+    fields: [userEventContacts.eventId],
+    references: [userEvents.id],
+  }),
+  contact: one(contacts, {
+    fields: [userEventContacts.contactId],
+    references: [contacts.id],
+  }),
+}));
+
+export const userEventPhotosRelations = relations(userEventPhotos, ({ one }) => ({
+  event: one(userEvents, {
+    fields: [userEventPhotos.eventId],
+    references: [userEvents.id],
+  }),
 }));
 
 export const contactsRelations = relations(contacts, ({ one, many }) => ({
@@ -353,6 +426,22 @@ export const insertMergeHistorySchema = createInsertSchema(mergeHistory).omit({
   createdAt: true,
 });
 
+export const insertUserEventSchema = createInsertSchema(userEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserEventContactSchema = createInsertSchema(userEventContacts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserEventPhotoSchema = createInsertSchema(userEventPhotos).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Upsert user type for Replit Auth
 export type UpsertUser = {
   authId: string;
@@ -402,6 +491,13 @@ export type EventPreference = typeof eventPreferences.$inferSelect;
 export type InsertEventPreference = z.infer<typeof insertEventPreferenceSchema>;
 export type MergeHistory = typeof mergeHistory.$inferSelect;
 export type InsertMergeHistory = z.infer<typeof insertMergeHistorySchema>;
+
+export type UserEvent = typeof userEvents.$inferSelect;
+export type InsertUserEvent = z.infer<typeof insertUserEventSchema>;
+export type UserEventContact = typeof userEventContacts.$inferSelect;
+export type InsertUserEventContact = z.infer<typeof insertUserEventContactSchema>;
+export type UserEventPhoto = typeof userEventPhotos.$inferSelect;
+export type InsertUserEventPhoto = z.infer<typeof insertUserEventPhotoSchema>;
 
 // Key Development item for historical company events
 export interface KeyDevelopment {

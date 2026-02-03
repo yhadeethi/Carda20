@@ -1322,5 +1322,488 @@ Return ONLY valid JSON, no markdown or explanation.`;
     }
   });
 
+  // ========================================
+  // USER EVENTS API (Contact Capture Events)
+  // ========================================
+
+  // GET all user events
+  app.get("/api/user-events", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const limit = parseInt(req.query.limit as string) || 50;
+      const events = await storage.getUserEvents(userId, limit);
+      res.json(events);
+    } catch (error) {
+      console.error("[UserEvents] Error fetching events:", error);
+      res.status(500).json({ error: "Failed to fetch events" });
+    }
+  });
+
+  // GET active user event
+  app.get("/api/user-events/active", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const activeEvent = await storage.getActiveUserEvent(userId);
+      res.json(activeEvent || null);
+    } catch (error) {
+      console.error("[UserEvents] Error fetching active event:", error);
+      res.status(500).json({ error: "Failed to fetch active event" });
+    }
+  });
+
+  // POST create new user event
+  app.post("/api/user-events", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const { title, locationLabel, latitude, longitude, tags, notes, eventLink } = req.body;
+
+      if (!title) {
+        return res.status(400).json({ error: "Title is required" });
+      }
+
+      const event = await storage.createUserEvent({
+        userId,
+        title,
+        locationLabel: locationLabel || null,
+        latitude: latitude || null,
+        longitude: longitude || null,
+        tags: tags || null,
+        notes: notes || null,
+        eventLink: eventLink || null,
+        isActive: 1,
+        startedAt: new Date(),
+      });
+
+      res.json(event);
+    } catch (error) {
+      console.error("[UserEvents] Error creating event:", error);
+      res.status(500).json({ error: "Failed to create event" });
+    }
+  });
+
+  // GET single user event
+  app.get("/api/user-events/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: "Invalid event ID" });
+      }
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      res.json(event);
+    } catch (error) {
+      console.error("[UserEvents] Error fetching event:", error);
+      res.status(500).json({ error: "Failed to fetch event" });
+    }
+  });
+
+  // PATCH update user event
+  app.patch("/api/user-events/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: "Invalid event ID" });
+      }
+
+      const existingEvent = await storage.getUserEvent(eventId);
+      if (!existingEvent || existingEvent.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const { title, locationLabel, latitude, longitude, tags, notes, eventLink, isActive, endedAt } = req.body;
+
+      const updates: any = {};
+      if (title !== undefined) updates.title = title;
+      if (locationLabel !== undefined) updates.locationLabel = locationLabel;
+      if (latitude !== undefined) updates.latitude = latitude;
+      if (longitude !== undefined) updates.longitude = longitude;
+      if (tags !== undefined) updates.tags = tags;
+      if (notes !== undefined) updates.notes = notes;
+      if (eventLink !== undefined) updates.eventLink = eventLink;
+      if (isActive !== undefined) updates.isActive = isActive ? 1 : 0;
+      if (endedAt !== undefined) updates.endedAt = endedAt ? new Date(endedAt) : null;
+
+      const event = await storage.updateUserEvent(eventId, updates);
+      res.json(event);
+    } catch (error) {
+      console.error("[UserEvents] Error updating event:", error);
+      res.status(500).json({ error: "Failed to update event" });
+    }
+  });
+
+  // DELETE user event
+  app.delete("/api/user-events/:id", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: "Invalid event ID" });
+      }
+
+      const existingEvent = await storage.getUserEvent(eventId);
+      if (!existingEvent || existingEvent.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      await storage.deleteUserEvent(eventId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[UserEvents] Error deleting event:", error);
+      res.status(500).json({ error: "Failed to delete event" });
+    }
+  });
+
+  // GET contacts for an event
+  app.get("/api/user-events/:id/contacts", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: "Invalid event ID" });
+      }
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const contacts = await storage.getContactsForUserEvent(eventId);
+      res.json(contacts);
+    } catch (error) {
+      console.error("[UserEvents] Error fetching event contacts:", error);
+      res.status(500).json({ error: "Failed to fetch event contacts" });
+    }
+  });
+
+  // POST attach contact(s) to event
+  app.post("/api/user-events/:id/attach-contacts", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: "Invalid event ID" });
+      }
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const { contactIds } = req.body;
+      if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
+        return res.status(400).json({ error: "contactIds array is required" });
+      }
+
+      const results = [];
+      for (const contactId of contactIds) {
+        try {
+          const result = await storage.attachContactToEvent({
+            eventId,
+            contactId,
+          });
+          results.push(result);
+        } catch (e) {
+          console.warn(`[UserEvents] Failed to attach contact ${contactId} to event ${eventId}:`, e);
+        }
+      }
+
+      res.json({ attached: results.length, results });
+    } catch (error) {
+      console.error("[UserEvents] Error attaching contacts:", error);
+      res.status(500).json({ error: "Failed to attach contacts" });
+    }
+  });
+
+  // DELETE detach contact from event
+  app.delete("/api/user-events/:id/contacts/:contactId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+      const contactId = parseInt(req.params.contactId);
+
+      if (isNaN(eventId) || isNaN(contactId)) {
+        return res.status(400).json({ error: "Invalid event or contact ID" });
+      }
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      await storage.detachContactFromEvent(eventId, contactId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[UserEvents] Error detaching contact:", error);
+      res.status(500).json({ error: "Failed to detach contact" });
+    }
+  });
+
+  // GET photos for an event
+  app.get("/api/user-events/:id/photos", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: "Invalid event ID" });
+      }
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const photos = await storage.getUserEventPhotos(eventId);
+      res.json(photos);
+    } catch (error) {
+      console.error("[UserEvents] Error fetching photos:", error);
+      res.status(500).json({ error: "Failed to fetch photos" });
+    }
+  });
+
+  // POST add photo to event
+  app.post("/api/user-events/:id/photos", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: "Invalid event ID" });
+      }
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const { filename, caption, mimeType, size } = req.body;
+      if (!filename) {
+        return res.status(400).json({ error: "Filename is required" });
+      }
+
+      const photo = await storage.createUserEventPhoto({
+        eventId,
+        filename,
+        caption: caption || null,
+        mimeType: mimeType || null,
+        size: size || null,
+      });
+
+      res.json(photo);
+    } catch (error) {
+      console.error("[UserEvents] Error adding photo:", error);
+      res.status(500).json({ error: "Failed to add photo" });
+    }
+  });
+
+  // DELETE photo from event
+  app.delete("/api/user-events/:id/photos/:photoId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+      const photoId = parseInt(req.params.photoId);
+
+      if (isNaN(eventId) || isNaN(photoId)) {
+        return res.status(400).json({ error: "Invalid event or photo ID" });
+      }
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      await storage.deleteUserEventPhoto(photoId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[UserEvents] Error deleting photo:", error);
+      res.status(500).json({ error: "Failed to delete photo" });
+    }
+  });
+
+  // GET event report (HTML for printing to PDF)
+  app.get("/api/user-events/:id/report", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.id);
+
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: "Invalid event ID" });
+      }
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const contacts = await storage.getContactsForUserEvent(eventId);
+
+      const escapeHtml = (str: string | null | undefined): string => {
+        if (!str) return "";
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      };
+
+      const formatDate = (date: Date | null | string) => {
+        if (!date) return "N/A";
+        return new Date(date).toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+      };
+
+      const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(event.title)} - Event Report</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      color: #1a1a1a;
+      line-height: 1.5;
+    }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    .meta { color: #666; font-size: 14px; margin-bottom: 24px; }
+    .meta span { margin-right: 16px; }
+    .tags { margin-bottom: 24px; }
+    .tag {
+      display: inline-block;
+      background: #f0f0f0;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    .notes {
+      background: #f9f9f9;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      white-space: pre-wrap;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #eee;
+    }
+    .contacts-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .contacts-table th,
+    .contacts-table td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+    }
+    .contacts-table th {
+      background: #f9f9f9;
+      font-weight: 600;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+      font-size: 12px;
+      color: #999;
+      text-align: center;
+    }
+    @media print {
+      body { padding: 20px; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(event.title)}</h1>
+  <div class="meta">
+    <span>Date: ${formatDate(event.startedAt || event.createdAt)}</span>
+    ${event.locationLabel ? `<span>Location: ${escapeHtml(event.locationLabel)}</span>` : ""}
+    <span>Contacts: ${contacts.length}</span>
+  </div>
+
+  ${event.tags && event.tags.length > 0 ? `
+  <div class="tags">
+    ${event.tags.map((tag: string) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+  </div>
+  ` : ""}
+
+  ${event.notes ? `
+  <div class="notes">${escapeHtml(event.notes)}</div>
+  ` : ""}
+
+  <h2 class="section-title">Contacts Captured (${contacts.length})</h2>
+  ${contacts.length > 0 ? `
+  <table class="contacts-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Title</th>
+        <th>Company</th>
+        <th>Email</th>
+        <th>Phone</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${contacts.map(c => `
+      <tr>
+        <td>${escapeHtml(c.fullName) || "-"}</td>
+        <td>${escapeHtml(c.jobTitle) || "-"}</td>
+        <td>${escapeHtml(c.companyName) || "-"}</td>
+        <td>${escapeHtml(c.email) || "-"}</td>
+        <td>${escapeHtml(c.phone) || "-"}</td>
+      </tr>
+      `).join("")}
+    </tbody>
+  </table>
+  ` : `<p>No contacts captured at this event.</p>`}
+
+  <div class="footer">
+    Generated by Carda on ${new Date().toLocaleDateString()}
+  </div>
+
+  <script class="no-print">
+    window.onload = function() {
+      window.print();
+    };
+  </script>
+</body>
+</html>
+      `;
+
+      res.setHeader("Content-Type", "text/html");
+      res.send(html);
+    } catch (error) {
+      console.error("[UserEvents] Error generating report:", error);
+      res.status(500).json({ error: "Failed to delete photo" });
+    }
+  });
+
   return httpServer;
 }
