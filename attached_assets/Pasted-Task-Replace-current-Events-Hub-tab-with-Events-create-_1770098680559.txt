@@ -1,0 +1,138 @@
+Task: Replace current Events Hub tab with “Events” (create events + capture contacts). Keep the rest of the app intact.
+
+Hard rules
+
+Do NOT rewrite/replace these files (only minimal targeted edits inside them):
+
+client/src/pages/home-page.tsx
+
+client/src/components/home/HomeScorecard.tsx (replace with the exact scorecard file path from this repo)
+
+client/src/components/home/RecentCompanies.tsx (if exists)
+Preserve all existing Home UI (weekly chart, recent companies list, bell notification, etc.).
+
+Do NOT create a new contact storage flow. Reuse the same extraction + save pipeline used by Scan/Paste so contacts show in Relationships + Companies + Home as usual.
+
+Persist Events in Neon/Postgres like other app data. Local storage is allowed only as a temporary queue during batch capture.
+
+UI/UX must match the existing app theme:
+
+Use existing shared components, shared tokens, typography, spacing, shadows, glass/blur styles, and Tailwind conventions already used elsewhere.
+
+Do not introduce new theme systems or new global styles.
+
+Reuse existing button/card/modal components (shadcn) and the same layout patterns as the rest of the app.
+
+Feature: Events tab (new)
+
+Replace the existing Events tab content with:
+
+1) Events list
+
+Button: Start event
+
+List recent events (title, date, tags, location label, #contacts)
+
+Optional: “Continue active event” if there’s an ongoing one
+
+2) Create event
+
+When user taps Start event:
+
+Create an event record in Neon immediately.
+
+Ask for location permission (non-blocking). If granted:
+
+store lat/lng
+
+if within Sydney bounding box → set locationLabel="Sydney" and add tag "Sydney" if missing
+
+Event supports:
+
+smart tags (auto Sydney)
+
+manual tags (chips)
+
+notes (text)
+
+photo records (upload images tied to event; store metadata + file ref)
+
+manual contact entry (create a contact without scanning)
+
+3) Inside an event: capture + manage
+
+Event detail screen must include:
+
+Batch scan cards button:
+
+reuse the same scanning UI logic as Scan tab
+
+auto batch capture enabled
+
+extraction runs in background; user can keep capturing without waiting
+
+each extracted contact is saved via existing pipeline and then attached to the event
+
+Add contact manually:
+
+create contact using same pipeline as Paste Text / existing manual entry
+
+attach to the event
+
+Contacts list for this event (same look/row components as elsewhere)
+
+4) PDF report (Phase 2 – keep minimal)
+
+Add button “Export report (PDF)”.
+Implementation:
+
+Use existing PDF utilities if present; otherwise implement a simple server endpoint returning a basic 1–2 page PDF.
+
+Report content uses:
+
+event title/date/location/tags/notes
+
+list of contacts captured
+
+photo captions/notes if present
+
+No Google scraping in v1. Optional field: “Event link” stored as text; include it in report only.
+
+Wiring requirements
+
+Contacts created via event scanning or manual entry must appear in:
+
+Relationships tab (contacts)
+
+Companies list (domain/email logic)
+
+Home widgets/metrics (reuse same cache invalidation/query refresh used by Scan)
+
+Events should have user_events and user_event_contacts tables in Neon.
+
+Add server routes:
+
+GET/POST /api/user-events
+
+GET/PATCH /api/user-events/:id
+
+POST /api/user-events/:id/attach-contacts
+
+GET /api/user-events/:id/contacts
+
+POST /api/user-events/:id/report (returns PDF)
+
+Minimal Home changes only (do not redesign)
+
+Remove “Inbox” section from the Home scoreboard (bell already covers it).
+
+Put “Recent Captures” in that slot (reuse existing component).
+
+Recent companies interaction:
+
+first tap selects company and shows overview on Home (no navigation)
+
+second tap on the same selected company navigates to company page
+Implement with selectedCompanyId state; do not change layout.
+
+Proceed with minimal diffs and preserve existing styling and theme.
