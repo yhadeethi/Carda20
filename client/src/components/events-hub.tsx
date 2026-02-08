@@ -316,14 +316,14 @@ function StartEventModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md p-0 gap-0 flex flex-col">
+        <DialogHeader className="shrink-0 p-6 pb-4">
           <DialogTitle>Start Event</DialogTitle>
           <DialogDescription>
             Create a new event to capture contacts at.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 space-y-4">
           <div>
             <label className="text-sm font-medium">Title</label>
             <Input
@@ -376,7 +376,7 @@ function StartEventModal({
             )}
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="shrink-0 p-6 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -476,14 +476,14 @@ function ImportIcsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md p-0 gap-0 flex flex-col">
+        <DialogHeader className="shrink-0 p-6 pb-4">
           <DialogTitle>Import from Calendar</DialogTitle>
           <DialogDescription>
             Import an event from a .ics calendar file.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 space-y-4">
           <div>
             <label className="text-sm font-medium">Calendar File (.ics)</label>
             <Input
@@ -521,7 +521,7 @@ function ImportIcsModal({
             </div>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="shrink-0 p-6 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -1015,11 +1015,11 @@ function EditEventModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md p-0 gap-0 flex flex-col">
+        <DialogHeader className="shrink-0 p-6 pb-4">
           <DialogTitle>{event.isDraft === 1 ? "Finalize Event" : "Edit Event"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 space-y-4">
           <div>
             <label className="text-sm font-medium">Title *</label>
             <Input
@@ -1081,7 +1081,7 @@ function EditEventModal({
             )}
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="shrink-0 p-6 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
