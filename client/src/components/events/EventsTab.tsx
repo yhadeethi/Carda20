@@ -218,7 +218,7 @@ export function EventsTab({ onSelectEvent, onContinueEvent }: EventsTabProps) {
           <DrawerHeader>
             <DrawerTitle>Start New Event</DrawerTitle>
           </DrawerHeader>
-          <div className="px-4 space-y-4">
+          <div className="px-4 space-y-4 overflow-y-auto max-h-[60vh]">
             <div className="space-y-2">
               <label className="text-sm font-medium">Event Name *</label>
               <Input

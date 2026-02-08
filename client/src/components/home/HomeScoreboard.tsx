@@ -278,7 +278,7 @@ export function HomeScoreboard({
               <SheetTitle>Inbox</SheetTitle>
             </SheetHeader>
           </div>
-          <div className="px-4 pb-4">
+          <div className="px-4 pb-4 overflow-y-auto max-h-[60vh]">
             <Tabs value={inboxTab} onValueChange={(v) => setInboxTab(v as any)}>
               <TabsList className="w-full">
                 <TabsTrigger value="reminders" className="flex-1">
