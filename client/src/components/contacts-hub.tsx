@@ -449,7 +449,7 @@ export function ContactsHub({
               </div>
 
               {peopleSubView === "upcoming" && (
-                <div className="min-h-[300px] max-h-[65vh] overflow-y-auto">
+                <div className="min-h-[300px]">
                   <UpcomingView
                     onSelectContact={(id) => {
                       const contact = contacts.find((c) => c.id === id);
@@ -460,7 +460,7 @@ export function ContactsHub({
               )}
 
               {peopleSubView === "duplicates" && (
-                <div className="min-h-[300px] max-h-[65vh] overflow-y-auto">
+                <div className="min-h-[300px]">
                   <DuplicatesView onRefresh={() => setContacts(loadContacts())} />
                 </div>
               )}
