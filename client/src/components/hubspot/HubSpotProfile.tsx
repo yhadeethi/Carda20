@@ -134,8 +134,23 @@ export function HubSpotProfile({ open, onOpenChange }: HubSpotProfileProps) {
     },
   });
 
-  const handleConnect = () => {
-    window.location.href = "/api/hubspot/connect";
+  const [connecting, setConnecting] = useState(false);
+
+  const handleConnect = async () => {
+    try {
+      setConnecting(true);
+      const res = await apiRequest("POST", "/api/hubspot/connect");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast({ title: "Connection failed", description: "Could not get HubSpot authorization URL.", variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "Connection failed", description: e.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setConnecting(false);
+    }
   };
 
   const toggleTimelineId = (id: number) => {
@@ -197,11 +212,12 @@ export function HubSpotProfile({ open, onOpenChange }: HubSpotProfileProps) {
                 </div>
                 <Button
                   onClick={handleConnect}
+                  disabled={connecting}
                   className="w-full gap-2"
                   data-testid="button-hubspot-connect"
                 >
-                  <Link2 className="w-4 h-4" />
-                  Connect HubSpot
+                  {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                  {connecting ? "Connecting..." : "Connect HubSpot"}
                 </Button>
               </CardContent>
             </Card>

@@ -432,32 +432,37 @@ export async function registerRoutes(
 
   
   // HubSpot OAuth (per-user)
-  app.get("/api/hubspot/connect", isAuthenticated, async (req: SessionRequest, res: Response) => {
+  app.post("/api/hubspot/connect", isAuthenticated, async (req: SessionRequest, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
       const state = crypto.randomUUID();
       req.session.hubspot_oauth_state = state;
       req.session.hubspot_oauth_user = userId;
 
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err: any) => err ? reject(err) : resolve());
+      });
+
       const redirectUri = getHubSpotRedirectUri(req);
       console.log("[HubSpot] Connect initiated for userId:", userId, "redirectUri:", redirectUri);
       const url = buildHubSpotAuthUrl({ redirectUri, state });
-      res.redirect(url);
+      res.json({ url });
     } catch (e: any) {
       console.error("[HubSpot] Connect error:", e?.message, "isAuthenticated:", req.isAuthenticated?.(), "user:", !!(req as any).user);
       res.status(500).json({ message: e?.message || "Failed to start HubSpot OAuth" });
     }
   });
 
-  app.get("/api/hubspot/callback", isAuthenticated, async (req: SessionRequest, res: Response) => {
+  app.get("/api/hubspot/callback", async (req: SessionRequest, res: Response) => {
     try {
       const code = req.query.code as string | undefined;
       const state = req.query.state as string | undefined;
-      const expectedState = req.session.hubspot_oauth_state;
-      const userId = req.session.hubspot_oauth_user;
+      const expectedState = req.session?.hubspot_oauth_state;
+      const userId = req.session?.hubspot_oauth_user;
 
       if (!code || !state || !expectedState || state !== expectedState || !userId) {
-        return res.status(400).send("Invalid HubSpot OAuth callback.");
+        console.warn("[HubSpot] Callback validation failed:", { hasCode: !!code, hasState: !!state, stateMatch: state === expectedState, hasUserId: !!userId, sessionID: req.sessionID?.slice(0, 8) });
+        return res.redirect("/?hubspot=error");
       }
 
       const redirectUri = getHubSpotRedirectUri(req);
