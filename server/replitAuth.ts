@@ -55,6 +55,7 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
+      sameSite: "lax" as const,
       maxAge: sessionTtl,
     },
   });
@@ -152,6 +153,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as ReplitAuthUser | undefined;
 
   if (!req.isAuthenticated() || !user?.expires_at) {
+    console.warn("[Auth] Unauthorized:", req.path, "| isAuthenticated:", req.isAuthenticated?.(), "| hasUser:", !!user, "| hasExpiry:", !!user?.expires_at, "| sessionID:", req.sessionID?.slice(0, 8));
     return res.status(401).json({ message: "Unauthorized" });
   }
 
@@ -162,6 +164,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   const refreshToken = user.refresh_token;
   if (!refreshToken) {
+    console.warn("[Auth] Session expired, no refresh token:", req.path);
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
@@ -172,6 +175,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     updateUserSession(user, tokenResponse);
     return next();
   } catch (error) {
+    console.warn("[Auth] Token refresh failed:", req.path, error);
     res.status(401).json({ message: "Unauthorized" });
     return;
   }

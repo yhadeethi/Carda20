@@ -440,9 +440,11 @@ export async function registerRoutes(
       req.session.hubspot_oauth_user = userId;
 
       const redirectUri = getHubSpotRedirectUri(req);
+      console.log("[HubSpot] Connect initiated for userId:", userId, "redirectUri:", redirectUri);
       const url = buildHubSpotAuthUrl({ redirectUri, state });
       res.redirect(url);
     } catch (e: any) {
+      console.error("[HubSpot] Connect error:", e?.message, "isAuthenticated:", req.isAuthenticated?.(), "user:", !!(req as any).user);
       res.status(500).json({ message: e?.message || "Failed to start HubSpot OAuth" });
     }
   });
