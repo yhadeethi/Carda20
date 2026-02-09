@@ -57,7 +57,7 @@ function getHubSpotRedirectUri(req: Request): string {
   return `${proto}://${host}/api/hubspot/callback`;
 }
 
-import { buildHubSpotAuthUrl, connectHubSpotForUser, disconnectHubSpotForUser, isHubSpotConnected, syncContactToHubSpot } from "./hubspotService";
+import { buildHubSpotAuthUrl, connectHubSpotForUser, disconnectHubSpotForUser, isHubSpotConnected, syncContactToHubSpot, getHubSpotStatus, createHubSpotNote } from "./hubspotService";
 import crypto from "crypto";
 
 const contactInputSchema = z.object({
@@ -485,8 +485,8 @@ export async function registerRoutes(
 app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const connected = await isHubSpotConnected(userId);
-      res.json({ connected });
+      const result = await getHubSpotStatus(userId);
+      res.json(result);
     } catch (error) {
       console.error("Error checking HubSpot status:", error);
       res.json({ connected: false });
@@ -514,6 +514,112 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
     } catch (error: any) {
       console.error("HubSpot sync error:", error);
       res.status(500).json({ success: false, message: error?.message || "HubSpot sync failed" });
+    }
+  });
+
+  app.post("/api/hubspot/sync-all", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const allContacts = await storage.getContactsByUserId(userId, 10000);
+      const withEmail = allContacts.filter(c => c.email);
+
+      let synced = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const contact of withEmail) {
+        try {
+          const result = await syncContactToHubSpot(userId, {
+            email: contact.email,
+            name: contact.fullName,
+            company: contact.companyName,
+            title: contact.jobTitle,
+            phone: contact.phone,
+            website: contact.website,
+            linkedinUrl: contact.linkedinUrl,
+          });
+          if (result.success) {
+            synced++;
+          } else {
+            failed++;
+            errors.push(`${contact.fullName || contact.email}: ${result.message}`);
+          }
+        } catch (e: any) {
+          failed++;
+          errors.push(`${contact.fullName || contact.email}: ${e.message}`);
+        }
+      }
+
+      res.json({ total: withEmail.length, synced, failed, errors: errors.slice(0, 10) });
+    } catch (error: any) {
+      console.error("HubSpot bulk sync error:", error);
+      res.status(500).json({ success: false, message: error?.message || "Bulk sync failed" });
+    }
+  });
+
+  app.post("/api/hubspot/export-event/:eventId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.eventId);
+      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) return res.status(404).json({ error: "Event not found" });
+
+      const contacts = await storage.getContactsForUserEvent(eventId);
+      const contactEmails = contacts.filter(c => c.email).map(c => c.email!);
+
+      const lines: string[] = [];
+      lines.push(`Event: ${event.title}`);
+      if (event.startedAt) lines.push(`Date: ${new Date(event.startedAt).toLocaleDateString()}`);
+      if (event.locationLabel) lines.push(`Location: ${event.locationLabel}`);
+      if (event.tags && event.tags.length > 0) lines.push(`Tags: ${event.tags.join(", ")}`);
+      if (event.notes) lines.push(`Notes: ${event.notes}`);
+      lines.push(`Contacts: ${contacts.map(c => c.fullName || c.email || "Unknown").join(", ")}`);
+
+      const noteBody = lines.join("\n");
+
+      const result = await createHubSpotNote(userId, { body: noteBody, contactEmails });
+      res.json(result);
+    } catch (error: any) {
+      console.error("HubSpot event export error:", error);
+      res.status(500).json({ success: false, message: error?.message || "Event export failed" });
+    }
+  });
+
+  app.post("/api/hubspot/export-timeline", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const { contactId, eventIds } = req.body;
+
+      if (!contactId || !Array.isArray(eventIds) || eventIds.length === 0) {
+        return res.status(400).json({ error: "contactId and eventIds array required" });
+      }
+
+      const contact = await storage.getContact(contactId);
+      if (!contact || contact.userId !== userId) return res.status(404).json({ error: "Contact not found" });
+      if (!contact.email) return res.status(400).json({ error: "Contact must have an email for HubSpot sync" });
+
+      const allTimeline = await storage.getTimelineEvents(contactId);
+      const selectedEvents = allTimeline.filter(e => eventIds.includes(e.id));
+
+      if (selectedEvents.length === 0) return res.status(400).json({ error: "No matching timeline events found" });
+
+      const lines: string[] = [];
+      lines.push(`Timeline Export for ${contact.fullName || contact.email}`);
+      lines.push(`Exported: ${new Date().toLocaleDateString()}`);
+      lines.push("---");
+
+      for (const event of selectedEvents) {
+        const date = event.eventAt ? new Date(event.eventAt).toLocaleDateString() : "Unknown date";
+        lines.push(`[${date}] ${event.type}: ${event.summary}`);
+      }
+
+      const result = await createHubSpotNote(userId, { body: lines.join("\n"), contactEmails: [contact.email] });
+      res.json({ ...result, exportedCount: selectedEvents.length });
+    } catch (error: any) {
+      console.error("HubSpot timeline export error:", error);
+      res.status(500).json({ success: false, message: error?.message || "Timeline export failed" });
     }
   });
 

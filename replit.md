@@ -34,6 +34,7 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Duplicate Detection & Merge**: Fuzzy matching and scoring for contact deduplication, with a side-by-side merge UI and undo support.
 -   **Calendar Integration**: Generates ICS files for meeting invites with customizable dates, times, and durations.
 -   **Batch Scanning (Event Mode)**: Multi-photo capture mode that queues business cards for background processing. Users can snap multiple cards quickly, then process all at once with a review/approve workflow before saving.
+-   **HubSpot CRM Integration**: Per-user OAuth connection with token auto-refresh. Accessible from the profile dropdown menu. Supports bulk contact export, event export (as HubSpot Notes), and selective timeline export. OAuth tokens stored in `hubspot_tokens` table. Required scopes: `oauth crm.objects.contacts.read crm.objects.contacts.write crm.objects.notes.write`.
 
 ### Feature Specifications
 -   **Business Card OCR**: Upload/scan images to extract text.
@@ -48,6 +49,7 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Duplicate Management**: Detects and helps merge duplicate contacts.
 -   **Calendar Integration**: Facilitates meeting scheduling and ICS export.
 -   **Batch Scanning**: In Event Mode, enables multi-photo capture with thumbnail previews, background OCR processing, and batch review/approve workflow for rapid networking events.
+-   **HubSpot Export**: Users connect HubSpot from profile menu, then export contacts (bulk), events (as Notes attached to contacts), and selected timeline entries (as Notes) to their HubSpot CRM.
 
 ## External Dependencies
 -   **OCR.space API**: For Optical Character Recognition.
@@ -55,3 +57,4 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Framer Motion**: For UI animations, particularly in navigation and organizational hierarchy.
 -   **React Flow**: For rendering interactive organizational diagram.
 -   **Dagre**: For auto-layout of organizational charts.
+-   **HubSpot API**: For CRM integration — OAuth, contacts, notes, and associations. Uses `@hubspot/api-client` SDK.

@@ -23,7 +23,7 @@ export function buildHubSpotAuthUrl(opts: {
 }): string {
   const clientId = requireEnv("HUBSPOT_CLIENT_ID");
   const scopes = (process.env.HUBSPOT_SCOPES ||
-    "oauth crm.objects.contacts.read crm.objects.contacts.write").trim();
+    "oauth crm.objects.contacts.read crm.objects.contacts.write crm.objects.notes.write").trim();
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -165,6 +165,84 @@ function splitName(fullName: string | null | undefined): { firstname: string | n
   if (parts.length === 0) return { firstname: null, lastname: null };
   if (parts.length === 1) return { firstname: parts[0], lastname: null };
   return { firstname: parts[0], lastname: parts.slice(1).join(" ") };
+}
+
+export async function getHubSpotStatus(userId: number): Promise<{ connected: boolean; hubDomain?: string | null }> {
+  const tokens = await storage.getHubspotTokens(userId);
+  if (!tokens) return { connected: false };
+  return { connected: true, hubDomain: tokens.hubDomain };
+}
+
+export async function createHubSpotNote(userId: number, opts: {
+  body: string;
+  contactEmails: string[];
+}): Promise<{ success: boolean; message: string }> {
+  const accessToken = await getValidAccessToken(userId);
+  const hs = new Client({ accessToken });
+
+  const contactIds: string[] = [];
+  for (const email of opts.contactEmails) {
+    try {
+      const searchRes = await hs.crm.contacts.searchApi.doSearch({
+        filterGroups: [{
+          filters: [{ propertyName: "email", operator: "EQ", value: email }],
+        }],
+        properties: ["email"],
+        limit: 1,
+      } as any);
+      const id = searchRes?.results?.[0]?.id;
+      if (id) contactIds.push(id);
+    } catch {}
+  }
+
+  try {
+    const noteResponse = await fetch("https://api.hubapi.com/crm/v3/objects/notes", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        properties: {
+          hs_note_body: opts.body,
+          hs_timestamp: new Date().toISOString(),
+        },
+      }),
+    });
+
+    if (!noteResponse.ok) {
+      const errText = await noteResponse.text();
+      return { success: false, message: `Failed to create note: ${errText}` };
+    }
+
+    const noteData = await noteResponse.json() as any;
+    const noteId = noteData.id;
+
+    let associatedCount = 0;
+    const associationFailures: string[] = [];
+    for (const contactId of contactIds) {
+      try {
+        const assocRes = await fetch(`https://api.hubapi.com/crm/v3/objects/notes/${noteId}/associations/contacts/${contactId}/202`, {
+          method: "PUT",
+          headers: { "Authorization": `Bearer ${accessToken}` },
+        });
+        if (assocRes.ok) {
+          associatedCount++;
+        } else {
+          associationFailures.push(`Contact ${contactId}: ${assocRes.status}`);
+        }
+      } catch (e: any) {
+        associationFailures.push(`Contact ${contactId}: ${e?.message || "unknown error"}`);
+      }
+    }
+
+    const msg = associationFailures.length > 0
+      ? `Note created. Associated with ${associatedCount}/${contactIds.length} contacts. ${associationFailures.length} failed.`
+      : `Note created and associated with ${associatedCount} contacts`;
+    return { success: true, message: msg };
+  } catch (e: any) {
+    return { success: false, message: e?.message || "Failed to create note" };
+  }
 }
 
 export async function syncContactToHubSpot(userId: number, contact: {

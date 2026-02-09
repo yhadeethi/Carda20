@@ -3,6 +3,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import { useAuth } from "@/hooks/useAuth";
 import { useTimelineSetup } from "@/hooks/useTimelineSetup";
+import { useToast } from "@/hooks/use-toast";
 import { ScanTab } from "@/components/scan-tab";
 import { RelationshipDetailView } from "@/components/relationship/RelationshipDetailView";
 import { ContactsHub } from "@/components/contacts-hub";
@@ -13,6 +14,7 @@ import { CompanyDetail } from "@/components/company-detail";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { HomeScoreboard } from "@/components/home/HomeScoreboard";
 import { CreateContactDrawer } from "@/components/create-contact-drawer";
+import { HubSpotProfile } from "@/components/hubspot/HubSpotProfile";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -22,7 +24,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw } from "lucide-react";
+import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings } from "lucide-react";
+import { SiHubspot } from "react-icons/si";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 import { motion, AnimatePresence } from "framer-motion";
@@ -58,6 +61,7 @@ export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
   const { isHidden, isCompact } = useScrollDirectionNav();
   const { user } = useAuth();
+  const { toast } = useToast();
 
   // Setup timeline data sync and migration
   useTimelineSetup();
@@ -77,6 +81,7 @@ export default function HomePage() {
   const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
   const [showCreateContactDrawer, setShowCreateContactDrawer] = useState(false);
+  const [showHubSpotProfile, setShowHubSpotProfile] = useState(false);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -94,6 +99,19 @@ export default function HomePage() {
       saveRecentAccount(email);
     }
   }, [user]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hubspotParam = params.get("hubspot");
+    if (hubspotParam === "connected") {
+      setShowHubSpotProfile(true);
+      toast({ title: "HubSpot connected", description: "Your HubSpot account has been linked successfully." });
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (hubspotParam === "error") {
+      toast({ title: "HubSpot connection failed", description: "There was a problem connecting your HubSpot account. Please try again.", variant: "destructive" });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [toast]);
 
   const handleSwitchAccount = (email: string) => {
     // Replit auth does not support true multi-session switching in-app.
@@ -319,6 +337,12 @@ export default function HomePage() {
                 <UserPlus className="w-4 h-4" />
                 Add Account
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setShowHubSpotProfile(true)} className="flex items-center gap-2 cursor-pointer" data-testid="button-hubspot-menu">
+                <SiHubspot className="w-4 h-4 text-[#FF7A59]" />
+                HubSpot
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <a href="/api/logout" className="flex items-center gap-2 cursor-pointer" data-testid="button-logout">
                   <LogOut className="w-4 h-4" />
@@ -530,6 +554,12 @@ export default function HomePage() {
         open={showCreateContactDrawer}
         onOpenChange={setShowCreateContactDrawer}
         onContactCreated={refreshContacts}
+      />
+
+      {/* HubSpot Integration */}
+      <HubSpotProfile
+        open={showHubSpotProfile}
+        onOpenChange={setShowHubSpotProfile}
       />
     </div>
   );
