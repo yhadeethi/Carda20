@@ -42,7 +42,8 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Editable Results**: Allows users to review and modify extracted fields.
 -   **vCard Export**: Exports contacts as .vcf files.
 -   **My QR**: Generates personal QR codes for quick contact sharing.
--   **Events Hub**: Discovery and tracking of industry events with user-controlled preferences (pin, attendance, notes).
+-   **Events (Capture Sessions)**: User-created networking events (e.g., "Tech Meetup Sydney 2026") that serve as containers for contact capture. Users start an event, then scan cards or add contacts manually within that event context. Events have active/ended states, tags, notes, GPS-detected location, and optional event links. Contacts are attached to events, organizing them by the occasion where they were met.
+-   **Events Hub (Legacy)**: A curated directory of industry events across renewable energy, mining, and construction sectors with user preferences (pin, attendance, notes). Uses static/curated data from `eventsData.ts` with localStorage-based preferences.
 -   **Org Intelligence**: Manages company and organizational data, including department filtering and auto-grouping based on job titles.
 -   **Smart Follow-Up**: Creates personalized messages and manages tasks/reminders.
 -   **Contact Timeline**: Logs all interactions and events for a contact.
@@ -50,6 +51,12 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Calendar Integration**: Facilitates meeting scheduling and ICS export.
 -   **Batch Scanning**: In Event Mode, enables multi-photo capture with thumbnail previews, background OCR processing, and batch review/approve workflow for rapid networking events.
 -   **HubSpot Export**: Users connect HubSpot from profile menu, then export contacts (bulk), events (as Notes attached to contacts), and selected timeline entries (as Notes) to their HubSpot CRM.
+
+### Events Data Model (UserEvent)
+-   Stored in PostgreSQL (`user_events` table), scoped per authenticated user.
+-   Fields: `id`, `userId`, `title`, `tags` (text array), `notes`, `eventLink`, `locationLabel`, `latitude`, `longitude`, `isActive` (1=active, 0=ended), `startedAt`, `endedAt`, `createdAt`.
+-   Contacts are associated to events via `eventId` foreign key or a join table (`user_event_contacts`).
+-   API endpoints: `GET /api/user-events`, `GET /api/user-events/active`, `GET /api/user-events/:id`, `POST /api/user-events`, `PATCH /api/user-events/:id`, `GET /api/user-events/:id/contacts`, `POST /api/user-events/:id/attach-contacts`, `GET /api/user-events/:id/report`.
 
 ## External Dependencies
 -   **OCR.space API**: For Optical Character Recognition.
