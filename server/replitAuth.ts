@@ -152,31 +152,21 @@ export async function setupAuth(app: Express) {
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as ReplitAuthUser | undefined;
 
-  if (!req.isAuthenticated() || !user?.expires_at) {
-    console.warn("[Auth] Unauthorized:", req.path, "| isAuthenticated:", req.isAuthenticated?.(), "| hasUser:", !!user, "| hasExpiry:", !!user?.expires_at, "| sessionID:", req.sessionID?.slice(0, 8));
+  if (!req.isAuthenticated() || !user?.claims?.sub) {
+    console.warn("[Auth] Unauthorized:", req.path, "| isAuthenticated:", req.isAuthenticated?.(), "| hasUser:", !!user, "| hasClaims:", !!user?.claims?.sub, "| sessionID:", req.sessionID?.slice(0, 8));
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
-    return next();
+  if (user.expires_at && now > user.expires_at && user.refresh_token) {
+    try {
+      const config = await getOidcConfig();
+      const tokenResponse = await client.refreshTokenGrant(config, user.refresh_token);
+      updateUserSession(user, tokenResponse);
+    } catch (error) {
+      console.warn("[Auth] Token refresh failed (non-blocking):", req.path, error);
+    }
   }
 
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    console.warn("[Auth] Session expired, no refresh token:", req.path);
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    console.warn("[Auth] Token refresh failed:", req.path, error);
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  return next();
 };
