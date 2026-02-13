@@ -653,8 +653,16 @@ export function ContactDetailView({
         label: "Connect HubSpot",
         icon: <SiHubspot className="w-5 h-5 text-[#FF7A59]" />,
         status: "Not connected",
-        onClick: () => {
-          window.location.href = "/api/hubspot/connect";
+        onClick: async () => {
+          try {
+            const res = await apiRequest("POST", "/api/hubspot/connect");
+            const data = await res.json();
+            if (data.url) {
+              window.location.href = data.url;
+            }
+          } catch (error) {
+            toast({ title: "Failed to connect HubSpot", variant: "destructive" });
+          }
         },
       });
     }
