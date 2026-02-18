@@ -31,13 +31,15 @@ interface AuthenticatedRequest extends Request {
   user: ReplitAuthUser;
 }
 
-interface HubSpotOAuthSession {
+interface CRMOAuthSession {
   hubspot_oauth_state?: string;
   hubspot_oauth_user?: number;
+  salesforce_oauth_state?: string;
+  salesforce_oauth_user?: number;
 }
 
 interface SessionRequest extends Request {
-  session: Express.Session & HubSpotOAuthSession;
+  session: Express.Session & CRMOAuthSession;
 }
 
 async function getCurrentUserId(req: Request): Promise<number> {
@@ -57,7 +59,16 @@ function getHubSpotRedirectUri(req: Request): string {
   return `${proto}://${host}/api/hubspot/callback`;
 }
 
+function getSalesforceRedirectUri(req: Request): string {
+  const envOverride = process.env.SALESFORCE_REDIRECT_URI;
+  if (envOverride) return envOverride;
+  const host = req.get("host");
+  const proto = req.get("x-forwarded-proto") || "https";
+  return `${proto}://${host}/api/salesforce/callback`;
+}
+
 import { buildHubSpotAuthUrl, connectHubSpotForUser, disconnectHubSpotForUser, isHubSpotConnected, syncContactToHubSpot, getHubSpotStatus, createHubSpotNote } from "./hubspotService";
+import { buildSalesforceAuthUrl, connectSalesforceForUser, disconnectSalesforceForUser, getSalesforceStatus, syncContactToSalesforce, createSalesforceNote } from "./salesforceService";
 import crypto from "crypto";
 
 const contactInputSchema = z.object({
@@ -626,6 +637,212 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
       res.json({ ...result, exportedCount: selectedEvents.length });
     } catch (error: any) {
       console.error("HubSpot timeline export error:", error);
+      res.status(500).json({ success: false, message: error?.message || "Timeline export failed" });
+    }
+  });
+
+  // Salesforce OAuth (per-user)
+  app.post("/api/salesforce/connect", isAuthenticated, async (req: SessionRequest, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const state = crypto.randomUUID();
+      req.session.salesforce_oauth_state = state;
+      req.session.salesforce_oauth_user = userId;
+
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err: any) => err ? reject(err) : resolve());
+      });
+
+      const redirectUri = getSalesforceRedirectUri(req);
+      console.log("[Salesforce] Connect initiated for userId:", userId, "redirectUri:", redirectUri);
+      const url = buildSalesforceAuthUrl({ redirectUri, state });
+      res.json({ url });
+    } catch (e: any) {
+      console.error("[Salesforce] Connect error:", e?.message);
+      res.status(500).json({ message: e?.message || "Failed to start Salesforce OAuth" });
+    }
+  });
+
+  app.get("/api/salesforce/callback", async (req: SessionRequest, res: Response) => {
+    try {
+      const code = req.query.code as string | undefined;
+      const state = req.query.state as string | undefined;
+      const expectedState = req.session?.salesforce_oauth_state;
+      const userId = req.session?.salesforce_oauth_user;
+
+      if (!code || !state || !expectedState || state !== expectedState || !userId) {
+        console.warn("[Salesforce] Callback validation failed:", { hasCode: !!code, hasState: !!state, stateMatch: state === expectedState, hasUserId: !!userId });
+        return res.redirect("/?salesforce=error");
+      }
+
+      const redirectUri = getSalesforceRedirectUri(req);
+      await connectSalesforceForUser({ userId, code, redirectUri });
+
+      req.session.salesforce_oauth_state = undefined;
+      req.session.salesforce_oauth_user = undefined;
+
+      res.redirect("/?salesforce=connected");
+    } catch (e: any) {
+      console.error("Salesforce callback error:", e);
+      res.redirect("/?salesforce=error");
+    }
+  });
+
+  app.post("/api/salesforce/disconnect", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      await disconnectSalesforceForUser(userId);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e?.message || "Failed to disconnect Salesforce" });
+    }
+  });
+
+  app.get("/api/salesforce/status", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const result = await getSalesforceStatus(userId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error checking Salesforce status:", error);
+      res.json({ connected: false });
+    }
+  });
+
+  app.post("/api/salesforce/sync", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const { email, firstname, lastname, company, jobtitle, phone, website, linkedinUrl } = req.body || {};
+      const name = [firstname, lastname].filter(Boolean).join(" ").trim() || null;
+
+      const result = await syncContactToSalesforce(userId, {
+        email: email || null,
+        name,
+        company: company || null,
+        title: jobtitle || null,
+        phone: phone || null,
+        website: website || null,
+        linkedinUrl: linkedinUrl || null,
+      });
+
+      res.json(result);
+    } catch (error: any) {
+      console.error("Salesforce sync error:", error);
+      res.status(500).json({ success: false, message: error?.message || "Salesforce sync failed" });
+    }
+  });
+
+  app.post("/api/salesforce/sync-all", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const allContacts = await storage.getContactsByUserId(userId, 10000);
+      const withEmail = allContacts.filter(c => c.email);
+
+      let synced = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const contact of withEmail) {
+        try {
+          const result = await syncContactToSalesforce(userId, {
+            email: contact.email,
+            name: contact.fullName,
+            company: contact.companyName,
+            title: contact.jobTitle,
+            phone: contact.phone,
+            website: contact.website,
+            linkedinUrl: contact.linkedinUrl,
+          });
+          if (result.success) {
+            synced++;
+          } else {
+            failed++;
+            errors.push(`${contact.fullName || contact.email}: ${result.message}`);
+          }
+        } catch (e: any) {
+          failed++;
+          errors.push(`${contact.fullName || contact.email}: ${e.message}`);
+        }
+      }
+
+      res.json({ total: withEmail.length, synced, failed, errors: errors.slice(0, 10) });
+    } catch (error: any) {
+      console.error("Salesforce bulk sync error:", error);
+      res.status(500).json({ success: false, message: error?.message || "Bulk sync failed" });
+    }
+  });
+
+  app.post("/api/salesforce/export-event/:eventId", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventId = parseInt(req.params.eventId);
+      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+
+      const event = await storage.getUserEvent(eventId);
+      if (!event || event.userId !== userId) return res.status(404).json({ error: "Event not found" });
+
+      const contacts = await storage.getContactsForUserEvent(eventId);
+      const contactEmails = contacts.filter(c => c.email).map(c => c.email!);
+
+      const lines: string[] = [];
+      lines.push(`Event: ${event.title}`);
+      if (event.startedAt) lines.push(`Date: ${new Date(event.startedAt).toLocaleDateString()}`);
+      if (event.locationLabel) lines.push(`Location: ${event.locationLabel}`);
+      if (event.tags && event.tags.length > 0) lines.push(`Tags: ${event.tags.join(", ")}`);
+      if (event.notes) lines.push(`Notes: ${event.notes}`);
+      lines.push(`Contacts: ${contacts.map(c => c.fullName || c.email || "Unknown").join(", ")}`);
+
+      const noteBody = lines.join("\n");
+      const firstEmail = contactEmails[0];
+
+      const result = await createSalesforceNote(userId, {
+        title: `Carda Event: ${event.title}`,
+        body: noteBody,
+        contactEmail: firstEmail,
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error("Salesforce event export error:", error);
+      res.status(500).json({ success: false, message: error?.message || "Event export failed" });
+    }
+  });
+
+  app.post("/api/salesforce/export-timeline", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const { contactId, eventIds } = req.body;
+
+      if (!contactId || !Array.isArray(eventIds) || eventIds.length === 0) {
+        return res.status(400).json({ error: "contactId and eventIds array required" });
+      }
+
+      const contact = await storage.getContact(contactId);
+      if (!contact || contact.userId !== userId) return res.status(404).json({ error: "Contact not found" });
+      if (!contact.email) return res.status(400).json({ error: "Contact must have an email for Salesforce sync" });
+
+      const allTimeline = await storage.getTimelineEvents(contactId);
+      const selectedEvents = allTimeline.filter(e => eventIds.includes(e.id));
+
+      if (selectedEvents.length === 0) return res.status(400).json({ error: "No matching timeline events found" });
+
+      const lines: string[] = [];
+      lines.push(`Timeline Export for ${contact.fullName || contact.email}`);
+      lines.push(`Exported: ${new Date().toLocaleDateString()}`);
+      lines.push("---");
+
+      for (const event of selectedEvents) {
+        const date = event.eventAt ? new Date(event.eventAt).toLocaleDateString() : "Unknown date";
+        lines.push(`[${date}] ${event.type}: ${event.summary}`);
+      }
+
+      const result = await createSalesforceNote(userId, {
+        title: `Carda Timeline: ${contact.fullName || contact.email}`,
+        body: lines.join("\n"),
+        contactEmail: contact.email,
+      });
+      res.json({ ...result, exportedCount: selectedEvents.length });
+    } catch (error: any) {
+      console.error("Salesforce timeline export error:", error);
       res.status(500).json({ success: false, message: error?.message || "Timeline export failed" });
     }
   });

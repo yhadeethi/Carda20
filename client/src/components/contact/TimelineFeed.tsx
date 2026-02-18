@@ -35,7 +35,8 @@ export type TimelineEventType =
   | "event_attended"
   | "contact_merged"
   | "contact_updated"
-  | "hubspot_synced";
+  | "hubspot_synced"
+  | "salesforce_synced";
 
 export interface TimelineItem {
   id: string;
@@ -62,6 +63,7 @@ const EVENT_ICONS: Record<string, typeof StickyNote> = {
   reminder_done: Bell,
   crm: CloudUpload,
   hubspot_synced: CloudUpload,
+  salesforce_synced: CloudUpload,
   created: Scan,
   scan_created: Scan,
   task_added: CheckSquare,
@@ -83,6 +85,7 @@ const EVENT_COLORS: Record<string, string> = {
   reminder_done: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
   crm: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   hubspot_synced: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  salesforce_synced: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
   created: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   scan_created: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   task_added: "bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300",

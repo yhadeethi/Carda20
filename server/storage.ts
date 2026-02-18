@@ -1,5 +1,5 @@
 import {
-  users, contacts, companies, companyIntel, hubspotTokens,
+  users, contacts, companies, companyIntel, hubspotTokens, salesforceTokens,
   contactTasks, contactReminders, timelineEvents, eventPreferences, mergeHistory,
   userEvents, userEventContacts, userEventPhotos,
   type User, type InsertUser, type UpsertUser,
@@ -7,6 +7,7 @@ import {
   type Company, type InsertCompany,
   type CompanyIntel, type InsertCompanyIntel,
   type HubspotToken, type InsertHubspotToken,
+  type SalesforceToken, type InsertSalesforceToken,
   type CompanyIntelData,
   type ContactTask, type InsertContactTask,
   type ContactReminder, type InsertContactReminder,
@@ -47,6 +48,11 @@ export interface IStorage {
   getHubspotTokens(userId: number): Promise<HubspotToken | undefined>;
   upsertHubspotTokens(tokens: InsertHubspotToken): Promise<HubspotToken>;
   deleteHubspotTokens(userId: number): Promise<void>;
+
+  // Salesforce OAuth tokens
+  getSalesforceTokens(userId: number): Promise<SalesforceToken | undefined>;
+  upsertSalesforceTokens(tokens: InsertSalesforceToken): Promise<SalesforceToken>;
+  deleteSalesforceTokens(userId: number): Promise<void>;
 
   // Contact Tasks
   getContactTasks(contactId: number): Promise<ContactTask[]>;
@@ -291,6 +297,36 @@ export class DatabaseStorage implements IStorage {
 
   async deleteHubspotTokens(userId: number): Promise<void> {
     await db.delete(hubspotTokens).where(eq(hubspotTokens.userId, userId));
+  }
+
+  async getSalesforceTokens(userId: number): Promise<SalesforceToken | undefined> {
+    const [token] = await db
+      .select()
+      .from(salesforceTokens)
+      .where(eq(salesforceTokens.userId, userId));
+    return token || undefined;
+  }
+
+  async upsertSalesforceTokens(tokens: InsertSalesforceToken): Promise<SalesforceToken> {
+    const [result] = await db
+      .insert(salesforceTokens)
+      .values(tokens)
+      .onConflictDoUpdate({
+        target: salesforceTokens.userId,
+        set: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          instanceUrl: tokens.instanceUrl,
+          expiresAt: tokens.expiresAt,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async deleteSalesforceTokens(userId: number): Promise<void> {
+    await db.delete(salesforceTokens).where(eq(salesforceTokens.userId, userId));
   }
 
   // Contact Tasks

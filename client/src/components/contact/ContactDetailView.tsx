@@ -45,7 +45,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { SiHubspot } from "react-icons/si";
+import { SiHubspot, SiSalesforce } from "react-icons/si";
 
 import { CompanyIntelV2Card } from "@/components/company-intel-v2";
 import { ContactHeroCard, Contact } from "./ContactHeroCard";
@@ -191,6 +191,7 @@ export function ContactDetailView({
 
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isSyncingHubspot, setIsSyncingHubspot] = useState(false);
+  const [isSyncingSalesforce, setIsSyncingSalesforce] = useState(false);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
 
   // Follow-up drawer state
@@ -234,6 +235,10 @@ export function ContactDetailView({
 
   const { data: hubspotStatus } = useQuery<{ connected: boolean }>({
     queryKey: ["/api/hubspot/status"],
+  });
+
+  const { data: salesforceStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ["/api/salesforce/status"],
   });
 
   const heroContact: Contact = useMemo(
@@ -413,6 +418,65 @@ export function ContactDetailView({
       });
     }
     setIsSyncingHubspot(false);
+  };
+
+  const handleSyncToSalesforce = async () => {
+    if (!contact.email) {
+      toast({
+        title: "Email required",
+        description: "Contact must have an email to sync with Salesforce",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSyncingSalesforce(true);
+    try {
+      const nameParts = (contact.name || "").split(" ");
+      const firstname = nameParts[0] || "";
+      const lastname = nameParts.slice(1).join(" ") || "";
+
+      const response = await apiRequest("POST", "/api/salesforce/sync", {
+        email: contact.email,
+        firstname,
+        lastname,
+        phone: contact.phone,
+        company: contact.company,
+        jobtitle: contact.title,
+        website: contact.website,
+        linkedinUrl: contact.linkedinUrl,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        addTimelineEvent(
+          contact.id,
+          "salesforce_synced",
+          `Synced to Salesforce (${result.action})`,
+          { salesforceId: result.salesforceId }
+        );
+        onUpdate();
+        toast({
+          title:
+            result.action === "created" ? "Added to Salesforce" : "Updated in Salesforce",
+          description: `Contact ${result.action} successfully`,
+        });
+      } else {
+        toast({
+          title: "Sync failed",
+          description: result.error || "Failed to sync with Salesforce",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Sync failed",
+        description: error.message || "Failed to sync with Salesforce",
+        variant: "destructive",
+      });
+    }
+    setIsSyncingSalesforce(false);
   };
 
   const launchFollowUpComposer = async (res: FollowUpResponse) => {
@@ -667,6 +731,35 @@ export function ContactDetailView({
       });
     }
 
+    if (salesforceStatus?.connected) {
+      const isSynced = contactV2?.timeline?.some((t) => t.type === "salesforce_synced");
+      actions.push({
+        id: "salesforce",
+        label: "Sync to Salesforce",
+        icon: <SiSalesforce className="w-5 h-5 text-[#00A1E0]" />,
+        status: isSynced ? "Synced" : "Not synced",
+        onClick: handleSyncToSalesforce,
+      });
+    } else {
+      actions.push({
+        id: "salesforce-connect",
+        label: "Connect Salesforce",
+        icon: <SiSalesforce className="w-5 h-5 text-[#00A1E0]" />,
+        status: "Not connected",
+        onClick: async () => {
+          try {
+            const res = await apiRequest("POST", "/api/salesforce/connect");
+            const data = await res.json();
+            if (data.url) {
+              window.location.href = data.url;
+            }
+          } catch (error) {
+            toast({ title: "Failed to connect Salesforce", variant: "destructive" });
+          }
+        },
+      });
+    }
+
     actions.push({
       id: "note",
       label: "Add Note",
@@ -680,7 +773,7 @@ export function ContactDetailView({
     });
 
     return actions;
-  }, [contact.id, contact.name, contactV2, hubspotStatus, toast, onUpdate]);
+  }, [contact.id, contact.name, contactV2, hubspotStatus, salesforceStatus, toast, onUpdate]);
 
   const heroBottomLabel = useMemo(() => {
     // wording tweak

@@ -71,6 +71,23 @@ export const hubspotTokens = pgTable(
   })
 );
 
+// Salesforce OAuth tokens (per-user)
+export const salesforceTokens = pgTable(
+  "salesforce_tokens",
+  {
+    userId: integer("user_id").notNull().references(() => users.id).primaryKey(),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    instanceUrl: text("instance_url").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("salesforce_tokens_user_idx").on(t.userId),
+  })
+);
+
 
 export const contacts = pgTable("contacts", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -454,6 +471,9 @@ export type UpsertUser = {
 export const insertHubspotTokenSchema = createInsertSchema(hubspotTokens);
 export const upsertHubspotTokenSchema = insertHubspotTokenSchema;
 
+export const insertSalesforceTokenSchema = createInsertSchema(salesforceTokens);
+export const upsertSalesforceTokenSchema = insertSalesforceTokenSchema;
+
 // Profile update schema
 export const updateProfileSchema = z.object({
   fullName: z.string().optional(),
@@ -472,6 +492,8 @@ export const updateProfileSchema = z.object({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type HubspotToken = typeof hubspotTokens.$inferSelect;
 export type InsertHubspotToken = typeof hubspotTokens.$inferInsert;
+export type SalesforceToken = typeof salesforceTokens.$inferSelect;
+export type InsertSalesforceToken = typeof salesforceTokens.$inferInsert;
 
 export type User = typeof users.$inferSelect;
 export type InsertContact = z.infer<typeof insertContactSchema>;

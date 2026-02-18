@@ -35,6 +35,7 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Calendar Integration**: Generates ICS files for meeting invites with customizable dates, times, and durations.
 -   **Batch Scanning (Event Mode)**: Multi-photo capture mode that queues business cards for background processing. Users can snap multiple cards quickly, then process all at once with a review/approve workflow before saving.
 -   **HubSpot CRM Integration**: Per-user OAuth connection with token auto-refresh. Accessible from the profile dropdown menu. Supports bulk contact export, event export (as HubSpot Notes), and selective timeline export. OAuth tokens stored in `hubspot_tokens` table. Required scopes: `oauth crm.objects.contacts.read crm.objects.contacts.write crm.objects.notes.write`.
+-   **Salesforce CRM Integration**: Per-user OAuth connection with token auto-refresh. Accessible from the profile dropdown menu (alongside HubSpot). Supports bulk contact export, event export (as Salesforce Notes), and selective timeline export. OAuth tokens stored in `salesforce_tokens` table. Required scopes: `api refresh_token`. Uses Salesforce REST API v59.0.
 
 ### Feature Specifications
 -   **Business Card OCR**: Upload/scan images to extract text.
@@ -51,6 +52,7 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Calendar Integration**: Facilitates meeting scheduling and ICS export.
 -   **Batch Scanning**: In Event Mode, enables multi-photo capture with thumbnail previews, background OCR processing, and batch review/approve workflow for rapid networking events.
 -   **HubSpot Export**: Users connect HubSpot from profile menu, then export contacts (bulk), events (as Notes attached to contacts), and selected timeline entries (as Notes) to their HubSpot CRM.
+-   **Salesforce Export**: Users connect Salesforce from profile menu, then export contacts (bulk), events (as Salesforce Notes linked to contacts), and selected timeline entries (as Notes) to their Salesforce CRM.
 
 ### Events Data Model (UserEvent)
 -   Stored in PostgreSQL (`user_events` table), scoped per authenticated user.

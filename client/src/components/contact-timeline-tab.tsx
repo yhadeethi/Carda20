@@ -47,6 +47,7 @@ const EVENT_ICONS: Record<TimelineEventType, typeof StickyNote> = {
   contact_merged: Users,
   contact_updated: Edit,
   hubspot_synced: CloudUpload,
+  salesforce_synced: CloudUpload,
 };
 
 const EVENT_COLORS: Record<TimelineEventType, string> = {
@@ -63,6 +64,7 @@ const EVENT_COLORS: Record<TimelineEventType, string> = {
   contact_merged: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
   contact_updated: "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300",
   hubspot_synced: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  salesforce_synced: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
 };
 
 const EVENT_LABELS: Record<TimelineEventType, string> = {
@@ -79,6 +81,7 @@ const EVENT_LABELS: Record<TimelineEventType, string> = {
   contact_merged: "Merged",
   contact_updated: "Updated",
   hubspot_synced: "HubSpot Sync",
+  salesforce_synced: "Salesforce Sync",
 };
 
 type FilterType = 'all' | TimelineEventType;

@@ -15,6 +15,7 @@ import { MyQRModal } from "@/components/my-qr-modal";
 import { HomeScoreboard } from "@/components/home/HomeScoreboard";
 import { CreateContactDrawer } from "@/components/create-contact-drawer";
 import { HubSpotProfile } from "@/components/hubspot/HubSpotProfile";
+import { SalesforceProfile } from "@/components/salesforce/SalesforceProfile";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -25,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings } from "lucide-react";
-import { SiHubspot } from "react-icons/si";
+import { SiHubspot, SiSalesforce } from "react-icons/si";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 import { motion, AnimatePresence } from "framer-motion";
@@ -82,6 +83,7 @@ export default function HomePage() {
   const [contactsVersion, setContactsVersion] = useState(0);
   const [showCreateContactDrawer, setShowCreateContactDrawer] = useState(false);
   const [showHubSpotProfile, setShowHubSpotProfile] = useState(false);
+  const [showSalesforceProfile, setShowSalesforceProfile] = useState(false);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -109,6 +111,16 @@ export default function HomePage() {
       window.history.replaceState({}, "", window.location.pathname);
     } else if (hubspotParam === "error") {
       toast({ title: "HubSpot connection failed", description: "There was a problem connecting your HubSpot account. Please try again.", variant: "destructive" });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    const salesforceParam = params.get("salesforce");
+    if (salesforceParam === "connected") {
+      setShowSalesforceProfile(true);
+      toast({ title: "Salesforce connected", description: "Your Salesforce account has been linked successfully." });
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (salesforceParam === "error") {
+      toast({ title: "Salesforce connection failed", description: "There was a problem connecting your Salesforce account. Please try again.", variant: "destructive" });
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, [toast]);
@@ -342,6 +354,10 @@ export default function HomePage() {
                 <SiHubspot className="w-4 h-4 text-[#FF7A59]" />
                 HubSpot
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowSalesforceProfile(true)} className="flex items-center gap-2 cursor-pointer" data-testid="button-salesforce-menu">
+                <SiSalesforce className="w-4 h-4 text-[#00A1E0]" />
+                Salesforce
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <a href="/api/logout" className="flex items-center gap-2 cursor-pointer" data-testid="button-logout">
@@ -560,6 +576,12 @@ export default function HomePage() {
       <HubSpotProfile
         open={showHubSpotProfile}
         onOpenChange={setShowHubSpotProfile}
+      />
+
+      {/* Salesforce Integration */}
+      <SalesforceProfile
+        open={showSalesforceProfile}
+        onOpenChange={setShowSalesforceProfile}
       />
     </div>
   );
