@@ -1,0 +1,40 @@
+Pre-flight audit approved. Proceed with Stage 4, but these are REQUIRED implementation requirements:
+
+1) Unify user-events routes to accept UUID eventRef
+- Implement resolveEventParam(ref, userId) on server/routes.ts similar to resolveContactParam:
+  - if UUID: resolveEventRef(userId, ref)
+  - else numeric: parseInt + ownership check (temporary)
+- Apply resolveEventParam to ALL /api/user-events/:id/* routes listed in your audit:
+  GET/PATCH/DELETE /api/user-events/:id
+  GET/POST /api/user-events/:id/contacts, attach-contacts
+  photos routes
+  report route
+- Also apply resolveEventParam to CRM export routes:
+  POST /api/hubspot/export-event/:eventId
+  POST /api/salesforce/export-event/:eventId
+
+2) Client must treat user-event id as UUID everywhere
+- home-page.tsx currentEventId must be string | null and store event.publicId (NOT event.id).
+- EventsTab must use event.publicId everywhere (select, compare, queryKey, etc.).
+- EventDetail props must use eventId: string (UUID), and ALL API calls must use UUID paths.
+
+3) Event attach conversion must be complete
+- Replace EventDetail attach call to use the new endpoint:
+  POST /api/events/:eventRef/contacts/attach with { contactPublicIds: UUID[] }
+- Ensure eventRef is event UUID.
+- Ensure contact ids passed are contact UUIDs after normalization.
+
+4) Contacts + Companies UUID normalization must update references + persist once
+- Normalize companies first, build oldCompanyId->newUUID, rewrite contact.companyId using the map.
+- Normalize contacts next, rewrite org.reportsToId + merge history mergedFromIds.
+- Persist normalized v2 immediately so it doesn’t re-run and create duplicates.
+
+5) Hydration + _needsUpsert rules
+- Strict merge by UUID only.
+- Never clear _needsUpsert during hydration; clear only on successful upsert response.
+
+After implementing, run these verification checks:
+- Events: create event, select it, open EventDetail, refresh, still opens; eventId in state is UUID.
+- Attach: attach contact to event, refresh, still attached; cross-device shows attached.
+- CRM export-event: still works with UUID param in URL (server resolves it).
+- Companies: contact.companyId link survives migration.
