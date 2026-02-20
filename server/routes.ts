@@ -51,6 +51,29 @@ async function getCurrentUserId(req: Request): Promise<number> {
   return user.id;
 }
 
+async function verifyContactOwnership(contactId: number, userId: number): Promise<boolean> {
+  const contact = await storage.getContact(contactId);
+  return !!contact && contact.userId === userId;
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveContactParam(ref: string, userId: number): Promise<{ contactId: number; error?: string; status?: number }> {
+  if (UUID_REGEX.test(ref)) {
+    try {
+      const contactId = await storage.resolveContactRef(userId, ref);
+      return { contactId };
+    } catch (e: any) {
+      if (e.message === "NOT_FOUND") return { contactId: 0, error: "Contact not found", status: 404 };
+      return { contactId: 0, error: "Invalid contact ref", status: 400 };
+    }
+  }
+  const parsed = parseInt(ref);
+  if (isNaN(parsed)) return { contactId: 0, error: "Invalid contact ID", status: 400 };
+  if (!(await verifyContactOwnership(parsed, userId))) return { contactId: 0, error: "Access denied", status: 403 };
+  return { contactId: parsed };
+}
+
 function getHubSpotRedirectUri(req: Request): string {
   const envOverride = process.env.HUBSPOT_REDIRECT_URI;
   if (envOverride) return envOverride;
@@ -618,7 +641,7 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
       if (!contact || contact.userId !== userId) return res.status(404).json({ error: "Contact not found" });
       if (!contact.email) return res.status(400).json({ error: "Contact must have an email for HubSpot sync" });
 
-      const allTimeline = await storage.getTimelineEvents(contactId);
+      const allTimeline = await storage.getTimelineEvents(contactId, userId);
       const selectedEvents = allTimeline.filter(e => eventIds.includes(e.id));
 
       if (selectedEvents.length === 0) return res.status(400).json({ error: "No matching timeline events found" });
@@ -820,7 +843,7 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
       if (!contact || contact.userId !== userId) return res.status(404).json({ error: "Contact not found" });
       if (!contact.email) return res.status(400).json({ error: "Contact must have an email for Salesforce sync" });
 
-      const allTimeline = await storage.getTimelineEvents(contactId);
+      const allTimeline = await storage.getTimelineEvents(contactId, userId);
       const selectedEvents = allTimeline.filter(e => eventIds.includes(e.id));
 
       if (selectedEvents.length === 0) return res.status(400).json({ error: "No matching timeline events found" });
@@ -1021,13 +1044,10 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.get("/api/contacts/:contactId/tasks", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const contactId = parseInt(req.params.contactId);
+      const resolved = await resolveContactParam(req.params.contactId, userId);
+      if (resolved.error) return res.status(resolved.status!).json({ error: resolved.error });
 
-      if (isNaN(contactId)) {
-        return res.status(400).json({ error: "Invalid contact ID" });
-      }
-
-      const tasks = await storage.getContactTasks(contactId);
+      const tasks = await storage.getContactTasks(resolved.contactId, userId);
       res.json(tasks);
     } catch (error) {
       console.error("[Tasks] Error fetching tasks:", error);
@@ -1039,11 +1059,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.post("/api/contacts/:contactId/tasks", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const contactId = parseInt(req.params.contactId);
-
-      if (isNaN(contactId)) {
-        return res.status(400).json({ error: "Invalid contact ID" });
-      }
+      const resolved = await resolveContactParam(req.params.contactId, userId);
+      if (resolved.error) return res.status(resolved.status!).json({ error: resolved.error });
 
       const { clientId, title, dueAt } = req.body;
 
@@ -1051,14 +1068,13 @@ Return ONLY valid JSON, no markdown or explanation.`;
         return res.status(400).json({ error: "Missing required fields: clientId, title" });
       }
 
-      // Check if task with this clientId already exists (idempotency)
       const existing = await storage.getContactTaskByClientId(clientId);
       if (existing) {
         return res.json(existing);
       }
 
       const task = await storage.createContactTask({
-        contactId,
+        contactId: resolved.contactId,
         userId,
         clientId,
         title,
@@ -1091,10 +1107,10 @@ Return ONLY valid JSON, no markdown or explanation.`;
       if (title !== undefined) updates.title = title;
       if (dueAt !== undefined) updates.dueAt = dueAt ? new Date(dueAt) : null;
 
-      const task = await storage.updateContactTask(taskId, updates);
+      const task = await storage.updateContactTask(taskId, userId, updates);
 
       if (!task) {
-        return res.status(404).json({ error: "Task not found" });
+        return res.status(404).json({ error: "Task not found or access denied" });
       }
 
       res.json(task);
@@ -1114,10 +1130,10 @@ Return ONLY valid JSON, no markdown or explanation.`;
         return res.status(400).json({ error: "Invalid task ID" });
       }
 
-      const deleted = await storage.deleteContactTask(taskId);
+      const deleted = await storage.deleteContactTask(taskId, userId);
 
       if (!deleted) {
-        return res.status(404).json({ error: "Task not found" });
+        return res.status(404).json({ error: "Task not found or access denied" });
       }
 
       res.json({ success: true });
@@ -1131,13 +1147,10 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.get("/api/contacts/:contactId/reminders", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const contactId = parseInt(req.params.contactId);
+      const resolved = await resolveContactParam(req.params.contactId, userId);
+      if (resolved.error) return res.status(resolved.status!).json({ error: resolved.error });
 
-      if (isNaN(contactId)) {
-        return res.status(400).json({ error: "Invalid contact ID" });
-      }
-
-      const reminders = await storage.getContactReminders(contactId);
+      const reminders = await storage.getContactReminders(resolved.contactId, userId);
       res.json(reminders);
     } catch (error) {
       console.error("[Reminders] Error fetching reminders:", error);
@@ -1149,11 +1162,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.post("/api/contacts/:contactId/reminders", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const contactId = parseInt(req.params.contactId);
-
-      if (isNaN(contactId)) {
-        return res.status(400).json({ error: "Invalid contact ID" });
-      }
+      const resolved = await resolveContactParam(req.params.contactId, userId);
+      if (resolved.error) return res.status(resolved.status!).json({ error: resolved.error });
 
       const { clientId, label, remindAt } = req.body;
 
@@ -1161,14 +1171,13 @@ Return ONLY valid JSON, no markdown or explanation.`;
         return res.status(400).json({ error: "Missing required fields: clientId, label, remindAt" });
       }
 
-      // Check if reminder with this clientId already exists (idempotency)
       const existing = await storage.getContactReminderByClientId(clientId);
       if (existing) {
         return res.json(existing);
       }
 
       const reminder = await storage.createContactReminder({
-        contactId,
+        contactId: resolved.contactId,
         userId,
         clientId,
         label,
@@ -1201,10 +1210,10 @@ Return ONLY valid JSON, no markdown or explanation.`;
       if (label !== undefined) updates.label = label;
       if (remindAt !== undefined) updates.remindAt = new Date(remindAt);
 
-      const reminder = await storage.updateContactReminder(reminderId, updates);
+      const reminder = await storage.updateContactReminder(reminderId, userId, updates);
 
       if (!reminder) {
-        return res.status(404).json({ error: "Reminder not found" });
+        return res.status(404).json({ error: "Reminder not found or access denied" });
       }
 
       res.json(reminder);
@@ -1224,10 +1233,10 @@ Return ONLY valid JSON, no markdown or explanation.`;
         return res.status(400).json({ error: "Invalid reminder ID" });
       }
 
-      const deleted = await storage.deleteContactReminder(reminderId);
+      const deleted = await storage.deleteContactReminder(reminderId, userId);
 
       if (!deleted) {
-        return res.status(404).json({ error: "Reminder not found" });
+        return res.status(404).json({ error: "Reminder not found or access denied" });
       }
 
       res.json({ success: true });
@@ -1241,13 +1250,10 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.get("/api/contacts/:contactId/timeline", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const contactId = parseInt(req.params.contactId);
+      const resolved = await resolveContactParam(req.params.contactId, userId);
+      if (resolved.error) return res.status(resolved.status!).json({ error: resolved.error });
 
-      if (isNaN(contactId)) {
-        return res.status(400).json({ error: "Invalid contact ID" });
-      }
-
-      const events = await storage.getTimelineEvents(contactId);
+      const events = await storage.getTimelineEvents(resolved.contactId, userId);
       res.json(events);
     } catch (error) {
       console.error("[Timeline] Error fetching events:", error);
@@ -1259,11 +1265,9 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.post("/api/contacts/:contactId/timeline", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const contactId = parseInt(req.params.contactId);
-
-      if (isNaN(contactId)) {
-        return res.status(400).json({ error: "Invalid contact ID" });
-      }
+      const resolved = await resolveContactParam(req.params.contactId, userId);
+      if (resolved.error) return res.status(resolved.status!).json({ error: resolved.error });
+      const contactId = resolved.contactId;
 
       const { clientId, type, summary, meta, eventAt } = req.body;
 
@@ -1291,6 +1295,152 @@ Return ONLY valid JSON, no markdown or explanation.`;
     } catch (error) {
       console.error("[Timeline] Error creating event:", error);
       res.status(500).json({ error: "Failed to create timeline event" });
+    }
+  });
+
+  // ============================================
+  // Upsert & List Endpoints (canonical sync)
+  // ============================================
+
+  // Contacts - upsert by publicId (non-destructive merge)
+  app.post("/api/contacts/upsert", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const { publicId, ...fields } = req.body;
+
+      if (!publicId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicId)) {
+        return res.status(400).json({ error: "Valid publicId (UUID) is required" });
+      }
+
+      const contact = await storage.upsertContactByPublicId(userId, publicId, fields);
+      res.json(contact);
+    } catch (error) {
+      console.error("[Contacts] Upsert error:", error);
+      res.status(500).json({ error: "Failed to upsert contact" });
+    }
+  });
+
+  // Contacts - list all for user
+  app.get("/api/contacts", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const limit = parseInt(req.query.limit as string) || 1000;
+      const contactsList = await storage.getContactsByUserId(userId, limit);
+      res.json(contactsList);
+    } catch (error) {
+      console.error("[Contacts] List error:", error);
+      res.status(500).json({ error: "Failed to list contacts" });
+    }
+  });
+
+  // Companies - upsert by publicId (non-destructive merge)
+  app.post("/api/companies/upsert", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const { publicId, ...fields } = req.body;
+
+      if (!publicId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicId)) {
+        return res.status(400).json({ error: "Valid publicId (UUID) is required" });
+      }
+
+      const company = await storage.upsertCompanyByPublicId(userId, publicId, fields);
+      res.json(company);
+    } catch (error) {
+      console.error("[Companies] Upsert error:", error);
+      res.status(500).json({ error: "Failed to upsert company" });
+    }
+  });
+
+  // Companies - list all for user
+  app.get("/api/companies", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const companiesList = await storage.getCompaniesByUserId(userId);
+      res.json(companiesList);
+    } catch (error) {
+      console.error("[Companies] List error:", error);
+      res.status(500).json({ error: "Failed to list companies" });
+    }
+  });
+
+  // Events - upsert by publicId (non-destructive merge)
+  app.post("/api/events/upsert", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const { publicId, ...fields } = req.body;
+
+      if (!publicId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicId)) {
+        return res.status(400).json({ error: "Valid publicId (UUID) is required" });
+      }
+
+      const event = await storage.upsertUserEventByPublicId(userId, publicId, fields);
+      res.json(event);
+    } catch (error) {
+      console.error("[Events] Upsert error:", error);
+      res.status(500).json({ error: "Failed to upsert event" });
+    }
+  });
+
+  // Events - attach contacts by publicIds
+  app.post("/api/events/:eventRef/contacts/attach", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventRef = req.params.eventRef;
+      const { contactPublicIds } = req.body;
+
+      if (!Array.isArray(contactPublicIds) || contactPublicIds.length === 0) {
+        return res.status(400).json({ error: "contactPublicIds array is required" });
+      }
+
+      let eventId: number;
+      try {
+        eventId = await storage.resolveEventRef(userId, eventRef);
+      } catch (e: any) {
+        if (e.message === "INVALID_REF") return res.status(400).json({ error: "Invalid event ref" });
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const attached: number[] = [];
+      for (const cpId of contactPublicIds) {
+        try {
+          const contactId = await storage.resolveContactRef(userId, cpId);
+          try {
+            await storage.attachContactToEvent({ userId, eventId, contactId } as any);
+            attached.push(contactId);
+          } catch (e: any) {
+            // ON CONFLICT DO NOTHING - ignore duplicates
+          }
+        } catch {
+          // skip unresolvable contacts
+        }
+      }
+
+      res.json({ attached: attached.length });
+    } catch (error) {
+      console.error("[Events] Attach contacts error:", error);
+      res.status(500).json({ error: "Failed to attach contacts" });
+    }
+  });
+
+  // Events - list contacts for an event (by eventRef UUID)
+  app.get("/api/events/:eventRef/contacts", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const eventRef = req.params.eventRef;
+
+      let eventId: number;
+      try {
+        eventId = await storage.resolveEventRef(userId, eventRef);
+      } catch (e: any) {
+        if (e.message === "INVALID_REF") return res.status(400).json({ error: "Invalid event ref" });
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const contactsList = await storage.getContactsForUserEvent(eventId);
+      res.json(contactsList);
+    } catch (error) {
+      console.error("[Events] List contacts error:", error);
+      res.status(500).json({ error: "Failed to list event contacts" });
     }
   });
 

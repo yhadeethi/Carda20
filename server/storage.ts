@@ -19,7 +19,7 @@ import {
   type UserEventPhoto, type InsertUserEventPhoto
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -55,25 +55,25 @@ export interface IStorage {
   deleteSalesforceTokens(userId: number): Promise<void>;
 
   // Contact Tasks
-  getContactTasks(contactId: number): Promise<ContactTask[]>;
+  getContactTasks(contactId: number, userId: number): Promise<ContactTask[]>;
   getContactTaskByClientId(clientId: string): Promise<ContactTask | undefined>;
   createContactTask(task: InsertContactTask): Promise<ContactTask>;
-  updateContactTask(id: number, updates: Partial<ContactTask>): Promise<ContactTask | undefined>;
-  deleteContactTask(id: number): Promise<boolean>;
+  updateContactTask(id: number, userId: number, updates: Partial<ContactTask>): Promise<ContactTask | undefined>;
+  deleteContactTask(id: number, userId: number): Promise<boolean>;
 
   // Contact Reminders
-  getContactReminders(contactId: number): Promise<ContactReminder[]>;
+  getContactReminders(contactId: number, userId: number): Promise<ContactReminder[]>;
   getContactReminderByClientId(clientId: string): Promise<ContactReminder | undefined>;
   getUpcomingReminders(userId: number, limit?: number): Promise<ContactReminder[]>;
   createContactReminder(reminder: InsertContactReminder): Promise<ContactReminder>;
-  updateContactReminder(id: number, updates: Partial<ContactReminder>): Promise<ContactReminder | undefined>;
-  deleteContactReminder(id: number): Promise<boolean>;
+  updateContactReminder(id: number, userId: number, updates: Partial<ContactReminder>): Promise<ContactReminder | undefined>;
+  deleteContactReminder(id: number, userId: number): Promise<boolean>;
 
   // Timeline Events
-  getTimelineEvents(contactId: number): Promise<TimelineEvent[]>;
+  getTimelineEvents(contactId: number, userId: number): Promise<TimelineEvent[]>;
   getTimelineEventByClientId(clientId: string): Promise<TimelineEvent | undefined>;
   createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent>;
-  deleteTimelineEvent(id: number): Promise<boolean>;
+  deleteTimelineEvent(id: number, userId: number): Promise<boolean>;
 
   // Event Preferences
   getEventPreferences(userId: number, eventId: string): Promise<EventPreference | undefined>;
@@ -103,6 +103,22 @@ export interface IStorage {
   getUserEventPhotos(eventId: number): Promise<UserEventPhoto[]>;
   createUserEventPhoto(photo: InsertUserEventPhoto): Promise<UserEventPhoto>;
   deleteUserEventPhoto(id: number): Promise<boolean>;
+
+  // Public ID resolvers
+  getContactByPublicId(userId: number, publicId: string): Promise<Contact | undefined>;
+  getCompanyByPublicId(userId: number, publicId: string): Promise<Company | undefined>;
+  getUserEventByPublicId(userId: number, publicId: string): Promise<UserEvent | undefined>;
+  resolveContactRef(userId: number, ref: string): Promise<number>;
+  resolveCompanyRef(userId: number, ref: string): Promise<number>;
+  resolveEventRef(userId: number, ref: string): Promise<number>;
+
+  // Upsert by publicId (non-destructive merge)
+  upsertContactByPublicId(userId: number, publicId: string, data: Partial<Contact>): Promise<Contact>;
+  upsertCompanyByPublicId(userId: number, publicId: string, data: Partial<Company>): Promise<Company>;
+  upsertUserEventByPublicId(userId: number, publicId: string, data: Partial<UserEvent>): Promise<UserEvent>;
+
+  // List endpoints (with publicId)
+  getCompaniesByUserId(userId: number): Promise<Company[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -330,11 +346,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Contact Tasks
-  async getContactTasks(contactId: number): Promise<ContactTask[]> {
+  async getContactTasks(contactId: number, userId: number): Promise<ContactTask[]> {
     return db
       .select()
       .from(contactTasks)
-      .where(eq(contactTasks.contactId, contactId))
+      .where(and(eq(contactTasks.contactId, contactId), eq(contactTasks.userId, userId)))
       .orderBy(desc(contactTasks.createdAt));
   }
 
@@ -355,26 +371,26 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateContactTask(id: number, updates: Partial<ContactTask>): Promise<ContactTask | undefined> {
+  async updateContactTask(id: number, userId: number, updates: Partial<ContactTask>): Promise<ContactTask | undefined> {
     const [task] = await db
       .update(contactTasks)
       .set(updates)
-      .where(eq(contactTasks.id, id))
+      .where(and(eq(contactTasks.id, id), eq(contactTasks.userId, userId)))
       .returning();
     return task || undefined;
   }
 
-  async deleteContactTask(id: number): Promise<boolean> {
-    const result = await db.delete(contactTasks).where(eq(contactTasks.id, id));
+  async deleteContactTask(id: number, userId: number): Promise<boolean> {
+    const result = await db.delete(contactTasks).where(and(eq(contactTasks.id, id), eq(contactTasks.userId, userId)));
     return (result as any).rowCount > 0;
   }
 
   // Contact Reminders
-  async getContactReminders(contactId: number): Promise<ContactReminder[]> {
+  async getContactReminders(contactId: number, userId: number): Promise<ContactReminder[]> {
     return db
       .select()
       .from(contactReminders)
-      .where(eq(contactReminders.contactId, contactId))
+      .where(and(eq(contactReminders.contactId, contactId), eq(contactReminders.userId, userId)))
       .orderBy(desc(contactReminders.remindAt));
   }
 
@@ -407,26 +423,26 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateContactReminder(id: number, updates: Partial<ContactReminder>): Promise<ContactReminder | undefined> {
+  async updateContactReminder(id: number, userId: number, updates: Partial<ContactReminder>): Promise<ContactReminder | undefined> {
     const [reminder] = await db
       .update(contactReminders)
       .set(updates)
-      .where(eq(contactReminders.id, id))
+      .where(and(eq(contactReminders.id, id), eq(contactReminders.userId, userId)))
       .returning();
     return reminder || undefined;
   }
 
-  async deleteContactReminder(id: number): Promise<boolean> {
-    const result = await db.delete(contactReminders).where(eq(contactReminders.id, id));
+  async deleteContactReminder(id: number, userId: number): Promise<boolean> {
+    const result = await db.delete(contactReminders).where(and(eq(contactReminders.id, id), eq(contactReminders.userId, userId)));
     return (result as any).rowCount > 0;
   }
 
   // Timeline Events
-  async getTimelineEvents(contactId: number): Promise<TimelineEvent[]> {
+  async getTimelineEvents(contactId: number, userId: number): Promise<TimelineEvent[]> {
     return db
       .select()
       .from(timelineEvents)
-      .where(eq(timelineEvents.contactId, contactId))
+      .where(and(eq(timelineEvents.contactId, contactId), eq(timelineEvents.userId, userId)))
       .orderBy(desc(timelineEvents.eventAt));
   }
 
@@ -447,8 +463,8 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async deleteTimelineEvent(id: number): Promise<boolean> {
-    const result = await db.delete(timelineEvents).where(eq(timelineEvents.id, id));
+  async deleteTimelineEvent(id: number, userId: number): Promise<boolean> {
+    const result = await db.delete(timelineEvents).where(and(eq(timelineEvents.id, id), eq(timelineEvents.userId, userId)));
     return (result as any).rowCount > 0;
   }
 
@@ -603,7 +619,16 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db
       .insert(userEventContacts)
       .values(eventContact)
+      .onConflictDoNothing()
       .returning();
+    if (!created) {
+      const [existing] = await db.select().from(userEventContacts)
+        .where(and(
+          eq(userEventContacts.eventId, eventContact.eventId),
+          eq(userEventContacts.contactId, eventContact.contactId)
+        ));
+      return existing;
+    }
     return created;
   }
 
@@ -637,6 +662,147 @@ export class DatabaseStorage implements IStorage {
   async deleteUserEventPhoto(id: number): Promise<boolean> {
     const result = await db.delete(userEventPhotos).where(eq(userEventPhotos.id, id));
     return (result as any).rowCount > 0;
+  }
+
+  // Public ID resolvers
+  async getContactByPublicId(userId: number, publicId: string): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(contacts)
+      .where(and(eq(contacts.userId, userId), eq(contacts.publicId, publicId)));
+    return contact || undefined;
+  }
+
+  async getCompanyByPublicId(userId: number, publicId: string): Promise<Company | undefined> {
+    const [company] = await db.select().from(companies)
+      .where(and(eq(companies.userId, userId), eq(companies.publicId, publicId)));
+    return company || undefined;
+  }
+
+  async getUserEventByPublicId(userId: number, publicId: string): Promise<UserEvent | undefined> {
+    const [event] = await db.select().from(userEvents)
+      .where(and(eq(userEvents.userId, userId), eq(userEvents.publicId, publicId)));
+    return event || undefined;
+  }
+
+  async resolveContactRef(userId: number, ref: string): Promise<number> {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(ref)) {
+      throw new Error("INVALID_REF");
+    }
+    const contact = await this.getContactByPublicId(userId, ref);
+    if (!contact) throw new Error("NOT_FOUND");
+    return contact.id;
+  }
+
+  async resolveCompanyRef(userId: number, ref: string): Promise<number> {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(ref)) {
+      throw new Error("INVALID_REF");
+    }
+    const company = await this.getCompanyByPublicId(userId, ref);
+    if (!company) throw new Error("NOT_FOUND");
+    return company.id;
+  }
+
+  async resolveEventRef(userId: number, ref: string): Promise<number> {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(ref)) {
+      throw new Error("INVALID_REF");
+    }
+    const event = await this.getUserEventByPublicId(userId, ref);
+    if (!event) throw new Error("NOT_FOUND");
+    return event.id;
+  }
+
+  // Non-destructive upsert helpers
+  private buildNonDestructiveUpdate<T extends Record<string, any>>(data: Partial<T>, excludeKeys: string[] = []): Record<string, any> {
+    const update: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (excludeKeys.includes(key)) continue;
+      if (value === null || value === undefined || value === "") continue;
+      update[key] = value;
+    }
+    return update;
+  }
+
+  async upsertContactByPublicId(userId: number, publicId: string, data: Partial<Contact>): Promise<Contact> {
+    const existing = await this.getContactByPublicId(userId, publicId);
+
+    if (existing) {
+      const updateData = this.buildNonDestructiveUpdate(data, ["id", "userId", "publicId", "createdAt"]);
+      if (Object.keys(updateData).length === 0) return existing;
+      const [updated] = await db.update(contacts)
+        .set(updateData)
+        .where(and(eq(contacts.userId, userId), eq(contacts.publicId, publicId)))
+        .returning();
+      return updated;
+    } else {
+      const insertData = this.buildNonDestructiveUpdate(data, ["id", "userId", "publicId", "createdAt"]);
+      const [created] = await db.insert(contacts)
+        .values({
+          ...insertData,
+          userId,
+          publicId,
+        } as any)
+        .returning();
+      return created;
+    }
+  }
+
+  async upsertCompanyByPublicId(userId: number, publicId: string, data: Partial<Company>): Promise<Company> {
+    const existing = await this.getCompanyByPublicId(userId, publicId);
+
+    if (existing) {
+      const updateData = this.buildNonDestructiveUpdate(data, ["id", "userId", "publicId"]);
+      if (Object.keys(updateData).length === 0) return existing;
+      const [updated] = await db.update(companies)
+        .set(updateData)
+        .where(and(eq(companies.userId, userId), eq(companies.publicId, publicId)))
+        .returning();
+      return updated;
+    } else {
+      const insertData = this.buildNonDestructiveUpdate(data, ["id", "userId", "publicId"]);
+      const [created] = await db.insert(companies)
+        .values({
+          ...insertData,
+          userId,
+          publicId,
+        } as any)
+        .returning();
+      return created;
+    }
+  }
+
+  async upsertUserEventByPublicId(userId: number, publicId: string, data: Partial<UserEvent>): Promise<UserEvent> {
+    const existing = await this.getUserEventByPublicId(userId, publicId);
+
+    if (existing) {
+      const updateData = this.buildNonDestructiveUpdate(data, ["id", "userId", "publicId", "createdAt", "updatedAt"]);
+      if (Object.keys(updateData).length === 0) return existing;
+      updateData.updatedAt = new Date();
+      const [updated] = await db.update(userEvents)
+        .set(updateData)
+        .where(and(eq(userEvents.userId, userId), eq(userEvents.publicId, publicId)))
+        .returning();
+      return updated;
+    } else {
+      const insertData = this.buildNonDestructiveUpdate(data, ["id", "userId", "publicId", "createdAt", "updatedAt"]);
+      const [created] = await db.insert(userEvents)
+        .values({
+          ...insertData,
+          userId,
+          publicId,
+          title: (data.title || "Untitled Event"),
+        } as any)
+        .returning();
+      return created;
+    }
+  }
+
+  // List companies for user
+  async getCompaniesByUserId(userId: number): Promise<Company[]> {
+    return db.select().from(companies)
+      .where(eq(companies.userId, userId))
+      .orderBy(desc(companies.id));
   }
 }
 

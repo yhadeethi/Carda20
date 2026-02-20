@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, json, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, json, index, jsonb, uuid, uniqueIndex } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -42,14 +42,18 @@ export const users = pgTable("users", {
 // Companies table - stores company information for intel caching
 export const companies = pgTable("companies", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  domain: text("domain").unique(),
+  publicId: uuid("public_id"),
+  userId: integer("user_id").references(() => users.id),
+  domain: text("domain"),
   name: text("name"),
   industry: text("industry"),
   sizeBand: text("size_band"),
   hqCountry: text("hq_country"),
   hqCity: text("hq_city"),
   lastEnrichedAt: timestamp("last_enriched_at"),
-});
+}, (table) => [
+  uniqueIndex("companies_user_public_id").on(table.userId, table.publicId),
+]);
 
 // Contacts table - stores scanned/extracted contacts
 
@@ -91,6 +95,7 @@ export const salesforceTokens = pgTable(
 
 export const contacts = pgTable("contacts", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  publicId: uuid("public_id"),
   userId: integer("user_id").notNull().references(() => users.id),
   fullName: text("full_name"),
   companyName: text("company_name"),
@@ -101,17 +106,18 @@ export const contacts = pgTable("contacts", {
   linkedinUrl: text("linkedin_url"),
   rawText: text("raw_text"),
   companyDomain: text("company_domain"),
-  companyId: integer("company_id").references(() => companies.id),
-  notes: text("notes"), // Contact notes
-  lastTouchedAt: timestamp("last_touched_at"), // Last interaction timestamp
-  // Org chart fields
+  companyId: integer("db_company_id").references(() => companies.id),
+  notes: text("notes"),
+  lastTouchedAt: timestamp("last_touched_at"),
   orgDepartment: varchar("org_department", { length: 50 }),
   orgRole: varchar("org_role", { length: 50 }),
-  orgReportsToId: integer("org_reports_to_id"), // Self-referencing for manager relationship
+  orgReportsToId: integer("org_reports_to_id"),
   orgInfluence: varchar("org_influence", { length: 50 }),
   orgRelationshipStrength: varchar("org_relationship_strength", { length: 50 }),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("contacts_user_public_id").on(table.userId, table.publicId),
+]);
 
 // Contact Tasks table - stores tasks per contact
 export const contactTasks = pgTable("contact_tasks", {
@@ -186,15 +192,16 @@ export const eventPreferences = pgTable("event_preferences", {
 // User Events table - stores user-created events for contact capture
 export const userEvents = pgTable("user_events", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  publicId: uuid("public_id"),
   userId: integer("user_id").notNull().references(() => users.id),
   title: text("title").notNull(),
-  locationLabel: text("location_label"), // e.g., "Sydney"
-  latitude: text("latitude"), // Store as text for precision
+  locationLabel: text("location_label"),
+  latitude: text("latitude"),
   longitude: text("longitude"),
-  tags: text("tags").array(), // ["Sydney", "Tech", "Networking"]
+  tags: text("tags").array(),
   notes: text("notes"),
-  eventLink: text("event_link"), // Optional URL for the event
-  isActive: integer("is_active").notNull().default(1), // 1 = active, 0 = closed
+  eventLink: text("event_link"),
+  isActive: integer("is_active").notNull().default(1),
   startedAt: timestamp("started_at").defaultNow(),
   endedAt: timestamp("ended_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -202,17 +209,20 @@ export const userEvents = pgTable("user_events", {
 }, (table) => [
   index("user_events_user_idx").on(table.userId),
   index("user_events_active_idx").on(table.isActive),
+  uniqueIndex("user_events_user_public_id").on(table.userId, table.publicId),
 ]);
 
 // User Event Contacts table - junction table linking events to contacts
 export const userEventContacts = pgTable("user_event_contacts", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id").notNull().references(() => users.id),
   eventId: integer("event_id").notNull().references(() => userEvents.id, { onDelete: "cascade" }),
   contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("user_event_contacts_event_idx").on(table.eventId),
   index("user_event_contacts_contact_idx").on(table.contactId),
+  uniqueIndex("user_event_contacts_unique").on(table.userId, table.eventId, table.contactId),
 ]);
 
 // User Event Photos table - stores photos attached to events
@@ -384,7 +394,11 @@ export const mergeHistoryRelations = relations(mergeHistory, ({ one }) => ({
   }),
 }));
 
-export const companiesRelations = relations(companies, ({ many }) => ({
+export const companiesRelations = relations(companies, ({ one, many }) => ({
+  user: one(users, {
+    fields: [companies.userId],
+    references: [users.id],
+  }),
   contacts: many(contacts),
   intel: many(companyIntel),
 }));
@@ -406,10 +420,12 @@ export const insertUserSchema = createInsertSchema(users).omit({
 export const insertContactSchema = createInsertSchema(contacts).omit({
   id: true,
   createdAt: true,
+  publicId: true,
 });
 
 export const insertCompanySchema = createInsertSchema(companies).omit({
   id: true,
+  publicId: true,
 });
 
 export const insertCompanyIntelSchema = createInsertSchema(companyIntel).omit({
@@ -445,6 +461,7 @@ export const insertMergeHistorySchema = createInsertSchema(mergeHistory).omit({
 
 export const insertUserEventSchema = createInsertSchema(userEvents).omit({
   id: true,
+  publicId: true,
   createdAt: true,
   updatedAt: true,
 });
