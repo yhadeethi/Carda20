@@ -1,0 +1,37 @@
+Good. Proceed, but lock these constraints before implementation:
+
+1) Companies userId backfill must be safe (no guessing)
+- If existing companies rows exist without a clear owner, do NOT try to infer ownership from contacts automatically unless there is exactly one unambiguous userId.
+- If ambiguous (companies referenced by multiple users), either:
+  a) duplicate the company row per user (recommended for now), OR
+  b) leave it unassigned and exclude from user queries until fixed manually.
+- Document which approach you choose and why. Do not silently assign.
+
+2) user_event_contacts join table
+- Confirm whether user_event_contacts already has userId, eventId, contactId and UNIQUE(userId,eventId,contactId).
+- The attach endpoint MUST:
+  - resolve eventRef (uuid) -> eventId (owned by user)
+  - resolve each contactRef (uuid) -> contactId (owned by user)
+  - insert with ON CONFLICT DO NOTHING
+- No publicId needed for join rows unless absolutely required. Keep it simple.
+
+3) Hydration + write-through: keep it minimal
+- You can create client/src/lib/*/sync.ts, but do not add a new state management layer.
+- Requirements:
+  - strict merge by publicId only
+  - server-wins for canonical fields
+  - keep local records with _needsUpsert=true
+  - queue only when offline/fail
+- Don’t implement fuzzy matching or dedupe logic in hydration.
+
+4) Provide a SEQUENCED TASK LIST with file paths + acceptance checks after each stage
+Before coding, respond with:
+Stage 1: security fixes (list exact routes + storage functions touched) + how to verify
+Stage 2: schema/migrations/backfill scripts + how to verify
+Stage 3: server ref-resolvers + upsert/list endpoints + how to verify
+Stage 4: client UUID normalization + write-through + hydration for contacts/companies/events + how to verify
+Stage 5: remove legacy dual-writes and old storage usage + how to verify
+
+Then implement stage by stage.
+
+Also: No UI redesign. No new product features. Only refactor for correctness and sync.
