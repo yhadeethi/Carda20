@@ -1,11 +1,15 @@
 /**
- * Simple ID generation utilities
+ * ID generation utilities — canonical UUID format
  */
 
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 export function generateShortId(): string {
-  return Math.random().toString(36).substr(2, 9);
+  return crypto.randomUUID().slice(0, 8);
+}
+
+export function isUUID(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }

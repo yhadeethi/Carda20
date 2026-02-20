@@ -33,14 +33,13 @@ export interface StoredContact {
   linkedinUrl: string;
   address: string;
   eventName: string | null;
-  // Org Intelligence fields (optional)
   companyId?: string | null;
-  // Legacy fields (kept for migration compatibility)
   orgRole?: OrgRole;
   influenceLevel?: InfluenceLevel;
   managerContactId?: string | null;
-  // Org Intelligence v2: structured org data
   org?: ContactOrg;
+  legacyId?: string;
+  _needsUpsert?: boolean;
 }
 
 // Default org values for new/migrated contacts
@@ -89,7 +88,7 @@ function migrateContact(contact: StoredContact): StoredContact {
 }
 
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 export function loadContacts(): StoredContact[] {
@@ -266,9 +265,11 @@ export function saveContact(contact: Omit<StoredContact, "id" | "createdAt" | "e
       ...existing,
       ...contact,
       eventName: eventName ?? existing.eventName,
+      _needsUpsert: true,
     };
     const newContacts = contacts.map((c) => (c.id === existing.id ? updated : c));
     saveContacts(newContacts);
+    fireContactUpsert(updated);
     return updated;
   } else {
     const newContact: StoredContact = {
@@ -276,10 +277,27 @@ export function saveContact(contact: Omit<StoredContact, "id" | "createdAt" | "e
       createdAt: new Date().toISOString(),
       ...contact,
       eventName,
+      _needsUpsert: true,
     };
     saveContacts([newContact, ...contacts]);
+    fireContactUpsert(newContact);
     return newContact;
   }
+}
+
+function fireContactUpsert(contact: StoredContact): void {
+  import('../api/sync').then(({ upsertContactToServer }) => {
+    upsertContactToServer(contact).then((ok) => {
+      if (ok) {
+        const contacts = loadContacts();
+        const idx = contacts.findIndex((c) => c.id === contact.id);
+        if (idx !== -1) {
+          contacts[idx]._needsUpsert = false;
+          saveContacts(contacts);
+        }
+      }
+    });
+  });
 }
 
 export function deleteContact(id: string): void {
@@ -306,9 +324,10 @@ export function updateContact(id: string, updates: Partial<StoredContact>): Stor
   
   if (index === -1) return null;
   
-  const updated = { ...contacts[index], ...updates };
+  const updated = { ...contacts[index], ...updates, _needsUpsert: true };
   contacts[index] = updated;
   saveContacts(contacts);
+  fireContactUpsert(updated);
   
   return updated;
 }

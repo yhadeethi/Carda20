@@ -5,9 +5,13 @@
 
 const SYNC_QUEUE_KEY = 'carda_sync_queue_v1';
 
+export type SyncType =
+  | 'task' | 'reminder' | 'timeline_event' | 'event_preference' | 'merge_history' | 'contact_org'
+  | 'contact_upsert' | 'company_upsert' | 'event_upsert' | 'event_attach_contacts';
+
 export interface QueuedChange {
   id: string;
-  type: 'task' | 'reminder' | 'timeline_event' | 'event_preference' | 'merge_history' | 'contact_org';
+  type: SyncType;
   action: 'create' | 'update' | 'delete';
   endpoint: string;
   method: 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -38,7 +42,7 @@ function saveQueue(queue: QueuedChange[]): void {
 
 // Generate unique ID for queued items
 function generateQueueId(): string {
-  return `queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 // Add item to sync queue
@@ -106,6 +110,7 @@ export async function processSyncQueue(): Promise<{
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: item.data ? JSON.stringify(item.data) : undefined,
       });
 
@@ -137,7 +142,7 @@ export async function processSyncQueue(): Promise<{
       }
 
       failed++;
-      errors.push(`${item.type} ${item.action}: ${error.message}`);
+      errors.push(`${item.type} ${item.action}: ${(error as any).message}`);
     }
   }
 

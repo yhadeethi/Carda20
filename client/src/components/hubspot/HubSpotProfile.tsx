@@ -94,7 +94,7 @@ export function HubSpotProfile({ open, onOpenChange }: HubSpotProfileProps) {
   });
 
   const exportEventMutation = useMutation({
-    mutationFn: async (eventId: number) => {
+    mutationFn: async (eventId: number | string) => {
       const res = await apiRequest("POST", `/api/hubspot/export-event/${eventId}`);
       return res.json();
     },
@@ -297,9 +297,9 @@ export function HubSpotProfile({ open, onOpenChange }: HubSpotProfileProps) {
                             <CardContent className="p-0">
                               <button
                                 className="w-full p-3 flex items-center justify-between gap-3 text-left"
-                                onClick={() => exportEventMutation.mutate(event.id)}
+                                onClick={() => exportEventMutation.mutate(event.publicId ?? event.id)}
                                 disabled={exportEventMutation.isPending}
-                                data-testid={`button-hubspot-export-event-${event.id}`}
+                                data-testid={`button-hubspot-export-event-${event.publicId ?? event.id}`}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
                                   <div className="h-8 w-8 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0">

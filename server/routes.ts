@@ -74,6 +74,23 @@ async function resolveContactParam(ref: string, userId: number): Promise<{ conta
   return { contactId: parsed };
 }
 
+async function resolveEventParam(ref: string, userId: number): Promise<{ eventId: number; error?: string; status?: number }> {
+  if (UUID_REGEX.test(ref)) {
+    try {
+      const eventId = await storage.resolveEventRef(userId, ref);
+      return { eventId };
+    } catch (e: any) {
+      if (e.message === "NOT_FOUND") return { eventId: 0, error: "Event not found", status: 404 };
+      return { eventId: 0, error: "Invalid event ref", status: 400 };
+    }
+  }
+  const parsed = parseInt(ref);
+  if (isNaN(parsed)) return { eventId: 0, error: "Invalid event ID", status: 400 };
+  const event = await storage.getUserEvent(parsed);
+  if (!event || event.userId !== userId) return { eventId: 0, error: "Event not found", status: 404 };
+  return { eventId: parsed };
+}
+
 function getHubSpotRedirectUri(req: Request): string {
   const envOverride = process.env.HUBSPOT_REDIRECT_URI;
   if (envOverride) return envOverride;
@@ -601,11 +618,11 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
   app.post("/api/hubspot/export-event/:eventId", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.eventId);
-      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+      const { eventId, error, status } = await resolveEventParam(req.params.eventId, userId);
+      if (error) return res.status(status!).json({ error });
 
       const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) return res.status(404).json({ error: "Event not found" });
+      if (!event) return res.status(404).json({ error: "Event not found" });
 
       const contacts = await storage.getContactsForUserEvent(eventId);
       const contactEmails = contacts.filter(c => c.email).map(c => c.email!);
@@ -798,11 +815,11 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
   app.post("/api/salesforce/export-event/:eventId", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.eventId);
-      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+      const { eventId, error, status } = await resolveEventParam(req.params.eventId, userId);
+      if (error) return res.status(status!).json({ error });
 
       const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) return res.status(404).json({ error: "Event not found" });
+      if (!event) return res.status(404).json({ error: "Event not found" });
 
       const contacts = await storage.getContactsForUserEvent(eventId);
       const contactEmails = contacts.filter(c => c.email).map(c => c.email!);
@@ -1865,16 +1882,11 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.get("/api/user-events/:id", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
-
-      if (isNaN(eventId)) {
-        return res.status(400).json({ error: "Invalid event ID" });
-      }
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
 
       const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      if (!event) return res.status(404).json({ error: "Event not found" });
 
       res.json(event);
     } catch (error) {
@@ -1887,16 +1899,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.patch("/api/user-events/:id", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
-
-      if (isNaN(eventId)) {
-        return res.status(400).json({ error: "Invalid event ID" });
-      }
-
-      const existingEvent = await storage.getUserEvent(eventId);
-      if (!existingEvent || existingEvent.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
 
       const { title, locationLabel, latitude, longitude, tags, notes, eventLink, isActive, endedAt } = req.body;
 
@@ -1923,16 +1927,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.delete("/api/user-events/:id", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
-
-      if (isNaN(eventId)) {
-        return res.status(400).json({ error: "Invalid event ID" });
-      }
-
-      const existingEvent = await storage.getUserEvent(eventId);
-      if (!existingEvent || existingEvent.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
 
       await storage.deleteUserEvent(eventId);
       res.json({ success: true });
@@ -1946,16 +1942,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.get("/api/user-events/:id/contacts", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
-
-      if (isNaN(eventId)) {
-        return res.status(400).json({ error: "Invalid event ID" });
-      }
-
-      const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
 
       const contacts = await storage.getContactsForUserEvent(eventId);
       res.json(contacts);
@@ -1965,28 +1953,33 @@ Return ONLY valid JSON, no markdown or explanation.`;
     }
   });
 
-  // POST attach contact(s) to event
+  // POST attach contact(s) to event — accepts contactIds (numeric) or contactPublicIds (UUID)
   app.post("/api/user-events/:id/attach-contacts", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
 
-      if (isNaN(eventId)) {
-        return res.status(400).json({ error: "Invalid event ID" });
-      }
+      const { contactIds, contactPublicIds } = req.body;
+      const resolvedContactIds: number[] = [];
 
-      const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
-
-      const { contactIds } = req.body;
-      if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
-        return res.status(400).json({ error: "contactIds array is required" });
+      if (contactPublicIds && Array.isArray(contactPublicIds)) {
+        for (const pubId of contactPublicIds) {
+          try {
+            const cid = await storage.resolveContactRef(userId, pubId);
+            resolvedContactIds.push(cid);
+          } catch (e) {
+            console.warn(`[UserEvents] Could not resolve contact publicId ${pubId}:`, e);
+          }
+        }
+      } else if (contactIds && Array.isArray(contactIds)) {
+        resolvedContactIds.push(...contactIds.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id)));
+      } else {
+        return res.status(400).json({ error: "contactIds or contactPublicIds array is required" });
       }
 
       const results = [];
-      for (const contactId of contactIds) {
+      for (const contactId of resolvedContactIds) {
         try {
           const result = await storage.attachContactToEvent({
             eventId,
@@ -2009,17 +2002,11 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.delete("/api/user-events/:id/contacts/:contactId", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
-      const contactId = parseInt(req.params.contactId);
+      const { eventId, error: evtError, status: evtStatus } = await resolveEventParam(req.params.id, userId);
+      if (evtError) return res.status(evtStatus!).json({ error: evtError });
 
-      if (isNaN(eventId) || isNaN(contactId)) {
-        return res.status(400).json({ error: "Invalid event or contact ID" });
-      }
-
-      const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      const { contactId, error: cError, status: cStatus } = await resolveContactParam(req.params.contactId, userId);
+      if (cError) return res.status(cStatus!).json({ error: cError });
 
       await storage.detachContactFromEvent(eventId, contactId);
       res.json({ success: true });
@@ -2033,16 +2020,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.get("/api/user-events/:id/photos", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
-
-      if (isNaN(eventId)) {
-        return res.status(400).json({ error: "Invalid event ID" });
-      }
-
-      const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
 
       const photos = await storage.getUserEventPhotos(eventId);
       res.json(photos);
@@ -2056,16 +2035,8 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.post("/api/user-events/:id/photos", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
-
-      if (isNaN(eventId)) {
-        return res.status(400).json({ error: "Invalid event ID" });
-      }
-
-      const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
 
       const { filename, caption, mimeType, size } = req.body;
       if (!filename) {
@@ -2091,17 +2062,10 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.delete("/api/user-events/:id/photos/:photoId", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
       const photoId = parseInt(req.params.photoId);
-
-      if (isNaN(eventId) || isNaN(photoId)) {
-        return res.status(400).json({ error: "Invalid event or photo ID" });
-      }
-
-      const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      if (isNaN(photoId)) return res.status(400).json({ error: "Invalid photo ID" });
 
       await storage.deleteUserEventPhoto(photoId);
       res.json({ success: true });
@@ -2115,16 +2079,11 @@ Return ONLY valid JSON, no markdown or explanation.`;
   app.get("/api/user-events/:id/report", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const eventId = parseInt(req.params.id);
-
-      if (isNaN(eventId)) {
-        return res.status(400).json({ error: "Invalid event ID" });
-      }
+      const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
+      if (error) return res.status(status!).json({ error });
 
       const event = await storage.getUserEvent(eventId);
-      if (!event || event.userId !== userId) {
-        return res.status(404).json({ error: "Event not found" });
-      }
+      if (!event) return res.status(404).json({ error: "Event not found" });
 
       const contacts = await storage.getContactsForUserEvent(eventId);
 

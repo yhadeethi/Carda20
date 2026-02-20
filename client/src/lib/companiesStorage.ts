@@ -3,7 +3,8 @@
  * Stores and manages company data with localStorage persistence
  */
 
-const STORAGE_KEY = "carda_companies_v1";
+const STORAGE_KEY_V1 = "carda_companies_v1";
+const STORAGE_KEY_V2 = "carda_companies_v2";
 
 export interface Company {
   id: string;
@@ -15,19 +16,39 @@ export interface Company {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+  legacyId?: string;
+  _needsUpsert?: boolean;
 }
 
 function generateId(): string {
-  return `company-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return crypto.randomUUID();
 }
 
-export function getCompanies(): Company[] {
+function loadCompaniesV1(): Company[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY_V1);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed;
+  } catch {
+    return [];
+  }
+}
+
+export function getCompanies(): Company[] {
+  try {
+    const rawV2 = localStorage.getItem(STORAGE_KEY_V2);
+    if (rawV2) {
+      const parsed = JSON.parse(rawV2);
+      if (Array.isArray(parsed)) return parsed;
+    }
+
+    const v1 = loadCompaniesV1();
+    if (v1.length > 0) {
+      saveCompanies(v1);
+    }
+    return v1;
   } catch (e) {
     console.error("[CompaniesStorage] Failed to load companies:", e);
     return [];
@@ -36,7 +57,7 @@ export function getCompanies(): Company[] {
 
 export function saveCompanies(companies: Company[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(companies));
+    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(companies));
   } catch (e) {
     console.error("[CompaniesStorage] Failed to save companies:", e);
   }
@@ -47,18 +68,36 @@ export function upsertCompany(company: Company): Company[] {
   const existingIndex = companies.findIndex((c) => c.id === company.id);
   
   if (existingIndex >= 0) {
-    companies[existingIndex] = { ...company, updatedAt: new Date().toISOString() };
+    companies[existingIndex] = { ...company, updatedAt: new Date().toISOString(), _needsUpsert: true };
   } else {
     companies.push({
       ...company,
       id: company.id || generateId(),
       createdAt: company.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      _needsUpsert: true,
     });
   }
   
   saveCompanies(companies);
+  const saved = companies.find((c) => c.id === (company.id || companies[companies.length - 1].id));
+  if (saved) fireCompanyUpsert(saved);
   return companies;
+}
+
+function fireCompanyUpsert(company: Company): void {
+  import('./api/sync').then(({ upsertCompanyToServer }) => {
+    upsertCompanyToServer(company).then((ok) => {
+      if (ok) {
+        const companies = getCompanies();
+        const idx = companies.findIndex((c) => c.id === company.id);
+        if (idx !== -1) {
+          companies[idx]._needsUpsert = false;
+          saveCompanies(companies);
+        }
+      }
+    });
+  });
 }
 
 export function deleteCompany(companyId: string): Company[] {

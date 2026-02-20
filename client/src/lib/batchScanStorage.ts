@@ -35,7 +35,7 @@ export interface BatchScanSession {
 const STORAGE_KEY = "carda_batch_scan_v1";
 
 function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 // Create thumbnail from base64 image

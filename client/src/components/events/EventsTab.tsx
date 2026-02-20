@@ -31,8 +31,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { UserEvent, Contact } from "@shared/schema";
 
 interface EventsTabProps {
-  onSelectEvent: (eventId: number) => void;
-  onContinueEvent?: (eventId: number) => void;
+  onSelectEvent: (eventId: string) => void;
+  onContinueEvent?: (eventId: string) => void;
 }
 
 export function EventsTab({ onSelectEvent, onContinueEvent }: EventsTabProps) {
@@ -67,7 +67,7 @@ export function EventsTab({ onSelectEvent, onContinueEvent }: EventsTabProps) {
       setShowCreateDrawer(false);
       resetForm();
       toast({ title: "Event started", description: `"${event.title}" is now active` });
-      onSelectEvent(event.id);
+      onSelectEvent(event.publicId!);
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to create event", variant: "destructive" });
@@ -196,7 +196,7 @@ export function EventsTab({ onSelectEvent, onContinueEvent }: EventsTabProps) {
             )}
             <Button
               className="w-full gap-2"
-              onClick={() => onContinueEvent?.(activeEvent.id) || onSelectEvent(activeEvent.id)}
+              onClick={() => onContinueEvent?.(activeEvent.publicId!) || onSelectEvent(activeEvent.publicId!)}
               data-testid="button-continue-event"
             >
               <Users className="w-4 h-4" />
@@ -337,7 +337,7 @@ export function EventsTab({ onSelectEvent, onContinueEvent }: EventsTabProps) {
               <EventRow
                 key={event.id}
                 event={event}
-                onSelect={() => onSelectEvent(event.id)}
+                onSelect={() => onSelectEvent(event.publicId!)}
                 isActive={activeEvent?.id === event.id}
               />
             ))}

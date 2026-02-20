@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from './useAuth';
 import { setupAutoSync } from '../lib/syncQueue';
+import { runIdNormalization } from '../lib/migrations/normalizeIds';
+import { hydrateFromServer } from '../lib/hydration';
 import {
   migrateExistingDataToServer,
   isMigrationComplete,
@@ -19,7 +21,6 @@ export function useTimelineSetup() {
   const hasSetup = useRef(false);
 
   useEffect(() => {
-    // Only run once when user is authenticated
     if (!isAuthenticated || !user || hasSetup.current) {
       return;
     }
@@ -28,7 +29,13 @@ export function useTimelineSetup() {
 
     console.log('[TimelineSetup] Initializing timeline sync and migration...');
 
-    // 1. Setup automatic sync queue processing
+    // 0. Normalize IDs to UUIDs (runs once per user, must run before anything else)
+    runIdNormalization(user.id);
+
+    // 1. Hydrate from server (merge server data, push dirty items)
+    hydrateFromServer();
+
+    // 2. Setup automatic sync queue processing
     setupAutoSync();
 
     // 2. Run migration if needed

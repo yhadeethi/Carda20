@@ -79,7 +79,7 @@ export default function HomePage() {
   const [contactsHubTab, setContactsHubTab] = useState<'people' | 'companies'>('people');
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
-  const [currentEventId, setCurrentEventId] = useState<number | null>(null);
+  const [currentEventId, setCurrentEventId] = useState<string | null>(null);
   const [contactsVersion, setContactsVersion] = useState(0);
   const [showCreateContactDrawer, setShowCreateContactDrawer] = useState(false);
   const [showHubSpotProfile, setShowHubSpotProfile] = useState(false);
@@ -245,7 +245,7 @@ export default function HomePage() {
     refreshContacts();
   }, [refreshContacts]);
 
-  const handleSelectUserEvent = (eventId: number) => {
+  const handleSelectUserEvent = (eventId: string) => {
     setCurrentEventId(eventId);
     setViewMode("event-detail");
     setActiveTab("events");
@@ -257,7 +257,7 @@ export default function HomePage() {
     setActiveTab("events");
   };
 
-  const handleScanAtUserEvent = (eventId: number) => {
+  const handleScanAtUserEvent = (eventId: string) => {
     setCurrentEventId(eventId);
     setEventModeEnabled(true);
     setActiveTab("scan");

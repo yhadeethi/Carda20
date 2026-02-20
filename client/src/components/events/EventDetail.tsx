@@ -38,9 +38,9 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { UserEvent, Contact } from "@shared/schema";
 
 interface EventDetailProps {
-  eventId: number;
+  eventId: string;
   onBack: () => void;
-  onScanAtEvent: (eventId: number) => void;
+  onScanAtEvent: (eventId: string) => void;
   onSelectContact?: (contact: Contact) => void;
 }
 
@@ -105,7 +105,7 @@ export function EventDetail({ eventId, onBack, onScanAtEvent, onSelectContact }:
     mutationFn: async (contactData: any) => {
       const response = await apiRequest("POST", "/api/contacts", contactData);
       const contact = await response.json();
-      await apiRequest("POST", `/api/user-events/${eventId}/attach-contacts`, { contactIds: [contact.id] });
+      await apiRequest("POST", `/api/user-events/${eventId}/attach-contacts`, { contactPublicIds: [contact.publicId] });
       return contact;
     },
     onSuccess: () => {
