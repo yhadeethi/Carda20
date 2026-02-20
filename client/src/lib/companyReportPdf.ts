@@ -56,15 +56,31 @@ function checkPageBreak(doc: jsPDF, y: number, needed: number = 30): number {
 function buildOrgTree(contacts: ContactV2[]): { roots: ContactV2[]; childrenMap: Map<string, ContactV2[]> } {
   const childrenMap = new Map<string, ContactV2[]>();
   const roots: ContactV2[] = [];
+  const contactIds = new Set(contacts.map((c) => c.id));
+
+  const cycleNodes = new Set<string>();
+  contacts.forEach((c) => {
+    const chain = new Set<string>();
+    let current: string | undefined = c.id;
+    while (current) {
+      if (chain.has(current)) {
+        chain.forEach((id) => cycleNodes.add(id));
+        break;
+      }
+      chain.add(current);
+      const contact = contacts.find((x) => x.id === current);
+      current = contact?.org?.reportsToId && contactIds.has(contact.org.reportsToId) ? contact.org.reportsToId : undefined;
+    }
+  });
 
   contacts.forEach((c) => {
     const managerId = c.org?.reportsToId;
-    if (managerId && contacts.some((m) => m.id === managerId)) {
+    if (cycleNodes.has(c.id) || !managerId || !contactIds.has(managerId)) {
+      roots.push(c);
+    } else {
       const children = childrenMap.get(managerId) || [];
       children.push(c);
       childrenMap.set(managerId, children);
-    } else {
-      roots.push(c);
     }
   });
 
@@ -112,8 +128,12 @@ function drawOrgTree(
   x: number,
   y: number,
   nodeWidth: number,
-  depth: number = 0
+  depth: number = 0,
+  visited: Set<string> = new Set()
 ): number {
+  if (visited.has(node.id) || depth > 10) return y;
+  visited.add(node.id);
+
   y = checkPageBreak(doc, y, 35);
 
   const indentX = x + depth * 12;
@@ -131,7 +151,7 @@ function drawOrgTree(
 
   const children = childrenMap.get(node.id) || [];
   children.forEach((child) => {
-    currentY = drawOrgTree(doc, child, childrenMap, x, currentY, nodeWidth, depth + 1);
+    currentY = drawOrgTree(doc, child, childrenMap, x, currentY, nodeWidth, depth + 1, visited);
   });
 
   return currentY;
@@ -327,10 +347,7 @@ export async function generateCompanyReport(data: ReportData): Promise<void> {
     y = checkPageBreak(doc, y, 50);
     y = addSectionTitle(doc, "Organizational Chart", y);
 
-    const contactsWithOrg = contacts.filter(
-      (c) => c.org?.reportsToId || c.org?.department !== "UNKNOWN"
-    );
-    const orgContacts = contactsWithOrg.length > 0 ? contacts : contacts;
+    const orgContacts = contacts;
 
     const { roots, childrenMap } = buildOrgTree(orgContacts);
 

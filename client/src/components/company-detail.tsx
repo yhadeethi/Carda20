@@ -39,6 +39,8 @@ import {
   Settings2,
   X,
   Filter,
+  FileDown,
+  Loader2,
 } from "lucide-react";
 import { FilterSheet, getFilterSummary } from "@/components/filters/FilterSheet";
 import {
@@ -61,6 +63,7 @@ import { loadContactsV2, updateContactV2, type ContactV2 } from "@/lib/contacts/
 import { useToast } from "@/hooks/use-toast";
 import { OrgMap } from "@/components/org-map";
 import { CompanyAvatar } from "@/components/companies/CompanyAvatar";
+import { generateCompanyReport } from "@/lib/companyReportPdf";
 
 interface CompanyDetailProps {
   companyId: string;
@@ -121,6 +124,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [undoState, setUndoState] = useState<Map<string, Department> | null>(null);
   const [quickEditContact, setQuickEditContact] = useState<ContactV2 | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const { toast } = useToast();
 
   // Load company and contacts
@@ -222,6 +226,66 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     toast({ title: "Manager cleared" });
   }, [handleQuickEditField, toast]);
 
+  const handleDownloadReport = useCallback(async () => {
+    if (!company || isGeneratingReport) return;
+    setIsGeneratingReport(true);
+
+    try {
+      toast({ title: "Generating report...", description: "Fetching latest company data" });
+
+      let intel = null;
+      let intelV2 = null;
+
+      try {
+        const params = new URLSearchParams();
+        params.set("companyName", company.name);
+        if (company.domain) params.set("domain", company.domain);
+        const res = await fetch(`/api/intel-v2?${params.toString()}`);
+        if (res.ok) intelV2 = await res.json();
+      } catch (e) {
+        console.warn("[Report] Failed to fetch intel v2:", e);
+      }
+
+      try {
+        const res = await fetch("/api/intel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            companyName: company.name,
+            website: company.domain,
+          }),
+        });
+        if (res.ok) intel = await res.json();
+      } catch (e) {
+        console.warn("[Report] Failed to fetch intel v1:", e);
+      }
+
+      const freshContacts = loadContactsV2().filter((c) => {
+        if (c.companyId === companyId) return true;
+        if (c.company && normalizeCompanyName(c.company).toLowerCase() === normalizeCompanyName(company.name).toLowerCase()) return true;
+        if (company.domain) {
+          const contactDomain = extractDomainFromEmail(c.email);
+          if (contactDomain === company.domain.toLowerCase()) return true;
+        }
+        return false;
+      });
+
+      await generateCompanyReport({
+        company,
+        contacts: freshContacts,
+        intel,
+        intelV2,
+      });
+
+      toast({ title: "Report downloaded", description: `${company.name} report saved as PDF` });
+    } catch (e: any) {
+      console.error("[Report] Failed to generate report:", e);
+      toast({ title: "Report failed", description: e?.message || "Could not generate the report", variant: "destructive" });
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }, [company, companyId, contacts, isGeneratingReport, toast]);
+
   const handleNotesChange = (value: string) => {
     setNotes(value);
     setNotesSaved(false);
@@ -256,7 +320,26 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       </Button>
 
       {/* Simplified Hero Header with Logo */}
-      <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleDownloadReport}
+          disabled={isGeneratingReport}
+          className="shrink-0 gap-1.5"
+          data-testid="button-download-report"
+        >
+          {isGeneratingReport ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileDown className="w-4 h-4" />
+          )}
+          <span className="hidden sm:inline">{isGeneratingReport ? "Generating..." : "Report"}</span>
+        </Button>
+      </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">

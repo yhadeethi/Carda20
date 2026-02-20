@@ -53,6 +53,7 @@ I prefer iterative development, so please break down tasks into smaller, managea
 -   **Batch Scanning**: In Event Mode, enables multi-photo capture with thumbnail previews, background OCR processing, and batch review/approve workflow for rapid networking events.
 -   **HubSpot Export**: Users connect HubSpot from profile menu, then export contacts (bulk), events (as Notes attached to contacts), and selected timeline entries (as Notes) to their HubSpot CRM.
 -   **Salesforce Export**: Users connect Salesforce from profile menu, then export contacts (bulk), events (as Salesforce Notes linked to contacts), and selected timeline entries (as Notes) to their Salesforce CRM.
+-   **Company PDF Report**: On-demand PDF report generation from company detail page. Fetches fresh AI intel (v1 + v2) and current contacts each time. Report includes: company brief, fact sheet with socials, employee directory table (sorted by department), and org chart tree diagram. Client-side generation using jsPDF + jspdf-autotable. Includes cycle detection for org charts.
 
 ### Events Data Model (UserEvent)
 -   Stored in PostgreSQL (`user_events` table), scoped per authenticated user.
