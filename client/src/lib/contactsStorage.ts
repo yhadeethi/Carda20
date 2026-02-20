@@ -286,7 +286,7 @@ export function saveContact(contact: Omit<StoredContact, "id" | "createdAt" | "e
 }
 
 function fireContactUpsert(contact: StoredContact): void {
-  import('../api/sync').then(({ upsertContactToServer }) => {
+  import('./api/sync').then(({ upsertContactToServer }) => {
     upsertContactToServer(contact).then((ok) => {
       if (ok) {
         const contacts = loadContacts();
