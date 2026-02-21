@@ -318,24 +318,15 @@ export async function registerRoutes(
 
   app.patch("/api/contacts/:id", isAuthenticated, async (req: any, res: Response) => {
     try {
-      const authId = req.user.claims.sub;
-      const user = await storage.getUserByAuthId(authId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      const contactId = parseInt(req.params.id);
-      if (isNaN(contactId)) {
-        return res.status(400).json({ message: "Invalid contact ID" });
-      }
-      const existing = await storage.getContact(contactId);
-      if (!existing || existing.userId !== user.id) {
-        return res.status(403).json({ message: "Not authorized" });
-      }
+      const userId = await getCurrentUserId(req);
+      const resolved = await resolveContactParam(req.params.id, userId);
+      if (resolved.error) return res.status(resolved.status!).json({ message: resolved.error });
+
       const parsed = contactInputSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid contact data", errors: parsed.error.errors });
       }
-      const contact = await storage.updateContact(contactId, parsed.data);
+      const contact = await storage.updateContact(resolved.contactId, parsed.data);
       res.json(contact);
     } catch (error) {
       console.error("Error updating contact:", error);
@@ -345,20 +336,11 @@ export async function registerRoutes(
 
   app.delete("/api/contacts/:id", isAuthenticated, async (req: any, res: Response) => {
     try {
-      const authId = req.user.claims.sub;
-      const user = await storage.getUserByAuthId(authId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      const contactId = parseInt(req.params.id);
-      if (isNaN(contactId)) {
-        return res.status(400).json({ message: "Invalid contact ID" });
-      }
-      const existing = await storage.getContact(contactId);
-      if (!existing || existing.userId !== user.id) {
-        return res.status(403).json({ message: "Not authorized" });
-      }
-      await storage.deleteContact(contactId);
+      const userId = await getCurrentUserId(req);
+      const resolved = await resolveContactParam(req.params.id, userId);
+      if (resolved.error) return res.status(resolved.status!).json({ message: resolved.error });
+
+      await storage.deleteContact(resolved.contactId);
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting contact:", error);

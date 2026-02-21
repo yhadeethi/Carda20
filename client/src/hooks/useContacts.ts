@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { apiRequest } from "@/lib/queryClient";
+import { normalizeServerContact } from "@/lib/contacts/normalize";
 import type { StoredContact } from "@/lib/contactsStorage";
 
 export interface DbContact {
   id: number;
+  publicId?: string;
   userId: number;
   fullName: string | null;
   companyName: string | null;
@@ -19,20 +21,22 @@ export interface DbContact {
   createdAt: string | null;
 }
 
-function dbContactToStoredContact(contact: DbContact): StoredContact {
+function dbContactToStoredContact(raw: DbContact): StoredContact {
+  const contact = normalizeServerContact(raw);
   return {
     id: String(contact.id),
-    createdAt: contact.createdAt || new Date().toISOString(),
-    name: contact.fullName || "",
-    company: contact.companyName || "",
-    title: contact.jobTitle || "",
-    email: contact.email || "",
-    phone: contact.phone || "",
-    website: contact.website || "",
-    linkedinUrl: contact.linkedinUrl || "",
+    dbId: contact.dbId,
+    createdAt: raw.createdAt || new Date().toISOString(),
+    name: raw.fullName || "",
+    company: raw.companyName || "",
+    title: raw.jobTitle || "",
+    email: raw.email || "",
+    phone: raw.phone || "",
+    website: raw.website || "",
+    linkedinUrl: raw.linkedinUrl || "",
     address: "",
     eventName: null,
-    companyId: contact.companyId ? String(contact.companyId) : null,
+    companyId: raw.companyId ? String(raw.companyId) : null,
     org: {
       department: 'UNKNOWN',
       reportsToId: null,

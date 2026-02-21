@@ -685,32 +685,50 @@ export class DatabaseStorage implements IStorage {
 
   async resolveContactRef(userId: number, ref: string): Promise<number> {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(ref)) {
-      throw new Error("INVALID_REF");
+    if (uuidRegex.test(ref)) {
+      const contact = await this.getContactByPublicId(userId, ref);
+      if (!contact) throw new Error("NOT_FOUND");
+      return contact.id;
     }
-    const contact = await this.getContactByPublicId(userId, ref);
-    if (!contact) throw new Error("NOT_FOUND");
-    return contact.id;
+    const numId = parseInt(ref);
+    if (!isNaN(numId)) {
+      const contact = await this.getContact(numId);
+      if (!contact || contact.userId !== userId) throw new Error("NOT_FOUND");
+      return contact.id;
+    }
+    throw new Error("INVALID_REF");
   }
 
   async resolveCompanyRef(userId: number, ref: string): Promise<number> {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(ref)) {
-      throw new Error("INVALID_REF");
+    if (uuidRegex.test(ref)) {
+      const company = await this.getCompanyByPublicId(userId, ref);
+      if (!company) throw new Error("NOT_FOUND");
+      return company.id;
     }
-    const company = await this.getCompanyByPublicId(userId, ref);
-    if (!company) throw new Error("NOT_FOUND");
-    return company.id;
+    const numId = parseInt(ref);
+    if (!isNaN(numId)) {
+      const company = await this.getCompanyById(numId);
+      if (!company || company.userId !== userId) throw new Error("NOT_FOUND");
+      return company.id;
+    }
+    throw new Error("INVALID_REF");
   }
 
   async resolveEventRef(userId: number, ref: string): Promise<number> {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(ref)) {
-      throw new Error("INVALID_REF");
+    if (uuidRegex.test(ref)) {
+      const event = await this.getUserEventByPublicId(userId, ref);
+      if (!event) throw new Error("NOT_FOUND");
+      return event.id;
     }
-    const event = await this.getUserEventByPublicId(userId, ref);
-    if (!event) throw new Error("NOT_FOUND");
-    return event.id;
+    const numId = parseInt(ref);
+    if (!isNaN(numId)) {
+      const event = await this.getUserEvent(numId);
+      if (!event || event.userId !== userId) throw new Error("NOT_FOUND");
+      return event.id;
+    }
+    throw new Error("INVALID_REF");
   }
 
   // Non-destructive upsert helpers

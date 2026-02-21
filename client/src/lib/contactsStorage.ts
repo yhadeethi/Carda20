@@ -24,6 +24,7 @@ export interface ContactOrg {
 
 export interface StoredContact {
   id: string;
+  dbId?: number;
   createdAt: string;
   name: string;
   company: string;

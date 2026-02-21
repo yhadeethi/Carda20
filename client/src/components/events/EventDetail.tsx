@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { normalizeServerContact } from "@/lib/contacts/normalize";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -104,8 +105,9 @@ export function EventDetail({ eventId, onBack, onScanAtEvent, onSelectContact }:
   const createContactMutation = useMutation({
     mutationFn: async (contactData: any) => {
       const response = await apiRequest("POST", "/api/contacts", contactData);
-      const contact = await response.json();
-      await apiRequest("POST", `/api/events/${eventId}/contacts/attach`, { contactPublicIds: [contact.publicId] });
+      const raw = await response.json();
+      const contact = normalizeServerContact(raw);
+      await apiRequest("POST", `/api/events/${eventId}/contacts/attach`, { contactPublicIds: [contact.id] });
       return contact;
     },
     onSuccess: () => {

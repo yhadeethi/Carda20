@@ -1,8 +1,9 @@
 import { loadContacts, saveContacts, type StoredContact } from './contactsStorage';
 import { getCompanies, saveCompanies, type Company } from './companiesStorage';
 import { upsertContactToServer, upsertCompanyToServer } from './api/sync';
+import { normalizeServerContact } from './contacts/normalize';
 
-interface ServerContact {
+interface ServerContactRaw {
   id: number;
   publicId: string;
   fullName: string | null;
@@ -13,6 +14,11 @@ interface ServerContact {
   website: string | null;
   linkedinUrl: string | null;
   address: string | null;
+}
+
+interface ServerContact extends Omit<ServerContactRaw, 'id'> {
+  id: string;
+  dbId?: number;
 }
 
 interface ServerCompany {
@@ -66,7 +72,8 @@ export async function hydrateFromServer(): Promise<void> {
       return;
     }
 
-    const serverContacts: ServerContact[] = await contactsRes.json();
+    const serverContactsRaw: ServerContactRaw[] = await contactsRes.json();
+    const serverContacts: ServerContact[] = serverContactsRaw.map(c => normalizeServerContact(c) as unknown as ServerContact);
     const serverCompanies: ServerCompany[] = await companiesRes.json();
 
     // --- COMPANIES ---
@@ -102,18 +109,19 @@ export async function hydrateFromServer(): Promise<void> {
     // --- CONTACTS ---
     const localContacts = loadContacts();
     const localContactMap = new Map(localContacts.map(c => [c.id, c]));
-    const serverContactMap = new Map(serverContacts.filter(c => c.publicId).map(c => [c.publicId, c]));
+    const serverContactMap = new Map(serverContacts.map(c => [c.id, c]));
 
-    for (const [pubId, server] of serverContactMap) {
-      const local = localContactMap.get(pubId);
+    for (const [uuid, server] of serverContactMap) {
+      const local = localContactMap.get(uuid);
       if (local) {
         if (!local._needsUpsert) {
           const merged = mergeServerContact(local, server);
-          localContactMap.set(pubId, merged);
+          localContactMap.set(uuid, merged);
         }
       } else {
-        localContactMap.set(pubId, {
-          id: pubId,
+        localContactMap.set(uuid, {
+          id: uuid,
+          dbId: server.dbId,
           name: server.fullName || '',
           email: server.email || '',
           phone: server.phone || '',
