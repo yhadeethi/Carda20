@@ -14,7 +14,6 @@ import {
 import { generateId } from './ids';
 import {
   StoredContact,
-  ContactOrg,
 } from '../contactsStorage';
 import { addToSyncQueue } from '../syncQueue';
 import {
