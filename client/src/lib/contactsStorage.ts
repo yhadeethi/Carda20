@@ -1,4 +1,5 @@
-const STORAGE_KEY = "carda_contacts_v1";
+const STORAGE_KEY = "carda_contacts_v2";
+const STORAGE_KEY_V1 = "carda_contacts_v1";
 
 // Org Intelligence v2: Department classification
 export type Department = 'EXEC' | 'LEGAL' | 'PROJECT_DELIVERY' | 'SALES' | 'FINANCE' | 'OPS' | 'UNKNOWN';
@@ -94,16 +95,28 @@ function generateId(): string {
 export function loadContacts(): StoredContact[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    // Migrate contacts to v2 format if needed
-    const migrated = parsed.map(migrateContact);
-    // Save migrated contacts back if any were updated
-    if (migrated.some((c: StoredContact, i: number) => c.org && !parsed[i].org)) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const migrated = parsed.map(migrateContact);
+        if (migrated.some((c: StoredContact, i: number) => c.org && !parsed[i].org)) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        }
+        return migrated;
+      }
     }
-    return migrated;
+
+    const rawV1 = localStorage.getItem(STORAGE_KEY_V1);
+    if (rawV1) {
+      const parsedV1 = JSON.parse(rawV1);
+      if (Array.isArray(parsedV1) && parsedV1.length > 0) {
+        const migrated = parsedV1.map(migrateContact);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+    }
+
+    return [];
   } catch (e) {
     console.error("[ContactsStorage] Failed to load contacts:", e);
     return [];

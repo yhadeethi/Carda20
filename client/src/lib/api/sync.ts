@@ -54,7 +54,7 @@ export async function attachContactToEventServer(
   contactPublicIds: string[]
 ): Promise<boolean> {
   try {
-    const res = await fetch(`/api/user-events/${eventPublicId}/attach-contacts`, {
+    const res = await fetch(`/api/events/${eventPublicId}/contacts/attach`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -70,7 +70,7 @@ export async function attachContactToEventServer(
     addToSyncQueue(
       'event_attach_contacts',
       'create',
-      `/api/user-events/${eventPublicId}/attach-contacts`,
+      `/api/events/${eventPublicId}/contacts/attach`,
       'POST',
       { contactPublicIds }
     );
@@ -90,7 +90,7 @@ export async function upsertEventToServer(eventData: {
   isActive?: number;
 }): Promise<boolean> {
   try {
-    const res = await fetch('/api/user-events/upsert', {
+    const res = await fetch('/api/events/upsert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -103,7 +103,7 @@ export async function upsertEventToServer(eventData: {
     throw new Error(`Server returned ${res.status}`);
   } catch (e) {
     console.warn(`[Sync] Event upsert failed, queuing:`, e);
-    addToSyncQueue('event_upsert', 'update', '/api/user-events/upsert', 'POST', eventData);
+    addToSyncQueue('event_upsert', 'update', '/api/events/upsert', 'POST', eventData);
     return false;
   }
 }

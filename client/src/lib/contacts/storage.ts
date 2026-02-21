@@ -15,9 +15,6 @@ import { generateId } from './ids';
 import {
   StoredContact,
   ContactOrg,
-  loadContacts as loadContactsV1,
-  saveContacts as saveContactsV1,
-  updateContact as updateContactV1
 } from '../contactsStorage';
 import { addToSyncQueue } from '../syncQueue';
 import {
@@ -36,14 +33,8 @@ const STORAGE_KEY_V2 = "carda_contacts_v2";
 const MERGE_HISTORY_KEY = "carda_merges_v1";
 const MAX_MERGE_HISTORY = 10;
 
-// NOTE: V1 and V2 storage currently co-exist.
-// Scanning and most newer features write to V2, while some legacy screens
-// (notably Org Map in the current build) still write to V1.
-//
-// Without a merge, saving V2 can overwrite Org assignments stored in V1,
-// making roles/reporting lines "revert" after a new scan.
-//
-// This file implements a defensive merge when syncing V2 -> V1.
+// All contact storage is now unified on carda_contacts_v2.
+// contactsStorage.ts and this module both read/write the same key.
 
 // Extended contact with v2 fields
 export interface ContactV2 extends StoredContact {
@@ -87,7 +78,6 @@ function migrateToV2(contact: StoredContact): ContactV2 {
 // Load all contacts with v2 migration
 export function loadContactsV2(): ContactV2[] {
   try {
-    // First try v2 storage
     const rawV2 = localStorage.getItem(STORAGE_KEY_V2);
     if (rawV2) {
       const parsed = JSON.parse(rawV2);
@@ -95,17 +85,7 @@ export function loadContactsV2(): ContactV2[] {
         return parsed.map(migrateToV2);
       }
     }
-
-    // Fallback to v1 and migrate
-    const v1Contacts = loadContactsV1();
-    const v2Contacts = v1Contacts.map(migrateToV2);
-
-    // Save migrated contacts to v2 storage
-    if (v2Contacts.length > 0) {
-      saveContactsV2(v2Contacts);
-    }
-
-    return v2Contacts;
+    return [];
   } catch (e) {
     console.error("[ContactsStorage] Failed to load v2 contacts:", e);
     return [];
@@ -116,68 +96,6 @@ export function loadContactsV2(): ContactV2[] {
 export function saveContactsV2(contacts: ContactV2[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(contacts));
-    // Also sync back to v1 for compatibility.
-    // IMPORTANT: Merge in Org fields from V1 if V2 hasn't got them yet.
-    // This prevents Org Map edits (still writing to V1 in the current build)
-    // from being clobbered by a subsequent V2 save (e.g., after scanning).
-
-    const v1Existing = loadContactsV1();
-    const v1ById = new Map(v1Existing.map(c => [c.id, c] as const));
-
-    const isOrgMeaningful = (org?: ContactOrg | null): boolean => {
-      if (!org) return false;
-      return (
-        (org.department !== 'UNKNOWN') ||
-        (org.reportsToId !== null && org.reportsToId !== undefined) ||
-        (org.role !== 'UNKNOWN') ||
-        (org.influence !== 'UNKNOWN') ||
-        (org.relationshipStrength !== 'UNKNOWN')
-      );
-    };
-
-    const mergeOrg = (v1Org?: ContactOrg, v2Org?: ContactOrg): ContactOrg | undefined => {
-      if (!v1Org && !v2Org) return v2Org;
-      if (!v1Org) return v2Org;
-      if (!v2Org) return v1Org;
-
-      // Field-level: only let V2 override if it carries a meaningful value.
-      const pick = <K extends keyof ContactOrg>(key: K, def: ContactOrg[K]): ContactOrg[K] => {
-        const v2 = v2Org[key];
-        const v1 = v1Org[key];
-        const v2IsDefault = v2 === def;
-        return (v2IsDefault ? v1 : v2) as ContactOrg[K];
-      };
-
-      return {
-        department: pick('department', 'UNKNOWN'),
-        reportsToId: (() => {
-          const v2 = v2Org?.reportsToId;
-          // Null is meaningful if the user explicitly cleared the manager in V2.
-          if (v2 === null) return null;
-          if (v2 === undefined) return v1Org?.reportsToId ?? null;
-          return v2;
-        })(),
-        role: pick('role', 'UNKNOWN'),
-        influence: pick('influence', 'UNKNOWN'),
-        relationshipStrength: pick('relationshipStrength', 'UNKNOWN'),
-      };
-    };
-
-    const mergedForV1 = contacts.map((c) => {
-      const v1 = v1ById.get(c.id);
-      if (!v1) return c;
-
-      // If V2 has no meaningful org but V1 does, keep V1's org.
-      if (!isOrgMeaningful(c.org) && isOrgMeaningful(v1.org)) {
-        return { ...c, org: v1.org };
-      }
-
-      // Otherwise, merge org field-by-field (prefer meaningful V2 values).
-      const mergedOrg = mergeOrg(v1.org, c.org);
-      return mergedOrg ? { ...c, org: mergedOrg } : c;
-    });
-
-    saveContactsV1(mergedForV1 as unknown as StoredContact[]);
   } catch (e) {
     console.error("[ContactsStorage] Failed to save v2 contacts:", e);
   }
@@ -214,9 +132,6 @@ export async function updateContactV2(id: string, updates: Partial<ContactV2>): 
   const updated = { ...contacts[index], ...updates };
   contacts[index] = updated;
   saveContactsV2(contacts);
-
-  // Also sync to v1
-  updateContactV1(id, updates);
 
   // If org fields were updated, sync to server
   if (updates.org) {

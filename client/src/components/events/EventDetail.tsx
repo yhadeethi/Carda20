@@ -105,7 +105,7 @@ export function EventDetail({ eventId, onBack, onScanAtEvent, onSelectContact }:
     mutationFn: async (contactData: any) => {
       const response = await apiRequest("POST", "/api/contacts", contactData);
       const contact = await response.json();
-      await apiRequest("POST", `/api/user-events/${eventId}/attach-contacts`, { contactPublicIds: [contact.publicId] });
+      await apiRequest("POST", `/api/events/${eventId}/contacts/attach`, { contactPublicIds: [contact.publicId] });
       return contact;
     },
     onSuccess: () => {
