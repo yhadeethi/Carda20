@@ -1,13 +1,11 @@
-/**
- * Sync Queue for offline support
- * Queues timeline data changes when offline and syncs when back online
- */
-
 const SYNC_QUEUE_KEY = 'carda_sync_queue_v1';
+const MAX_RETRIES = 5;
 
 export type SyncType =
   | 'task' | 'reminder' | 'timeline_event' | 'event_preference' | 'merge_history' | 'contact_org'
   | 'contact_upsert' | 'company_upsert' | 'event_upsert' | 'event_attach_contacts';
+
+export type QueueItemStatus = 'pending' | 'failed';
 
 export interface QueuedChange {
   id: string;
@@ -18,20 +16,42 @@ export interface QueuedChange {
   data: any;
   timestamp: string;
   retryCount: number;
+  status: QueueItemStatus;
+  lastError?: string;
+  nextRetryAt?: string;
 }
 
-// Load sync queue from localStorage
+type SyncQueueListener = () => void;
+const listeners: SyncQueueListener[] = [];
+
+export function subscribeSyncQueue(fn: SyncQueueListener): () => void {
+  listeners.push(fn);
+  return () => {
+    const idx = listeners.indexOf(fn);
+    if (idx !== -1) listeners.splice(idx, 1);
+  };
+}
+
+function notifyListeners(): void {
+  for (const fn of listeners) {
+    try { fn(); } catch {}
+  }
+}
+
 function loadQueue(): QueuedChange[] {
   try {
     const raw = localStorage.getItem(SYNC_QUEUE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw) as QueuedChange[];
+    return parsed.map(item => ({
+      ...item,
+      status: item.status || 'pending',
+    }));
   } catch {
     return [];
   }
 }
 
-// Save sync queue to localStorage
 function saveQueue(queue: QueuedChange[]): void {
   try {
     localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
@@ -40,12 +60,6 @@ function saveQueue(queue: QueuedChange[]): void {
   }
 }
 
-// Generate unique ID for queued items
-function generateQueueId(): string {
-  return crypto.randomUUID();
-}
-
-// Add item to sync queue
 export function addToSyncQueue(
   type: QueuedChange['type'],
   action: QueuedChange['action'],
@@ -56,7 +70,7 @@ export function addToSyncQueue(
   const queue = loadQueue();
 
   const item: QueuedChange = {
-    id: generateQueueId(),
+    id: crypto.randomUUID(),
     type,
     action,
     endpoint,
@@ -64,116 +78,153 @@ export function addToSyncQueue(
     data,
     timestamp: new Date().toISOString(),
     retryCount: 0,
+    status: 'pending',
   };
 
   queue.push(item);
   saveQueue(queue);
+  notifyListeners();
 
   console.log(`[SyncQueue] Added ${type} ${action} to queue (${queue.length} items)`);
 }
 
-// Remove item from queue
 export function removeFromQueue(itemId: string): void {
   const queue = loadQueue();
   const filtered = queue.filter(item => item.id !== itemId);
   saveQueue(filtered);
+  notifyListeners();
 }
 
-// Get queue size
 export function getQueueSize(): number {
   return loadQueue().length;
 }
 
-// Process sync queue (retry failed requests)
+export function getFailedItems(): QueuedChange[] {
+  return loadQueue().filter(item => item.status === 'failed');
+}
+
+export function getFailedCount(): number {
+  return getFailedItems().length;
+}
+
+export function retryFailedItems(): void {
+  const queue = loadQueue();
+  let changed = false;
+  for (const item of queue) {
+    if (item.status === 'failed') {
+      item.status = 'pending';
+      item.retryCount = 0;
+      item.lastError = undefined;
+      item.nextRetryAt = undefined;
+      changed = true;
+    }
+  }
+  if (changed) {
+    saveQueue(queue);
+    notifyListeners();
+    if (navigator.onLine) {
+      processSyncQueue();
+    }
+  }
+}
+
+export function dismissFailedItem(itemId: string): void {
+  const queue = loadQueue();
+  const filtered = queue.filter(item => item.id !== itemId);
+  saveQueue(filtered);
+  notifyListeners();
+}
+
 export async function processSyncQueue(): Promise<{
   processed: number;
   failed: number;
+  newFailures: number;
   errors: string[]
 }> {
   const queue = loadQueue();
+  const pendingItems = queue.filter(item => item.status === 'pending');
 
-  if (queue.length === 0) {
-    return { processed: 0, failed: 0, errors: [] };
+  if (pendingItems.length === 0) {
+    return { processed: 0, failed: 0, newFailures: 0, errors: [] };
   }
 
-  console.log(`[SyncQueue] Processing ${queue.length} queued items...`);
+  console.log(`[SyncQueue] Processing ${pendingItems.length} pending items...`);
 
   let processed = 0;
   let failed = 0;
+  let newFailures = 0;
   const errors: string[] = [];
-  const remainingQueue: QueuedChange[] = [];
 
-  for (const item of queue) {
+  for (const item of pendingItems) {
     try {
       const response = await fetch(item.endpoint, {
         method: item.method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: item.data ? JSON.stringify(item.data) : undefined,
       });
 
       if (response.ok) {
+        item.status = 'pending';
+        const idx = queue.indexOf(item);
+        if (idx !== -1) queue.splice(idx, 1);
         processed++;
         console.log(`[SyncQueue] Synced ${item.type} ${item.action}`);
       } else {
-        // Retry failed - increment retry count
+        const errorText = await response.text().catch(() => `HTTP ${response.status}`);
         item.retryCount++;
+        item.lastError = errorText.slice(0, 200);
 
-        if (item.retryCount < 3) {
-          // Keep in queue for retry
-          remainingQueue.push(item);
-          failed++;
-          errors.push(`${item.type} ${item.action} failed (retry ${item.retryCount})`);
+        if (item.retryCount >= MAX_RETRIES) {
+          item.status = 'failed';
+          newFailures++;
+          console.error(`[SyncQueue] ${item.type} ${item.action} failed permanently after ${MAX_RETRIES} retries`);
         } else {
-          // Give up after 3 retries
-          console.error(`[SyncQueue] Giving up on ${item.type} after 3 retries`);
-          failed++;
-          errors.push(`${item.type} ${item.action} failed permanently`);
+          item.nextRetryAt = new Date(Date.now() + item.retryCount * 30000).toISOString();
         }
+        failed++;
+        errors.push(`${item.type} ${item.action} failed (attempt ${item.retryCount})`);
       }
     } catch (error) {
-      // Network error - keep in queue
       item.retryCount++;
+      item.lastError = (error as any).message?.slice(0, 200) || 'Network error';
 
-      if (item.retryCount < 3) {
-        remainingQueue.push(item);
+      if (item.retryCount >= MAX_RETRIES) {
+        item.status = 'failed';
+        newFailures++;
+        console.error(`[SyncQueue] ${item.type} ${item.action} failed permanently after ${MAX_RETRIES} retries`);
+      } else {
+        item.nextRetryAt = new Date(Date.now() + item.retryCount * 30000).toISOString();
       }
-
       failed++;
-      errors.push(`${item.type} ${item.action}: ${(error as any).message}`);
+      errors.push(`${item.type} ${item.action}: ${item.lastError}`);
     }
   }
 
-  // Save remaining items back to queue
-  saveQueue(remainingQueue);
+  saveQueue(queue);
+  notifyListeners();
 
-  console.log(`[SyncQueue] Processed: ${processed}, Failed: ${failed}, Remaining: ${remainingQueue.length}`);
+  console.log(`[SyncQueue] Processed: ${processed}, Failed: ${failed}, New failures: ${newFailures}, Remaining: ${queue.length}`);
 
-  return { processed, failed, errors };
+  return { processed, failed, newFailures, errors };
 }
 
-// Clear entire queue (use with caution!)
 export function clearSyncQueue(): void {
   localStorage.removeItem(SYNC_QUEUE_KEY);
   console.log('[SyncQueue] Queue cleared');
+  notifyListeners();
 }
 
-// Check if online and auto-process queue
 export function setupAutoSync(): void {
-  // Process queue on app load if online
   if (navigator.onLine) {
     setTimeout(() => processSyncQueue(), 1000);
   }
 
-  // Process queue when coming back online
   window.addEventListener('online', () => {
     console.log('[SyncQueue] Back online, processing queue...');
     processSyncQueue();
   });
 
-  // Periodic sync every 5 minutes
   setInterval(() => {
     if (navigator.onLine && getQueueSize() > 0) {
       processSyncQueue();

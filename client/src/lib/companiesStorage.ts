@@ -8,6 +8,7 @@ const STORAGE_KEY_V2 = "carda_companies_v2";
 
 export interface Company {
   id: string;
+  dbId?: number;
   name: string;
   domain?: string | null;
   city?: string | null;

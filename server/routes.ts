@@ -163,47 +163,46 @@ const upload = multer({
   },
 });
 
-// Rate limiting for expensive AI/OCR operations
+function userKeyGenerator(req: Request): string {
+  try {
+    const authUser = req.user as ReplitAuthUser | undefined;
+    if (authUser?.claims?.sub) {
+      return `user:${authUser.claims.sub}`;
+    }
+    return req.ip || 'unknown';
+  } catch {
+    return req.ip || 'unknown';
+  }
+}
+
 const aiRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // Limit each user to 50 requests per 15 minutes
-  message: { error: 'Too many requests, please try again later.' },
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many AI requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   validate: false,
-  // Use user ID if authenticated, otherwise IP
-  keyGenerator: async (req) => {
-    try {
-      const authUser = req.user as ReplitAuthUser | undefined;
-      if (authUser?.claims?.sub) {
-        return `user:${authUser.claims.sub}`;
-      }
-      return req.ip || 'unknown';
-    } catch {
-      return req.ip || 'unknown';
-    }
-  },
+  keyGenerator: userKeyGenerator,
 });
 
-// Stricter rate limiting for image upload endpoints
 const uploadRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // Limit each user to 30 uploads per 15 minutes
+  windowMs: 15 * 60 * 1000,
+  max: 30,
   message: { error: 'Too many file uploads, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   validate: false,
-  keyGenerator: async (req) => {
-    try {
-      const authUser = req.user as ReplitAuthUser | undefined;
-      if (authUser?.claims?.sub) {
-        return `user:${authUser.claims.sub}`;
-      }
-      return req.ip || 'unknown';
-    } catch {
-      return req.ip || 'unknown';
-    }
-  },
+  keyGenerator: userKeyGenerator,
+});
+
+const parseRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { error: 'Too many parse requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  keyGenerator: userKeyGenerator,
 });
 
 function generateVCard(contact: ParsedContact): string {
@@ -278,22 +277,6 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/contacts", isAuthenticated, async (req: any, res: Response) => {
-    try {
-      const authId = req.user.claims.sub;
-      const user = await storage.getUserByAuthId(authId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      const limit = parseInt(req.query.limit as string) || 100;
-      const contacts = await storage.getContactsByUserId(user.id, limit);
-      res.json(contacts);
-    } catch (error) {
-      console.error("Error fetching contacts:", error);
-      res.status(500).json({ message: "Failed to fetch contacts" });
-    }
-  });
-
   app.post("/api/contacts", isAuthenticated, async (req: any, res: Response) => {
     try {
       const authId = req.user.claims.sub;
@@ -348,7 +331,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/scan", uploadRateLimiter, upload.single("image"), async (req: Request, res: Response) => {
+  app.post("/api/scan", isAuthenticated, uploadRateLimiter, upload.single("image"), async (req: Request, res: Response) => {
     try {
       const file = req.file;
       if (!file) {
@@ -374,7 +357,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/parse", async (req: Request, res: Response) => {
+  app.post("/api/parse", isAuthenticated, parseRateLimiter, async (req: Request, res: Response) => {
     try {
       const { text } = req.body;
       if (!text || typeof text !== "string") {
@@ -407,7 +390,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/intel", aiRateLimiter, async (req: Request, res: Response) => {
+  app.post("/api/intel", isAuthenticated, aiRateLimiter, async (req: Request, res: Response) => {
     try {
       const { companyName, email, website, contactName, contactTitle } = req.body;
 
@@ -435,7 +418,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/intel-v2", async (req: Request, res: Response) => {
+  app.get("/api/intel-v2", isAuthenticated, aiRateLimiter, async (req: Request, res: Response) => {
     try {
       const { companyName, domain, role, address } = req.query;
 
@@ -869,7 +852,7 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
     }
   });
 
-  app.post("/api/parse-ai", aiRateLimiter, async (req: Request, res: Response) => {
+  app.post("/api/parse-ai", isAuthenticated, aiRateLimiter, async (req: Request, res: Response) => {
     try {
       const { text } = req.body;
       if (!text || typeof text !== "string") {
@@ -891,7 +874,7 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
     }
   });
 
-  app.post("/api/scan-ai", uploadRateLimiter, upload.single("image"), async (req: Request, res: Response) => {
+  app.post("/api/scan-ai", isAuthenticated, uploadRateLimiter, upload.single("image"), async (req: Request, res: Response) => {
     try {
       const file = req.file;
       if (!file) {
@@ -937,7 +920,7 @@ app.get("/api/hubspot/status", isAuthenticated, async (req: Request, res: Respon
     }),
   });
 
-  app.post("/api/followup", aiRateLimiter, async (req: Request, res: Response) => {
+  app.post("/api/followup", isAuthenticated, aiRateLimiter, async (req: Request, res: Response) => {
     try {
       if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
         return res.status(503).json({ error: "AI service not configured" });

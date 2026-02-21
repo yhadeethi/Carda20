@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,7 +25,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings } from "lucide-react";
+import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings, AlertTriangle } from "lucide-react";
+import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { SiHubspot, SiSalesforce } from "react-icons/si";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
@@ -63,9 +64,21 @@ export default function HomePage() {
   const { isHidden, isCompact } = useScrollDirectionNav();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { failedCount, retry: retrySyncFailures } = useSyncStatus();
 
-  // Setup timeline data sync and migration
   useTimelineSetup();
+
+  const prevFailedCountRef = useRef(0);
+  useEffect(() => {
+    if (failedCount > prevFailedCountRef.current && failedCount > 0) {
+      toast({
+        title: "Sync issue",
+        description: `${failedCount} item(s) failed to sync. Tap the warning icon to retry.`,
+        variant: "destructive",
+      });
+    }
+    prevFailedCountRef.current = failedCount;
+  }, [failedCount, toast]);
 
   const [activeTab, setActiveTab] = useState<TabMode>("home");
   const [viewMode, setViewMode] = useState<ViewMode>("home");
@@ -290,6 +303,23 @@ export default function HomePage() {
           <span className="font-semibold text-lg">Carda</span>
         </button>
         <div className="flex items-center gap-1">
+          {failedCount > 0 && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                retrySyncFailures();
+                toast({ title: "Retrying failed sync items", description: `${failedCount} item(s) queued for retry.` });
+              }}
+              className="relative text-destructive"
+              data-testid="button-sync-retry"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center px-1" data-testid="badge-sync-failures">
+                {failedCount}
+              </span>
+            </Button>
+          )}
           <MyQRModal />
           <Button
             size="icon"

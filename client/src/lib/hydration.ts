@@ -1,7 +1,7 @@
 import { loadContacts, saveContacts, type StoredContact } from './contactsStorage';
 import { getCompanies, saveCompanies, type Company } from './companiesStorage';
 import { upsertContactToServer, upsertCompanyToServer } from './api/sync';
-import { normalizeServerContact } from './contacts/normalize';
+import { normalizeServerContact, normalizeServerCompany } from './contacts/normalize';
 
 interface ServerContactRaw {
   id: number;
@@ -74,29 +74,31 @@ export async function hydrateFromServer(): Promise<void> {
 
     const serverContactsRaw: ServerContactRaw[] = await contactsRes.json();
     const serverContacts: ServerContact[] = serverContactsRaw.map(c => normalizeServerContact(c) as unknown as ServerContact);
-    const serverCompanies: ServerCompany[] = await companiesRes.json();
+    const serverCompaniesRaw: ServerCompany[] = await companiesRes.json();
+    const normalizedCompanies = serverCompaniesRaw.map(c => normalizeServerCompany(c));
 
     // --- COMPANIES ---
     const localCompanies = getCompanies();
     const localCompanyMap = new Map(localCompanies.map(c => [c.id, c]));
-    const serverCompanyMap = new Map(serverCompanies.filter(c => c.publicId).map(c => [c.publicId, c]));
 
-    for (const [pubId, server] of serverCompanyMap) {
-      const local = localCompanyMap.get(pubId);
+    for (const server of normalizedCompanies) {
+      const uuid = server.id;
+      const local = localCompanyMap.get(uuid);
       if (local) {
         if (!local._needsUpsert) {
-          const merged = mergeServerCompany(local, server);
-          localCompanyMap.set(pubId, merged);
+          const merged = mergeServerCompany(local, server as unknown as ServerCompany);
+          localCompanyMap.set(uuid, merged);
         }
       } else {
-        localCompanyMap.set(pubId, {
-          id: pubId,
-          name: server.name,
-          domain: server.domain,
-          city: server.city,
-          state: server.state,
-          country: server.country,
-          notes: server.notes,
+        localCompanyMap.set(uuid, {
+          id: uuid,
+          dbId: server.dbId,
+          name: (server as any).name || '',
+          domain: (server as any).domain || null,
+          city: (server as any).city || null,
+          state: (server as any).state || null,
+          country: (server as any).country || null,
+          notes: (server as any).notes || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
