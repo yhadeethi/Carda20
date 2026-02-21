@@ -37,6 +37,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { UserEvent, Contact } from "@shared/schema";
+import type { StoredContact } from "@/lib/contactsStorage";
 
 interface EventDetailProps {
   eventId: string;
@@ -66,8 +67,9 @@ export function EventDetail({ eventId, onBack, onScanAtEvent, onSelectContact }:
     queryKey: ["/api/user-events", eventId],
   });
 
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery<Contact[]>({
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery<Contact[], Error, StoredContact[]>({
     queryKey: ["/api/user-events", eventId, "contacts"],
+    select: (data) => data.map(normalizeServerContact),
   });
 
   const updateEventMutation = useMutation({
