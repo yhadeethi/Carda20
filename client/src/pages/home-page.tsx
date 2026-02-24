@@ -139,11 +139,11 @@ export default function HomePage() {
   }, [toast]);
 
   const handleSwitchAccount = (_email: string) => {
-    window.location.href = "/api/auth/switch?returnTo=/profile";
+    window.location.href = "/api/auth/switch";
   };
 
   const handleAddAccount = () => {
-    window.location.href = "/api/auth/switch?returnTo=/profile";
+    window.location.href = "/api/auth/switch";
   };
 
   const handleLogoClick = () => {
