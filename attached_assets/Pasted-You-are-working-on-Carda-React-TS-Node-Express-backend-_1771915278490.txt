@@ -1,0 +1,94 @@
+You are working on Carda (React + TS + Node/Express backend). The “Add account” button in Profile is broken: clicking it does NOT trigger any auth redirect; in Chrome DevTools Network it only hits /api/user (200) and then user ends up back on the main page.
+
+Goal
+
+When user clicks “Add account” (rename to “Switch account”), it must:
+
+log the current user out (clear app session cookie)
+
+then start Replit Auth login as a full page redirect (Document navigation) so the browser shows the Replit login/consent screen
+
+after callback, redirect back to /profile (not /)
+
+Add a separate “Log out” button that only logs out and returns to /.
+
+Constraints
+
+Do not implement custom email/password. Use Replit Auth.
+
+Must work in production URL https://cardaconnect.replit.app.
+
+Must show a clear redirect chain in DevTools: /api/auth/... → Replit auth domain → /api/auth/callback → /profile.
+
+Tasks
+A) Frontend wiring
+
+Find the Profile component where “Add account” button exists.
+
+Ensure its onClick does NOT call fetch/XHR.
+
+It must perform window.location.href = "/api/auth/switch?returnTo=/profile" (full page nav).
+
+Replace label “Add account” with “Switch account”.
+
+B) Backend routes
+
+Locate existing Replit Auth routes (likely under /api/auth/*).
+
+Create:
+
+GET /api/auth/login (if not existing) that starts auth and supports returnTo query param.
+
+GET /api/auth/logout that clears session and redirects to a provided returnTo (default /).
+
+GET /api/auth/switch that:
+
+clears session (same as logout)
+
+redirects immediately to the login/start route, preserving returnTo=/profile
+
+Ensure session cookie is cleared correctly (set cookie to empty + maxAge 0).
+
+C) Callback redirect behavior
+
+In the auth callback handler, DO NOT hardcode res.redirect("/").
+
+It must redirect to the stored returnTo value from before auth.
+
+Implement returnTo storage safely:
+
+store in server session OR signed cookie
+
+validate it is a relative path starting with / (no external redirects)
+
+fallback to /profile if missing.
+
+D) Debug instrumentation
+
+Add temporary server logs (console) for:
+
+incoming /api/auth/switch with returnTo
+
+auth callback success/failure
+
+final redirect target
+
+Remove noisy logs after verifying.
+
+Acceptance Criteria
+
+Clicking “Switch account” triggers Document navigation (not fetch) and shows Replit auth consent/login.
+
+After successful auth, user lands on /profile.
+
+DevTools Network (All, Preserve log) shows 302 redirects and the correct chain.
+
+“Log out” logs out and lands on /.
+
+Output
+
+Tell me exactly which files you changed and why.
+
+Provide code diffs (or full updated file contents if small).
+
+No speculative claims like “line 127” unless you show the actual file/line context.
