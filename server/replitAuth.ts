@@ -148,10 +148,16 @@ export async function setupAuth(app: Express) {
   app.get("/api/auth/switch", (req: any, res) => {
     const returnTo = req.query.returnTo as string || "/profile";
     const safeReturnTo = (returnTo.startsWith("/") && !returnTo.startsWith("//")) ? returnTo : "/profile";
+    const loginUrl = `${req.protocol}://${req.hostname}/api/login?returnTo=${encodeURIComponent(safeReturnTo)}`;
     req.logout(() => {
       req.session.destroy(() => {
         res.clearCookie("connect.sid");
-        res.redirect(`/api/login?returnTo=${encodeURIComponent(safeReturnTo)}`);
+        res.redirect(
+          client.buildEndSessionUrl(config, {
+            client_id: process.env.REPL_ID!,
+            post_logout_redirect_uri: loginUrl,
+          }).href
+        );
       });
     });
   });
