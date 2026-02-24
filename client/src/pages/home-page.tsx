@@ -138,12 +138,21 @@ export default function HomePage() {
     }
   }, [toast]);
 
-  const handleSwitchAccount = (_email: string) => {
-    window.location.href = "/api/auth/switch";
+  const handleSwitchAccount = (email: string) => {
+    // Replit auth does not support true multi-session switching in-app.
+    // We store the target email so the UI can show intent post-login.
+    try {
+      localStorage.setItem("carda_switch_to_email", email);
+    } catch {}
+    window.location.href = "/api/logout";
   };
 
   const handleAddAccount = () => {
-    window.location.href = "/api/auth/switch";
+    // Triggers sign-out so the user can sign in with another account.
+    try {
+      localStorage.setItem("carda_add_account", "1");
+    } catch {}
+    window.location.href = "/api/logout";
   };
 
   const handleLogoClick = () => {
@@ -366,9 +375,9 @@ export default function HomePage() {
                   <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem onClick={handleAddAccount} className="flex items-center gap-2 cursor-pointer" data-testid="button-switch-account">
+              <DropdownMenuItem onClick={handleAddAccount} className="flex items-center gap-2 cursor-pointer" data-testid="button-add-account">
                 <UserPlus className="w-4 h-4" />
-                Switch Account
+                Add Account
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setShowHubSpotProfile(true)} className="flex items-center gap-2 cursor-pointer" data-testid="button-hubspot-menu">
