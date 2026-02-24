@@ -121,30 +121,52 @@ export async function setupAuth(app: Express) {
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
-  app.get("/api/login", (req, res, next) => {
+  app.get("/api/login", (req: any, res, next) => {
+    const returnTo = req.query.returnTo as string | undefined;
+    if (returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")) {
+      req.session.returnTo = returnTo;
+    }
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
+      prompt: "select_account consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
-  app.get("/api/callback", (req, res, next) => {
+  app.get("/api/callback", (req: any, res, next) => {
     ensureStrategy(req.hostname);
+    const returnTo = req.session?.returnTo || "/";
     passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
-    })(req, res, next);
+    })(req, res, (err: any) => {
+      if (err) return next(err);
+      delete req.session.returnTo;
+      res.redirect(returnTo);
+    });
   });
 
-  app.get("/api/logout", (req, res) => {
+  app.get("/api/auth/switch", (req: any, res) => {
+    const returnTo = req.query.returnTo as string || "/profile";
+    const safeReturnTo = (returnTo.startsWith("/") && !returnTo.startsWith("//")) ? returnTo : "/profile";
     req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+      req.session.destroy(() => {
+        res.clearCookie("connect.sid");
+        res.redirect(`/api/login?returnTo=${encodeURIComponent(safeReturnTo)}`);
+      });
+    });
+  });
+
+  app.get("/api/logout", (req: any, res) => {
+    req.logout(() => {
+      req.session.destroy(() => {
+        res.clearCookie("connect.sid");
+        res.redirect(
+          client.buildEndSessionUrl(config, {
+            client_id: process.env.REPL_ID!,
+            post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
+          }).href
+        );
+      });
     });
   });
 }
