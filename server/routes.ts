@@ -1284,17 +1284,33 @@ Return ONLY valid JSON, no markdown or explanation.`;
   // Upsert & List Endpoints (canonical sync)
   // ============================================
 
-  // Contacts - upsert by publicId (non-destructive merge)
+  const contactUpsertSchema = z.object({
+    publicId: z.string().uuid(),
+    fullName: z.string().nullish(),
+    companyName: z.string().nullish(),
+    jobTitle: z.string().nullish(),
+    email: z.string().nullish(),
+    phone: z.string().nullish(),
+    website: z.string().nullish(),
+    linkedinUrl: z.string().nullish(),
+    orgDepartment: z.string().nullish(),
+    orgRole: z.string().nullish(),
+    orgInfluence: z.string().nullish(),
+    orgRelationshipStrength: z.string().nullish(),
+  }).strict();
+
   app.post("/api/contacts/upsert", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const userId = await getCurrentUserId(req);
-      const { publicId, ...fields } = req.body;
+      const parsed = contactUpsertSchema.safeParse(req.body);
 
-      if (!publicId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicId)) {
-        return res.status(400).json({ error: "Valid publicId (UUID) is required" });
+      if (!parsed.success) {
+        console.warn("[Contacts] Upsert validation failed:", parsed.error.flatten());
+        return res.status(400).json({ error: "Invalid payload", details: parsed.error.flatten().fieldErrors });
       }
 
-      const contact = await storage.upsertContactByPublicId(userId, publicId, fields);
+      const { publicId, ...fields } = parsed.data;
+      const contact = await storage.upsertContactByPublicId(userId, publicId, fields as any);
       res.json(contact);
     } catch (error) {
       console.error("[Contacts] Upsert error:", error);

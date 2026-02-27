@@ -170,6 +170,17 @@ export async function processSyncQueue(): Promise<{
         if (idx !== -1) queue.splice(idx, 1);
         processed++;
         console.log(`[SyncQueue] Synced ${item.type} ${item.action}`);
+      } else if (response.status === 401 || response.status === 403) {
+        console.warn(`[SyncQueue] Auth expired (${response.status}), pausing queue — not burning retries`);
+        break;
+      } else if (response.status === 400) {
+        const errorText = await response.text().catch(() => `HTTP ${response.status}`);
+        item.status = 'failed';
+        item.lastError = `Bad request: ${errorText.slice(0, 200)}`;
+        newFailures++;
+        failed++;
+        errors.push(`${item.type} ${item.action}: non-retryable 400`);
+        console.error(`[SyncQueue] ${item.type} ${item.action} failed permanently (400 bad request)`);
       } else {
         const errorText = await response.text().catch(() => `HTTP ${response.status}`);
         item.retryCount++;
@@ -215,7 +226,60 @@ export function clearSyncQueue(): void {
   notifyListeners();
 }
 
+function migrateQueuePayloads(): void {
+  const queue = loadQueue();
+  let changed = false;
+
+  for (const item of queue) {
+    if (item.type !== 'contact_upsert') continue;
+    const data = item.data;
+    if (!data) continue;
+
+    if (data.name !== undefined || data.company !== undefined || data.title !== undefined || data.companyId !== undefined) {
+      if (data.name && !data.fullName) {
+        data.fullName = data.name;
+      }
+      if (data.company && !data.companyName) {
+        data.companyName = data.company;
+      }
+      if (data.title && !data.jobTitle) {
+        data.jobTitle = data.title;
+      }
+
+      delete data.name;
+      delete data.company;
+      delete data.title;
+      delete data.companyId;
+      delete data.id;
+      delete data.dbId;
+      delete data.createdAt;
+      delete data.org;
+      delete data.address;
+      delete data.eventName;
+      delete data._needsUpsert;
+      delete data.legacyId;
+
+      if (item.status === 'failed') {
+        item.status = 'pending';
+        item.retryCount = 0;
+        item.lastError = undefined;
+        item.nextRetryAt = undefined;
+      }
+
+      changed = true;
+      console.log(`[SyncQueue] Migrated queued contact_upsert payload for ${data.publicId}`);
+    }
+  }
+
+  if (changed) {
+    saveQueue(queue);
+    notifyListeners();
+  }
+}
+
 export function setupAutoSync(): void {
+  migrateQueuePayloads();
+
   if (navigator.onLine) {
     setTimeout(() => processSyncQueue(), 1000);
   }

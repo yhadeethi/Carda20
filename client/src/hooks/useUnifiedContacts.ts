@@ -46,6 +46,12 @@ function storedContactToUnified(contact: StoredContact): UnifiedContact {
   };
 }
 
+function pickNonEmpty(cloudVal: string | undefined | null, localVal: string | undefined | null): string {
+  if (cloudVal && cloudVal.trim()) return cloudVal;
+  if (localVal && localVal.trim()) return localVal;
+  return cloudVal || localVal || "";
+}
+
 function enrichWithLocalData(
   cloudContacts: StoredContact[],
   localContacts: ContactV2[]
@@ -57,6 +63,16 @@ function enrichWithLocalData(
     if (local) {
       return {
         ...cloud,
+        name: pickNonEmpty(cloud.name, local.name),
+        company: pickNonEmpty(cloud.company, local.company),
+        title: pickNonEmpty(cloud.title, local.title),
+        email: pickNonEmpty(cloud.email, local.email),
+        phone: pickNonEmpty(cloud.phone, local.phone),
+        website: pickNonEmpty(cloud.website, local.website),
+        linkedinUrl: pickNonEmpty(cloud.linkedinUrl, local.linkedinUrl),
+        address: pickNonEmpty(cloud.address, local.address),
+        eventName: cloud.eventName || local.eventName || null,
+        companyId: cloud.companyId || local.companyId || null,
         tasks: local.tasks || [],
         reminders: local.reminders || [],
         timeline: local.timeline || [],

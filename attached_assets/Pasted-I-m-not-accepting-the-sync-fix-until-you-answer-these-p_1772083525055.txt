@@ -1,0 +1,48 @@
+I’m not accepting the sync fix until you answer these precisely and paste the relevant code snippets.
+
+Payload + contract
+
+After your fix, what is the exact JSON payload the client sends to POST /api/contacts/upsert? Paste a real example payload.
+
+Where do you map client fields name/company/title → DB fields fullName/companyName/jobTitle? Paste the exact mapping code.
+
+Do you have request validation (Zod or similar) on the server route? If yes, paste the schema. If no, add it.
+
+If the client sends unknown fields, do you reject with 400 or silently ignore? Show the behavior in code.
+
+Company linking (root cause)
+
+After your fix, does the client ever send companyId? If yes, why? Paste the client code that constructs the payload.
+
+Do you ignore companyId from the client on the server? If not, change it so the server owns FK IDs.
+
+If a contact has a company that does not exist in Neon yet, does the upsert still succeed? Explain how.
+
+Do you resolve/create the company on the server using companyName (string) and then set contacts.companyId (integer FK) in the same DB transaction? Paste the transaction code (find-or-create company + contact upsert).
+
+FK safety + idempotency
+
+Can you show why contacts_company_id_companies_id_fk violations are now structurally impossible (not just “less likely”)?
+
+Is the contact upsert idempotent by publicId (and userId/ownerId)? Paste the unique constraint/index and the upsert statement.
+
+Sync queue behavior
+
+Which errors are retryable vs non-retryable? List them and show the code that classifies them.
+
+If the user is logged out and sync runs, do we pause the queue or burn retries and mark items failed? Paste the logic.
+
+How are previously failed items handled after we deploy the fix — is there a replay/retry all pending mechanism? Describe it and show where it’s triggered.
+
+Proof (must pass these tests)
+Please run and show evidence (logs + DB row screenshots) for these tests:
+
+Test A: Scan a new contact with a brand-new company that exists only locally → sync succeeds (no FK errors).
+
+Test B: Trigger sync while logged out / session expired → queue pauses, retries aren’t burned, no permanent failure spam.
+
+Test C: After sync, Neon contacts row has non-null fullName, companyName, jobTitle and companyId is a valid integer FK to companies.id.
+
+Also show me one real Neon row output for the synced contact (columns + values) to confirm no more “Unknown contact”.
+
+Acceptance gate: I only accept if the client stops sending companyId (or server ignores it), server maps fields correctly, and server resolves/creates company + sets FK transactionally.

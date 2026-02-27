@@ -2,19 +2,37 @@ import { addToSyncQueue } from '../syncQueue';
 import type { StoredContact } from '../contactsStorage';
 import type { Company } from '../companiesStorage';
 
-function stripLocalFields<T extends Record<string, any>>(obj: T): Partial<T> {
-  const { _needsUpsert, legacyId, tasks, reminders, timeline, lastTouchedAt, mergeMeta, notes, ...rest } = obj as any;
-  return rest;
+export function buildContactUpsertPayload(contact: StoredContact): Record<string, any> {
+  const payload: Record<string, any> = {
+    publicId: contact.id,
+  };
+
+  if (contact.name) payload.fullName = contact.name;
+  if (contact.company) payload.companyName = contact.company;
+  if (contact.title) payload.jobTitle = contact.title;
+  if (contact.email) payload.email = contact.email;
+  if (contact.phone) payload.phone = contact.phone;
+  if (contact.website) payload.website = contact.website;
+  if (contact.linkedinUrl) payload.linkedinUrl = contact.linkedinUrl;
+
+  if (contact.org) {
+    if (contact.org.department && contact.org.department !== 'UNKNOWN') payload.orgDepartment = contact.org.department;
+    if (contact.org.role && contact.org.role !== 'UNKNOWN') payload.orgRole = contact.org.role;
+    if (contact.org.influence && contact.org.influence !== 'UNKNOWN') payload.orgInfluence = contact.org.influence;
+    if (contact.org.relationshipStrength && contact.org.relationshipStrength !== 'UNKNOWN') payload.orgRelationshipStrength = contact.org.relationshipStrength;
+  }
+
+  return payload;
 }
 
 export async function upsertContactToServer(contact: StoredContact): Promise<boolean> {
-  const payload = stripLocalFields(contact);
+  const payload = buildContactUpsertPayload(contact);
   try {
     const res = await fetch('/api/contacts/upsert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ publicId: contact.id, ...payload }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
       console.log(`[Sync] Upserted contact ${contact.id} to server`);
@@ -23,9 +41,14 @@ export async function upsertContactToServer(contact: StoredContact): Promise<boo
     throw new Error(`Server returned ${res.status}`);
   } catch (e) {
     console.warn(`[Sync] Contact upsert failed, queuing:`, e);
-    addToSyncQueue('contact_upsert', 'update', '/api/contacts/upsert', 'POST', { publicId: contact.id, ...payload });
+    addToSyncQueue('contact_upsert', 'update', '/api/contacts/upsert', 'POST', payload);
     return false;
   }
+}
+
+function stripLocalFields<T extends Record<string, any>>(obj: T): Partial<T> {
+  const { _needsUpsert, legacyId, tasks, reminders, timeline, lastTouchedAt, mergeMeta, notes, ...rest } = obj as any;
+  return rest;
 }
 
 export async function upsertCompanyToServer(company: Company): Promise<boolean> {

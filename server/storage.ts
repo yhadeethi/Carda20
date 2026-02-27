@@ -117,6 +117,8 @@ export interface IStorage {
   upsertCompanyByPublicId(userId: number, publicId: string, data: Partial<Company>): Promise<Company>;
   upsertUserEventByPublicId(userId: number, publicId: string, data: Partial<UserEvent>): Promise<UserEvent>;
 
+  findOrCreateCompanyByName(userId: number, companyName: string): Promise<number>;
+
   // List endpoints (with publicId)
   getCompaniesByUserId(userId: number): Promise<Company[]>;
 }
@@ -742,28 +744,76 @@ export class DatabaseStorage implements IStorage {
     return update;
   }
 
-  async upsertContactByPublicId(userId: number, publicId: string, data: Partial<Contact>): Promise<Contact> {
-    const existing = await this.getContactByPublicId(userId, publicId);
+  async findOrCreateCompanyByName(userId: number, companyName: string, tx?: any): Promise<number> {
+    const trimmed = companyName.trim();
+    if (!trimmed) throw new Error("Company name cannot be empty");
+    const conn = tx || db;
 
-    if (existing) {
-      const updateData = this.buildNonDestructiveUpdate(data, ["id", "userId", "publicId", "createdAt"]);
-      if (Object.keys(updateData).length === 0) return existing;
-      const [updated] = await db.update(contacts)
-        .set(updateData)
-        .where(and(eq(contacts.userId, userId), eq(contacts.publicId, publicId)))
-        .returning();
-      return updated;
-    } else {
-      const insertData = this.buildNonDestructiveUpdate(data, ["id", "userId", "publicId", "createdAt"]);
-      const [created] = await db.insert(contacts)
-        .values({
-          ...insertData,
-          userId,
-          publicId,
-        } as any)
-        .returning();
-      return created;
-    }
+    const [existing] = await conn.select().from(companies)
+      .where(and(
+        eq(companies.userId, userId),
+        sql`LOWER(${companies.name}) = LOWER(${trimmed})`
+      ))
+      .limit(1);
+
+    if (existing) return existing.id;
+
+    const newPublicId = crypto.randomUUID();
+    const [created] = await conn.insert(companies)
+      .values({
+        userId,
+        publicId: newPublicId,
+        name: trimmed,
+      } as any)
+      .returning();
+    console.log(`[Storage] Auto-created company "${trimmed}" (id=${created.id}) for user ${userId}`);
+    return created.id;
+  }
+
+  async upsertContactByPublicId(userId: number, publicId: string, data: Partial<Contact> & { companyName?: string }): Promise<Contact> {
+    return db.transaction(async (tx) => {
+      const { companyName, ...contactFields } = data as any;
+
+      let resolvedCompanyId: number | undefined;
+      if (companyName && typeof companyName === 'string' && companyName.trim()) {
+        resolvedCompanyId = await this.findOrCreateCompanyByName(userId, companyName, tx);
+      }
+
+      const [existing] = await tx.select().from(contacts)
+        .where(and(eq(contacts.userId, userId), eq(contacts.publicId, publicId)));
+
+      if (existing) {
+        const updateData = this.buildNonDestructiveUpdate(contactFields, ["id", "userId", "publicId", "createdAt", "companyId"]);
+        if (resolvedCompanyId !== undefined) {
+          updateData.companyId = resolvedCompanyId;
+        }
+        if (companyName && typeof companyName === 'string' && companyName.trim()) {
+          updateData.companyName = companyName.trim();
+        }
+        if (Object.keys(updateData).length === 0) return existing;
+        const [updated] = await tx.update(contacts)
+          .set(updateData)
+          .where(and(eq(contacts.userId, userId), eq(contacts.publicId, publicId)))
+          .returning();
+        return updated;
+      } else {
+        const insertData = this.buildNonDestructiveUpdate(contactFields, ["id", "userId", "publicId", "createdAt", "companyId"]);
+        if (resolvedCompanyId !== undefined) {
+          insertData.companyId = resolvedCompanyId;
+        }
+        if (companyName && typeof companyName === 'string' && companyName.trim()) {
+          insertData.companyName = companyName.trim();
+        }
+        const [created] = await tx.insert(contacts)
+          .values({
+            ...insertData,
+            userId,
+            publicId,
+          } as any)
+          .returning();
+        return created;
+      }
+    });
   }
 
   async upsertCompanyByPublicId(userId: number, publicId: string, data: Partial<Company>): Promise<Company> {
