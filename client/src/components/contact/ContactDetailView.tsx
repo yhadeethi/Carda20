@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
@@ -39,10 +39,13 @@ import {
   Bell,
   Briefcase,
   Calendar,
+  CloudUpload,
   Edit,
+  Phone,
   Sparkles,
   StickyNote,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { SiHubspot, SiSalesforce } from "react-icons/si";
@@ -51,7 +54,7 @@ import { CompanyIntelV2Card } from "@/components/company-intel-v2";
 import { ContactHeroCard, Contact } from "./ContactHeroCard";
 import { ContactBottomBar } from "./ContactBottomBar";
 import { QuickActionsSheet, QuickAction } from "./QuickActionsSheet";
-import { TimelineFeed, TimelineItem } from "./TimelineFeed";
+import { TimelineFeed, TimelineItem, TimelineEventType } from "./TimelineFeed";
 
 import { StoredContact } from "@/lib/contactsStorage";
 import {
@@ -361,6 +364,13 @@ export function ContactDetailView({
     setIsAddingNote(false);
   };
 
+  const handleQuickLog = useCallback(async (type: TimelineEventType, summary: string) => {
+    if (!contactV2) return;
+    await addTimelineEvent(contact.id, type, summary, { source: "quick_log" });
+    onUpdate();
+    toast({ title: `${summary} logged` });
+  }, [contact.id, contactV2, onUpdate, toast]);
+
   const handleSyncToHubspot = async () => {
     if (!contact.email) {
       toast({
@@ -664,6 +674,26 @@ export function ContactDetailView({
   const quickActions: QuickAction[] = useMemo(() => {
     const actions: QuickAction[] = [
       {
+        id: "log-call",
+        label: "Log Call",
+        icon: <Phone className="w-5 h-5" />,
+        onClick: () => {
+          addTimelineEvent(contact.id, "note_added", "Phone call", { source: "quick_action" });
+          onUpdate();
+          toast({ title: "Call logged" });
+        },
+      },
+      {
+        id: "log-meeting",
+        label: "Log Meeting",
+        icon: <Users className="w-5 h-5" />,
+        onClick: () => {
+          addTimelineEvent(contact.id, "meeting_scheduled", "Meeting", { source: "quick_action" });
+          onUpdate();
+          toast({ title: "Meeting logged" });
+        },
+      },
+      {
         id: "followup",
         label: "Generate Follow-up",
         icon: <Sparkles className="w-5 h-5" />,
@@ -700,77 +730,62 @@ export function ContactDetailView({
         icon: <Briefcase className="w-5 h-5" />,
         onClick: () => void openIntel(false),
       },
+      {
+        id: "note",
+        label: "Add Note",
+        icon: <StickyNote className="w-5 h-5" />,
+        onClick: () => {
+          setTimeout(() => {
+            const el = document.querySelector('[data-testid="input-add-note"]') as HTMLTextAreaElement | null;
+            el?.focus();
+          }, 60);
+        },
+      },
     ];
 
-    if (hubspotStatus?.connected) {
+    // CRM tiles: only show if connected. If neither connected, show one Connect CRM tile.
+    const hubspotConnected = hubspotStatus?.connected;
+    const salesforceConnected = salesforceStatus?.connected;
+
+    if (hubspotConnected) {
       const isSynced = contactV2?.timeline?.some((t) => t.type === "hubspot_synced");
       actions.push({
         id: "hubspot",
         label: "Sync to HubSpot",
         icon: <SiHubspot className="w-5 h-5 text-[#FF7A59]" />,
-        status: isSynced ? "Synced" : "Not synced",
+        status: isSynced ? "Synced" : undefined,
         onClick: handleSyncToHubspot,
-      });
-    } else {
-      actions.push({
-        id: "hubspot-connect",
-        label: "Connect HubSpot",
-        icon: <SiHubspot className="w-5 h-5 text-[#FF7A59]" />,
-        status: "Not connected",
-        onClick: async () => {
-          try {
-            const res = await apiRequest("POST", "/api/hubspot/connect");
-            const data = await res.json();
-            if (data.url) {
-              window.location.href = data.url;
-            }
-          } catch (error) {
-            toast({ title: "Failed to connect HubSpot", variant: "destructive" });
-          }
-        },
       });
     }
 
-    if (salesforceStatus?.connected) {
+    if (salesforceConnected) {
       const isSynced = contactV2?.timeline?.some((t) => t.type === "salesforce_synced");
       actions.push({
         id: "salesforce",
         label: "Sync to Salesforce",
         icon: <SiSalesforce className="w-5 h-5 text-[#00A1E0]" />,
-        status: isSynced ? "Synced" : "Not synced",
+        status: isSynced ? "Synced" : undefined,
         onClick: handleSyncToSalesforce,
       });
-    } else {
+    }
+
+    if (!hubspotConnected && !salesforceConnected) {
       actions.push({
-        id: "salesforce-connect",
-        label: "Connect Salesforce",
-        icon: <SiSalesforce className="w-5 h-5 text-[#00A1E0]" />,
-        status: "Not connected",
+        id: "connect-crm",
+        label: "Connect CRM",
+        icon: <CloudUpload className="w-5 h-5" />,
+        status: "Not set up",
         onClick: async () => {
           try {
-            const res = await apiRequest("POST", "/api/salesforce/connect");
+            const res = await apiRequest("POST", "/api/hubspot/connect");
             const data = await res.json();
-            if (data.url) {
-              window.location.href = data.url;
-            }
-          } catch (error) {
-            toast({ title: "Failed to connect Salesforce", variant: "destructive" });
+            if (data.url) window.location.href = data.url;
+          } catch {
+            toast({ title: "Failed to open CRM settings", variant: "destructive" });
           }
         },
       });
     }
-
-    actions.push({
-      id: "note",
-      label: "Add Note",
-      icon: <StickyNote className="w-5 h-5" />,
-      onClick: () => {
-        setTimeout(() => {
-          const el = document.querySelector('[data-testid="input-add-note"]') as HTMLTextAreaElement | null;
-          el?.focus();
-        }, 60);
-      },
-    });
 
     return actions;
   }, [contact.id, contact.name, contactV2, hubspotStatus, salesforceStatus, toast, onUpdate]);
@@ -868,7 +883,7 @@ export function ContactDetailView({
           />
 
           <div className="mt-6">
-            <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} />
+            <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} onQuickLog={handleQuickLog} />
           </div>
         </>
       )}

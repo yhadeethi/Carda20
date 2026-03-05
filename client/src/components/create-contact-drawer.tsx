@@ -14,6 +14,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { saveContact } from "@/lib/contactsStorage";
 import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
+import { findFuzzyCompanyMatch } from "@/lib/contacts/dedupe";
 import { generateId as generateTimelineId } from "@/lib/contacts/ids";
 import { X } from "lucide-react";
 
@@ -68,8 +69,19 @@ export function CreateContactDrawer({ open, onOpenChange, onContactCreated }: Cr
     }
 
     try {
+      // Fuzzy company name deduplication: if incoming company name closely matches
+      // an existing one, reuse the canonical name to prevent split company records.
+      let contactDataToSave = { ...formData };
+      if (contactDataToSave.company) {
+        const existingContacts = loadContactsV2();
+        const canonicalCompany = findFuzzyCompanyMatch(contactDataToSave.company, existingContacts);
+        if (canonicalCompany && canonicalCompany !== contactDataToSave.company) {
+          contactDataToSave = { ...contactDataToSave, company: canonicalCompany };
+        }
+      }
+
       // Save using the same logic as scan
-      const savedContact = saveContact(formData, null);
+      const savedContact = saveContact(contactDataToSave, null);
 
       if (!savedContact) {
         toast({
@@ -131,7 +143,7 @@ export function CreateContactDrawer({ open, onOpenChange, onContactCreated }: Cr
 
       toast({
         title: "Contact created",
-        description: `${formData.name || "Contact"} has been saved successfully`,
+        description: `${contactDataToSave.name || "Contact"} has been saved successfully`,
       });
 
       resetForm();

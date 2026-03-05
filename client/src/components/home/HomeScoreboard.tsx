@@ -25,6 +25,7 @@ import { useScoreboard } from "@/hooks/useScoreboard";
 import { completeReminder } from "@/lib/contacts/storage";
 import { getCompanies } from "@/lib/companiesStorage";
 import { RecentCompanies } from "@/components/home/RecentCompanies";
+import { CalendarTeaser } from "@/components/home/CalendarTeaser";
 
 type HomeScoreboardProps = {
   refreshKey: number;
@@ -163,6 +164,11 @@ export function HomeScoreboard({
           </div>
         </div>
       </button>
+
+      {/* Calendar briefing teaser */}
+      <section>
+        <CalendarTeaser />
+      </section>
 
       {/* Weekly chart */}
       <section>

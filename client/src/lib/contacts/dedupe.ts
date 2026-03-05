@@ -227,6 +227,33 @@ export function findDuplicateGroups(contacts: ContactV2[], minScore: number = 60
   return groups.sort((a, b) => b.score - a.score);
 }
 
+/**
+ * Finds an existing company name that fuzzy-matches the incoming name.
+ * Returns the canonical existing name if a match is found above threshold, otherwise null.
+ */
+export function findFuzzyCompanyMatch(
+  incomingName: string,
+  contacts: ContactV2[],
+  threshold: number = 82
+): string | null {
+  const normalized = normalizeCompany(incomingName);
+  if (!normalized || normalized.length < 3) return null;
+
+  const companyNames = [...new Set(
+    contacts.map(c => c.company).filter((c): c is string => !!c && c.trim().length > 0)
+  )];
+
+  for (const existing of companyNames) {
+    const normalizedExisting = normalizeCompany(existing);
+    if (!normalizedExisting || existing === incomingName) continue;
+    const similarity = stringSimilarity(normalized, normalizedExisting);
+    if (similarity >= threshold) {
+      return existing;
+    }
+  }
+  return null;
+}
+
 // Suggest top merges
 export function suggestMerges(contacts: ContactV2[], limit: number = 10): DuplicateGroup[] {
   const groups = findDuplicateGroups(contacts, 70);

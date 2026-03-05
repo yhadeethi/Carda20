@@ -81,19 +81,40 @@ export function RecentCompanies({
                 </button>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  onClick={() => onSelectCompany(suggestedCompany.companyId, "contacts")}
-                  className="text-xs font-medium rounded-full bg-primary/10 text-primary px-3 py-1 hover:bg-primary/15 transition-colors"
-                >
-                  {suggestedCompany.contactsCount} contacts
-                </button>
-                <button
-                  onClick={() => onSelectCompany(suggestedCompany.companyId, suggestedCompany.nextAction === "finish_profile" ? "notes" : "notes")}
-                  className="text-xs font-medium rounded-full bg-muted/40 px-3 py-1 hover:bg-muted/60 transition-colors"
-                >
-                  {suggestedCompany.nextAction === "finish_profile" ? "Finish profile" : "Add intel"}
-                </button>
+              <div className="mt-3 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => onSelectCompany(suggestedCompany.companyId, "contacts")}
+                    className="text-xs font-medium rounded-full bg-primary/10 text-primary px-3 py-1 hover:bg-primary/15 transition-colors"
+                  >
+                    {suggestedCompany.contactsCount} contact{suggestedCompany.contactsCount !== 1 ? "s" : ""}
+                  </button>
+                  <button
+                    onClick={() =>
+                      onSelectCompany(
+                        suggestedCompany.companyId,
+                        !suggestedCompany.hasNotes ? "notes" : "contacts"
+                      )
+                    }
+                    className="text-xs font-medium rounded-full bg-muted/40 px-3 py-1 hover:bg-muted/60 transition-colors"
+                  >
+                    {suggestedCompany.nextAction === "finish_profile" ? "Finish profile" : "Add intel"}
+                  </button>
+                </div>
+
+                {suggestedCompany.missingFields && suggestedCompany.missingFields.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {suggestedCompany.missingFields.map((field) => (
+                      <span
+                        key={field}
+                        className="text-[11px] text-muted-foreground/70 flex items-center gap-1"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full border border-muted-foreground/40 inline-block" />
+                        {field}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

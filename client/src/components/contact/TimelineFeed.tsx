@@ -50,6 +50,7 @@ interface TimelineFeedProps {
   items: TimelineItem[];
   onAddNote: (text: string) => void;
   isAddingNote?: boolean;
+  onQuickLog?: (type: TimelineEventType, summary: string) => void;
 }
 
 const EVENT_ICONS: Record<string, typeof StickyNote> = {
@@ -114,7 +115,39 @@ function normalizeType(type: string): FilterType | null {
   return null;
 }
 
-export function TimelineFeed({ items, onAddNote, isAddingNote }: TimelineFeedProps) {
+interface QuickLogBarProps {
+  onLog: (type: string, summary: string) => void;
+}
+
+function QuickLogBar({ onLog }: QuickLogBarProps) {
+  const options = [
+    { type: "meeting_scheduled", label: "📅 Met" },
+    { type: "note_added",        label: "📞 Called" },
+    { type: "note_added",        label: "✉️ Emailed" },
+    { type: "note_added",        label: "💬 LinkedIn" },
+  ];
+
+  return (
+    <div className="pb-2">
+      <p className="text-xs text-muted-foreground mb-2">Log interaction</p>
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {options.map((opt) => (
+          <button
+            key={opt.label}
+            onClick={() => onLog(opt.type, opt.label.replace(/^[^\s]+\s/, ""))}
+            className="shrink-0 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium hover:bg-muted/50 transition-colors active:scale-95"
+            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            data-testid={`chip-log-${opt.label.replace(/^[^\s]+\s/, "").toLowerCase().replace(/\s+/g, "-")}`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: TimelineFeedProps) {
   const [filter, setFilter] = useState<FilterType>("all");
   const [noteText, setNoteText] = useState("");
 
@@ -125,6 +158,40 @@ export function TimelineFeed({ items, onAddNote, isAddingNote }: TimelineFeedPro
       return normalized === filter;
     });
   }, [items, filter]);
+
+  // Group consecutive contact_updated events to reduce noise
+  const groupedItems = useMemo(() => {
+    const result: Array<TimelineItem | { type: "__group__"; label: string; id: string; at: string | Date }> = [];
+    let i = 0;
+    while (i < filteredItems.length) {
+      const item = filteredItems[i];
+      if (item.type === "contact_updated") {
+        // Collect consecutive contact_updated items
+        const batch = [item];
+        while (
+          i + 1 < filteredItems.length &&
+          filteredItems[i + 1].type === "contact_updated"
+        ) {
+          i++;
+          batch.push(filteredItems[i]);
+        }
+        if (batch.length >= 2) {
+          result.push({
+            type: "__group__" as const,
+            label: `${batch.length} profile edits`,
+            id: `group-${batch[0].id}`,
+            at: batch[0].at,
+          });
+        } else {
+          result.push(item);
+        }
+      } else {
+        result.push(item);
+      }
+      i++;
+    }
+    return result;
+  }, [filteredItems]);
 
   const handleAddNote = () => {
     if (!noteText.trim()) return;
@@ -149,6 +216,9 @@ export function TimelineFeed({ items, onAddNote, isAddingNote }: TimelineFeedPro
 
   return (
     <div className="space-y-4" data-testid="timeline-feed">
+      {/* Quick Log Bar */}
+      {onQuickLog && <QuickLogBar onLog={onQuickLog} />}
+
       {/* Filter Chips */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         {FILTER_OPTIONS.map((option) => (
@@ -191,20 +261,37 @@ export function TimelineFeed({ items, onAddNote, isAddingNote }: TimelineFeedPro
 
       {/* Timeline List */}
       <div className="divide-y divide-border/50">
-        {filteredItems.length === 0 ? (
+        {groupedItems.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground text-sm">
             No timeline events yet
           </div>
         ) : (
-          filteredItems.map((item) => {
-            const Icon = EVENT_ICONS[item.type] || StickyNote;
-            const colorClass = EVENT_COLORS[item.type] || EVENT_COLORS.note;
+          groupedItems.map((item) => {
+            if ("label" in item && item.type === "__group__") {
+              return (
+                <div key={item.id} className="flex gap-3 py-2">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-gray-100 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
+                    <Edit className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center">
+                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <span className="ml-auto text-xs text-muted-foreground shrink-0 pl-2">
+                      {formatEventTime(item.at)}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            const timelineItem = item as TimelineItem;
+            const Icon = EVENT_ICONS[timelineItem.type] || StickyNote;
+            const colorClass = EVENT_COLORS[timelineItem.type] || EVENT_COLORS.note;
 
             return (
               <div
-                key={item.id}
+                key={timelineItem.id}
                 className="flex gap-3 py-3"
-                data-testid={`timeline-item-${item.id}`}
+                data-testid={`timeline-item-${timelineItem.id}`}
               >
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${colorClass}`}
@@ -213,14 +300,14 @@ export function TimelineFeed({ items, onAddNote, isAddingNote }: TimelineFeedPro
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium">{item.title}</p>
+                    <p className="text-sm font-medium">{timelineItem.title}</p>
                     <span className="text-xs text-muted-foreground shrink-0">
-                      {formatEventTime(item.at)}
+                      {formatEventTime(timelineItem.at)}
                     </span>
                   </div>
-                  {item.detail && (
+                  {timelineItem.detail && (
                     <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                      {item.detail}
+                      {timelineItem.detail}
                     </p>
                   )}
                 </div>
