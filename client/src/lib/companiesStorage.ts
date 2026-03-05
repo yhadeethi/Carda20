@@ -7,6 +7,31 @@ import { normalizeCompany, stringSimilarity } from "@/lib/contacts/dedupe";
 
 const STORAGE_KEY_V1 = "carda_companies_v1";
 const STORAGE_KEY_V2 = "carda_companies_v2";
+const DELETED_COMPANIES_KEY = "carda_deleted_companies";
+
+interface DeletedCompanyEntry {
+  normName: string;
+  domain?: string | null;
+}
+
+function getDeletedCompaniesBlocklist(): DeletedCompanyEntry[] {
+  try {
+    const raw = localStorage.getItem(DELETED_COMPANIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addToDeletedCompaniesBlocklist(company: Company): void {
+  const normName = normalizeCompany(company.name);
+  if (!normName) return;
+  const list = getDeletedCompaniesBlocklist();
+  if (!list.some((e) => e.normName === normName)) {
+    list.push({ normName, domain: company.domain?.toLowerCase() || null });
+    try { localStorage.setItem(DELETED_COMPANIES_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+  }
+}
 
 export interface Company {
   id: string;
@@ -105,6 +130,8 @@ function fireCompanyUpsert(company: Company): void {
 
 export function deleteCompany(companyId: string): Company[] {
   const companies = getCompanies();
+  const toDelete = companies.find((c) => c.id === companyId);
+  if (toDelete) addToDeletedCompaniesBlocklist(toDelete);
   const filtered = companies.filter((c) => c.id !== companyId);
   saveCompanies(filtered);
   return filtered;
@@ -254,9 +281,10 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
   });
   
   // Create companies for groups that don't already exist
+  const deletedBlocklist = getDeletedCompaniesBlocklist();
   companyGroups.forEach(({ name, domain }) => {
     const normalizedName = normalizeCompanyName(name).toLowerCase();
-    
+
     // Check if company already exists by name or domain
     const existsByName = existingCompanies.some(
       (c) => normalizeCompanyName(c.name).toLowerCase() === normalizedName
@@ -264,8 +292,16 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
     const existsByDomain = domain && existingCompanies.some(
       (c) => c.domain?.toLowerCase() === domain.toLowerCase()
     );
-    
-    if (!existsByName && !existsByDomain) {
+
+    // Skip companies the user has intentionally deleted
+    const normForBlock = normalizeCompany(name) || normalizedName;
+    const isDeleted = deletedBlocklist.some(
+      (e) =>
+        (e.normName && e.normName === normForBlock) ||
+        (e.domain && domain && e.domain === domain.toLowerCase())
+    );
+
+    if (!existsByName && !existsByDomain && !isDeleted) {
       const newCompany = createCompany({ name, domain });
       newCompanies.push(newCompany);
     }
