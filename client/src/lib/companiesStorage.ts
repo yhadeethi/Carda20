@@ -3,6 +3,8 @@
  * Stores and manages company data with localStorage persistence
  */
 
+import { normalizeCompany, stringSimilarity } from "@/lib/contacts/dedupe";
+
 const STORAGE_KEY_V1 = "carda_companies_v1";
 const STORAGE_KEY_V2 = "carda_companies_v2";
 
@@ -115,7 +117,17 @@ export function getCompanyById(companyId: string): Company | undefined {
 export function findCompanyByName(name: string): Company | undefined {
   if (!name) return undefined;
   const normalized = name.trim().toLowerCase();
-  return getCompanies().find((c) => c.name.trim().toLowerCase() === normalized);
+  // Exact case-insensitive match first
+  const exact = getCompanies().find((c) => c.name.trim().toLowerCase() === normalized);
+  if (exact) return exact;
+  // Fuzzy fallback — strips legal suffixes before comparing
+  const normIncoming = normalizeCompany(name);
+  if (!normIncoming || normIncoming.length < 3) return undefined;
+  return getCompanies().find((c) => {
+    const normExisting = normalizeCompany(c.name);
+    if (!normExisting || normExisting.length < 3) return false;
+    return stringSimilarity(normIncoming, normExisting) >= 82;
+  });
 }
 
 export function findCompanyByDomain(domain: string): Company | undefined {
@@ -205,12 +217,12 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
     const domain = websiteDomain || emailDomain;
     
     if (companyName) {
-      const normalized = normalizeCompanyName(companyName).toLowerCase();
-      if (normalized && !companyGroups.has(normalized)) {
-        companyGroups.set(normalized, { name: companyName, domain });
-      } else if (normalized && domain && !companyGroups.get(normalized)!.domain) {
+      const groupKey = normalizeCompany(companyName) || companyName.toLowerCase().trim();
+      if (groupKey && !companyGroups.has(groupKey)) {
+        companyGroups.set(groupKey, { name: companyName, domain });
+      } else if (groupKey && domain && !companyGroups.get(groupKey)!.domain) {
         // Update with domain if we have one
-        companyGroups.get(normalized)!.domain = domain;
+        companyGroups.get(groupKey)!.domain = domain;
       }
     } else if (domain) {
       // Fallback: use domain as company grouping

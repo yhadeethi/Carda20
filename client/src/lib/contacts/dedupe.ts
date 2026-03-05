@@ -67,7 +67,7 @@ function levenshteinDistance(a: string, b: string): number {
 }
 
 // Calculate similarity score (0-100)
-function stringSimilarity(a: string, b: string): number {
+export function stringSimilarity(a: string, b: string): number {
   if (a === b) return 100;
   if (!a || !b) return 0;
   

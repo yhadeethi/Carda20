@@ -33,6 +33,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { QueuedScan, updateQueueItem, clearBatchSession } from "@/lib/batchScanStorage";
 import { saveContact } from "@/lib/contactsStorage";
+import { loadContactsV2 } from "@/lib/contacts/storage";
+import { findFuzzyCompanyMatch } from "@/lib/contacts/dedupe";
 
 interface BatchReviewProps {
   items: QueuedScan[];
@@ -122,12 +124,19 @@ export function BatchReview({ items, eventName, onComplete, onBack }: BatchRevie
     setIsSaving(true);
     let savedCount = 0;
 
+    const existingContactsForDedupe = loadContactsV2();
+
     for (const item of completedItems) {
       if (approvedIds.has(item.id) && item.result?.contact) {
         try {
+          let companyName = item.result.contact.companyName || '';
+          if (companyName) {
+            const canonical = findFuzzyCompanyMatch(companyName, existingContactsForDedupe);
+            if (canonical && canonical !== companyName) companyName = canonical;
+          }
           saveContact({
             name: item.result.contact.fullName || '',
-            company: item.result.contact.companyName || '',
+            company: companyName,
             title: item.result.contact.jobTitle || '',
             email: item.result.contact.email || '',
             phone: item.result.contact.phone || '',
