@@ -126,7 +126,12 @@ export function findCompanyByName(name: string): Company | undefined {
   return getCompanies().find((c) => {
     const normExisting = normalizeCompany(c.name);
     if (!normExisting || normExisting.length < 3) return false;
-    return stringSimilarity(normIncoming, normExisting) >= 82;
+    if (stringSimilarity(normIncoming, normExisting) >= 82) return true;
+    if (normExisting.length >= 4 && (
+      normIncoming.startsWith(normExisting + ' ') ||
+      normExisting.startsWith(normIncoming + ' ')
+    )) return true;
+    return false;
   });
 }
 
@@ -218,11 +223,21 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
     
     if (companyName) {
       const groupKey = normalizeCompany(companyName) || companyName.toLowerCase().trim();
-      if (groupKey && !companyGroups.has(groupKey)) {
-        companyGroups.set(groupKey, { name: companyName, domain });
-      } else if (groupKey && domain && !companyGroups.get(groupKey)!.domain) {
-        // Update with domain if we have one
-        companyGroups.get(groupKey)!.domain = domain;
+      if (groupKey) {
+        // Check if this is a variant of an already-seen key (prefix/subsidiary match)
+        let canonicalKey = groupKey;
+        for (const existingKey of companyGroups.keys()) {
+          if (existingKey.length < 4 || groupKey.length < 4) continue;
+          if (groupKey.startsWith(existingKey + ' ') || existingKey.startsWith(groupKey + ' ')) {
+            canonicalKey = existingKey.length <= groupKey.length ? existingKey : groupKey;
+            break;
+          }
+        }
+        if (!companyGroups.has(canonicalKey)) {
+          companyGroups.set(canonicalKey, { name: companyName, domain });
+        } else if (domain && !companyGroups.get(canonicalKey)!.domain) {
+          companyGroups.get(canonicalKey)!.domain = domain;
+        }
       }
     } else if (domain) {
       // Fallback: use domain as company grouping

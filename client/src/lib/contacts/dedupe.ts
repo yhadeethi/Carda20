@@ -27,6 +27,8 @@ export function normalizeName(name: string | undefined): string {
 export function normalizeCompany(company: string | undefined): string {
   if (!company) return '';
   return company
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ')
