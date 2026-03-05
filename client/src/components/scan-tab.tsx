@@ -23,6 +23,7 @@ import {
 
 import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
 import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
+import { findFuzzyCompanyMatch } from "@/lib/contacts/dedupe";
 import { generateId as generateTimelineId } from "@/lib/contacts/ids";
 import {
   getContactCountForCompany,
@@ -262,7 +263,7 @@ export function ScanTab({
 
   const saveContactToStorage = (parsedContact: ParsedContact): StoredContact | null => {
     try {
-      const contactData = {
+      let contactData = {
         name: parsedContact.fullName || "",
         company: parsedContact.companyName || "",
         title: parsedContact.jobTitle || "",
@@ -274,6 +275,17 @@ export function ScanTab({
       };
 
       const eventNameToUse = eventModeEnabled ? effectiveEventName : null;
+
+      // Fuzzy company name deduplication: if incoming company name closely matches
+      // an existing one, reuse the canonical name to prevent split company records.
+      if (contactData.company) {
+        const existingContacts = loadContactsV2();
+        const canonicalCompany = findFuzzyCompanyMatch(contactData.company, existingContacts);
+        if (canonicalCompany && canonicalCompany !== contactData.company) {
+          contactData = { ...contactData, company: canonicalCompany };
+        }
+      }
+
       const savedContact = saveContact(contactData, eventNameToUse);
       if (!savedContact) return null;
 

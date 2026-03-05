@@ -43,10 +43,12 @@ export type CompanySummary = {
   lastTouchedAt: string;
   completeness: number; // 0-100
   hasNotes: boolean;
+  hasLocation: boolean;
 };
 
 export type SuggestedCompany = CompanySummary & {
   nextAction: "finish_profile" | "add_intel";
+  missingFields: string[];
 };
 
 function startOfLocalDay(d: Date): Date {
@@ -313,6 +315,7 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
           lastTouchedAt: v.lastTouchedAt.toISOString(),
           completeness,
           hasNotes: v.hasNotes,
+          hasLocation: v.hasLocation,
         } satisfies CompanySummary;
       })
       .sort((a, b) => b.lastTouchedAt.localeCompare(a.lastTouchedAt));
@@ -331,9 +334,17 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
       return b.lastTouchedAt.localeCompare(a.lastTouchedAt);
     });
     const best = sorted[0];
+
+    const missingFields: string[] = [];
+    if (!best.domain) missingFields.push("Website");
+    if (!best.hasNotes) missingFields.push("Notes");
+    if (!best.hasLocation) missingFields.push("Location");
+    if (best.contactsCount < 3) missingFields.push(`${3 - best.contactsCount} more contact${3 - best.contactsCount !== 1 ? "s" : ""}`);
+
     return {
       ...best,
       nextAction: best.completeness < 75 ? "finish_profile" : "add_intel",
+      missingFields,
     };
   }, [recentCompanies]);
 
