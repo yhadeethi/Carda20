@@ -1361,6 +1361,20 @@ Return ONLY valid JSON, no markdown or explanation.`;
     }
   });
 
+  // Companies - delete by publicId
+  app.delete("/api/companies/:id", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const company = await storage.getCompanyByPublicId(userId, req.params.id);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      await storage.deleteCompany(company.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting company:", error);
+      res.status(500).json({ message: "Failed to delete company" });
+    }
+  });
+
   // Events - upsert by publicId (non-destructive merge)
   app.post("/api/events/upsert", isAuthenticated, async (req: Request, res: Response) => {
     try {

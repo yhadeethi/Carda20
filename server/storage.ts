@@ -41,7 +41,8 @@ export interface IStorage {
   getCompanyById(id: number): Promise<Company | undefined>;
   createCompany(company: InsertCompany): Promise<Company>;
   updateCompany(id: number, updates: Partial<Company>): Promise<Company | undefined>;
-  
+  deleteCompany(id: number): Promise<boolean>;
+
   getCompanyIntelByCompanyId(companyId: number): Promise<CompanyIntel | undefined>;
   createCompanyIntel(intel: InsertCompanyIntel): Promise<CompanyIntel>
   // HubSpot OAuth tokens
@@ -219,6 +220,11 @@ export class DatabaseStorage implements IStorage {
   async deleteContact(id: number): Promise<boolean> {
     const result = await db.delete(contacts).where(eq(contacts.id, id));
     // Drizzle returns an array-like result with rowCount property
+    return (result as any).rowCount > 0;
+  }
+
+  async deleteCompany(id: number): Promise<boolean> {
+    const result = await db.delete(companies).where(eq(companies.id, id));
     return (result as any).rowCount > 0;
   }
 

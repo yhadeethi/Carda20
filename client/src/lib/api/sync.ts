@@ -72,6 +72,23 @@ export async function upsertCompanyToServer(company: Company): Promise<boolean> 
   }
 }
 
+export async function deleteCompanyFromServer(companyId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/companies/${companyId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (res.ok) {
+      console.log(`[Sync] Deleted company ${companyId} from server`);
+      return true;
+    }
+    throw new Error(`Server returned ${res.status}`);
+  } catch (e) {
+    console.warn(`[Sync] Company delete failed:`, e);
+    return false;
+  }
+}
+
 export async function deleteContactFromServer(contactId: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/contacts/${contactId}`, {

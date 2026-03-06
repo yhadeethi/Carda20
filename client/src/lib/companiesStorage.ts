@@ -134,6 +134,9 @@ export function deleteCompany(companyId: string): Company[] {
   if (toDelete) addToDeletedCompaniesBlocklist(toDelete);
   const filtered = companies.filter((c) => c.id !== companyId);
   saveCompanies(filtered);
+  import('./api/sync').then(({ deleteCompanyFromServer }) => {
+    deleteCompanyFromServer(companyId);
+  });
   return filtered;
 }
 
