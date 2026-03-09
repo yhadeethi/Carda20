@@ -25,15 +25,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings, AlertTriangle } from "lucide-react";
+import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings, AlertTriangle, Plus } from "lucide-react";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { SiHubspot, SiSalesforce } from "react-icons/si";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 import { motion, AnimatePresence } from "framer-motion";
 
-type TabMode = "home" | "scan" | "contacts" | "events";
-type ViewMode = "home" | "scan" | "contacts" | "contact-detail" | "company-detail" | "events" | "event-detail";
+type TabMode = "home" | "contacts" | "events";
+type ViewMode = "home" | "contacts" | "contact-detail" | "company-detail" | "events" | "event-detail";
 
 interface RecentAccount {
   email: string;
@@ -97,6 +97,8 @@ export default function HomePage() {
   const [showCreateContactDrawer, setShowCreateContactDrawer] = useState(false);
   const [showHubSpotProfile, setShowHubSpotProfile] = useState(false);
   const [showSalesforceProfile, setShowSalesforceProfile] = useState(false);
+  const [captureMenuOpen, setCaptureMenuOpen] = useState(false);
+  const [captureSheetMode, setCaptureSheetMode] = useState<"scan" | "paste" | null>(null);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -164,11 +166,17 @@ export default function HomePage() {
   };
 
   const handleTabChange = (tab: TabMode) => {
+    setCaptureMenuOpen(false);
+    setCaptureSheetMode(null);
     setActiveTab(tab);
-    setViewMode(tab);
-    setSelectedContact(null);
+    if (tab === "home") setViewMode("home");
+    else if (tab === "contacts") {
+      setViewMode("contacts");
+      setSelectedContact(null);
+      setSelectedCompanyId(null);
+    }
+    else if (tab === "events") setViewMode("events");
     setContactInitialAction(null);
-    setSelectedCompanyId(null);
   };
 
   const handleViewPeople = () => {
@@ -235,8 +243,8 @@ export default function HomePage() {
   };
 
   const handleBackToScan = () => {
-    setViewMode("scan");
-    setActiveTab("scan");
+    setViewMode("contacts");
+    setActiveTab("contacts");
     setSelectedContact(null);
     setContactInitialAction(null);
   };
@@ -273,8 +281,7 @@ export default function HomePage() {
   const handleScanAtUserEvent = (eventId: string) => {
     setCurrentEventId(eventId);
     setEventModeEnabled(true);
-    setActiveTab("scan");
-    setViewMode("scan");
+    setCaptureSheetMode("scan");
   };
 
   const handleContactSelectedFromEvent = (contact: StoredContact) => {
@@ -283,9 +290,19 @@ export default function HomePage() {
     setViewMode("contact-detail");
   };
 
+  const handleCaptureToggle = () => setCaptureMenuOpen(prev => !prev);
+
+  const handleCaptureOption = (option: "scan" | "paste" | "debrief") => {
+    setCaptureMenuOpen(false);
+    if (option === "scan" || option === "paste") {
+      setCaptureSheetMode(option);
+    }
+  };
+
+  const handleCaptureSheetClose = () => setCaptureSheetMode(null);
+
   const tabs = [
-    { id: "scan" as TabMode, label: "Scan", icon: Camera },
-    { id: "contacts" as TabMode, label: "Relationships", icon: Users },
+    { id: "contacts" as TabMode, label: "Network", icon: Users },
     { id: "events" as TabMode, label: "Events", icon: Calendar },
   ];
 
@@ -412,10 +429,7 @@ export default function HomePage() {
             >
               <HomeScoreboard
                 refreshKey={contactsVersion}
-                onStartScan={() => {
-                  setActiveTab('scan');
-                  setViewMode('scan');
-                }}
+                onStartScan={() => setCaptureSheetMode("scan")}
                 onCreateContact={() => setShowCreateContactDrawer(true)}
                 onViewPeople={handleViewPeople}
                 onViewCompanies={handleViewCompanies}
@@ -425,26 +439,7 @@ export default function HomePage() {
               />
             </motion.div>
           )}
-          {viewMode === "scan" && (
-            <motion.div
-              key="scan"
-              initial={{ x: 40, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -40, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <ScanTab
-                eventModeEnabled={eventModeEnabled}
-                currentEventName={currentEventName}
-                onEventModeChange={setEventModeEnabled}
-                onEventNameChange={setCurrentEventName}
-                onContactSaved={refreshContacts}
-                onViewInOrgMap={(companyId) => handleSelectCompany(companyId, 'orgmap')}
-                onShowingContactChange={setScanShowingContact}
-              />
-            </motion.div>
-          )}
-          {viewMode === "contacts" && (
+{viewMode === "contacts" && (
             <motion.div
               key="contacts"
               initial={{ x: 40, opacity: 0 }}
@@ -531,10 +526,10 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar - iOS Photos inspired (Home circle + pill group) */}
+      {/* Bottom Navigation Bar - Liquid Glass: Home circle + pill + Capture button */}
       {showBottomNav && (
         <nav
-          className={`fixed inset-x-0 bottom-0 z-30 flex justify-center transition-all duration-300 ease-out ${
+          className={`fixed inset-x-0 bottom-0 z-30 flex items-center justify-between px-4 transition-all duration-300 ease-out ${
             isHidden ? "translate-y-full opacity-0" : "translate-y-0 opacity-100"
           }`}
           style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
@@ -554,7 +549,7 @@ export default function HomePage() {
               <Home className="w-5 h-5" />
             </button>
 
-            {/* Pill group */}
+            {/* Pill group — Network + Events */}
             <div
               className={`inline-flex items-center h-12 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-xl border transition-all duration-300 ease-out ${
                 isCompact ? "gap-4 px-4" : "gap-6 px-5"
@@ -592,8 +587,145 @@ export default function HomePage() {
               })}
             </div>
           </div>
+
+          {/* Capture button (floating right) */}
+          <button
+            onClick={handleCaptureToggle}
+            className={`h-12 w-12 rounded-full backdrop-blur-sm shadow-xl border transition-all duration-300 flex items-center justify-center ${
+              captureMenuOpen
+                ? "bg-white/95 dark:bg-slate-900/95 text-muted-foreground"
+                : "bg-primary text-primary-foreground"
+            }`}
+            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            aria-label="Capture"
+            data-testid="nav-capture"
+          >
+            <Plus className={`w-5 h-5 transition-transform duration-300 ${captureMenuOpen ? "rotate-45" : ""}`} />
+          </button>
         </nav>
       )}
+
+      {/* Capture Menu Overlay */}
+      <AnimatePresence>
+        {captureMenuOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setCaptureMenuOpen(false)}
+            />
+            <motion.div
+              className="fixed bottom-20 right-4 z-[25] w-[220px]"
+              style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            >
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 dark:border-slate-700/50 overflow-hidden">
+                {/* Scan Card */}
+                <button
+                  onClick={() => handleCaptureOption("scan")}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-foreground">Scan Card</p>
+                    <p className="text-[11px] text-muted-foreground">Photo of a business card</p>
+                  </div>
+                </button>
+
+                <div className="border-t border-border/50" />
+
+                {/* Paste Signature */}
+                <button
+                  onClick={() => handleCaptureOption("paste")}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-foreground">Paste Signature</p>
+                    <p className="text-[11px] text-muted-foreground">Extract from email text</p>
+                  </div>
+                </button>
+
+                <div className="border-t border-border/50" />
+
+                {/* Voice Debrief (coming soon) */}
+                <button
+                  onClick={() => handleCaptureOption("debrief")}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-600 dark:text-violet-400">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" x2="12" y1="19" y2="22" />
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-foreground">Voice Debrief</p>
+                    <p className="text-[11px] text-muted-foreground">Record meeting notes</p>
+                  </div>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Capture Bottom Sheet */}
+      <AnimatePresence>
+        {captureSheetMode && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-black/40 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCaptureSheetClose}
+            />
+            <motion.div
+              className="fixed bottom-0 left-0 right-0 bg-background rounded-t-3xl z-50 max-h-[92vh] overflow-y-auto"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            >
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-2">
+                <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+              </div>
+              <ScanTab
+                onBackToContacts={handleCaptureSheetClose}
+                onDeleteContact={handleDeleteContact}
+                eventModeEnabled={eventModeEnabled}
+                currentEventName={currentEventName}
+                onEventModeChange={setEventModeEnabled}
+                onEventNameChange={setCurrentEventName}
+                onContactSaved={(contact) => {
+                  handleCaptureSheetClose();
+                  if (contact) handleSelectContact(contact);
+                  refreshContacts();
+                }}
+                onContactUpdated={handleContactUpdated}
+                onViewInOrgMap={(companyId) => {
+                  handleCaptureSheetClose();
+                  handleSelectCompany(companyId, 'orgmap');
+                }}
+                onShowingContactChange={() => {}}
+                initialMode={captureSheetMode}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Create Contact Drawer */}
       <CreateContactDrawer

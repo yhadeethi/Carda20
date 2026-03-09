@@ -72,10 +72,11 @@ interface ScanTabProps {
   currentEventName: string | null;
   onEventModeChange: (enabled: boolean) => void;
   onEventNameChange: (name: string | null) => void;
-  onContactSaved?: () => void;
+  onContactSaved?: (contact?: StoredContact) => void;
   onContactUpdated?: (contactId: string) => void;
   onViewInOrgMap?: (companyId: string) => void;
   onShowingContactChange?: (showing: boolean) => void;
+  initialMode?: "scan" | "paste";
 }
 
 interface HubSpotSyncButtonProps {
@@ -189,12 +190,18 @@ export function ScanTab({
   onContactUpdated,
   onViewInOrgMap,
   onShowingContactChange,
+  initialMode,
 }: ScanTabProps) {
   const { toast } = useToast();
   const reduceMotion = useReducedMotion();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [scanMode, setScanMode] = useState<ScanMode>("scan");
+  const [scanMode, setScanMode] = useState<ScanMode>(initialMode || "scan");
+
+  useEffect(() => {
+    if (initialMode) setScanMode(initialMode);
+  }, [initialMode]);
+
   const [pastedText, setPastedText] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -339,7 +346,7 @@ export function ScanTab({
       upsertContactV2(v2Contact);
       setContactV2(v2Contact);
 
-      onContactSaved?.();
+      onContactSaved?.(savedContact);
       return savedContact;
     } catch (e) {
       console.error("[ScanTab] Failed to save contact to storage:", e);
