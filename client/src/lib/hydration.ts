@@ -90,18 +90,30 @@ export async function hydrateFromServer(): Promise<void> {
           localCompanyMap.set(uuid, merged);
         }
       } else {
-        localCompanyMap.set(uuid, {
-          id: uuid,
-          dbId: server.dbId,
-          name: (server as any).name || '',
-          domain: (server as any).domain || null,
-          city: (server as any).city || null,
-          state: (server as any).state || null,
-          country: (server as any).country || null,
-          notes: (server as any).notes || null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
+        const deletedList: Array<{ normName: string; domain?: string | null }> = (() => {
+          try { return JSON.parse(localStorage.getItem('carda_deleted_companies') || '[]'); } catch { return []; }
+        })();
+        const serverName = (server as any).name || '';
+        const serverDomain = ((server as any).domain || '').toLowerCase();
+        const serverNorm = serverName.trim().toLowerCase().replace(/\s+/g, ' ');
+        const isDeleted = deletedList.some(
+          (e) => (e.normName && serverNorm.includes(e.normName)) ||
+                  (e.domain && serverDomain && e.domain === serverDomain)
+        );
+        if (!isDeleted) {
+          localCompanyMap.set(uuid, {
+            id: uuid,
+            dbId: server.dbId,
+            name: serverName,
+            domain: (server as any).domain || null,
+            city: (server as any).city || null,
+            state: (server as any).state || null,
+            country: (server as any).country || null,
+            notes: (server as any).notes || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
       }
     }
 

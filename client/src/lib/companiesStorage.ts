@@ -3,8 +3,36 @@
  * Stores and manages company data with localStorage persistence
  */
 
+import { normalizeCompany, stringSimilarity } from "@/lib/contacts/dedupe";
+
 const STORAGE_KEY_V1 = "carda_companies_v1";
 const STORAGE_KEY_V2 = "carda_companies_v2";
+
+const DELETED_COMPANIES_KEY = "carda_deleted_companies";
+
+interface DeletedCompanyEntry {
+  normName: string;
+  domain?: string | null;
+}
+
+function getDeletedCompaniesBlocklist(): DeletedCompanyEntry[] {
+  try {
+    const raw = localStorage.getItem(DELETED_COMPANIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addToDeletedCompaniesBlocklist(company: Company): void {
+  const normName = normalizeCompany(company.name);
+  if (!normName) return;
+  const list = getDeletedCompaniesBlocklist();
+  if (!list.some((e) => e.normName === normName)) {
+    list.push({ normName, domain: company.domain?.toLowerCase() || null });
+    try { localStorage.setItem(DELETED_COMPANIES_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+  }
+}
 
 export interface Company {
   id: string;
@@ -103,8 +131,13 @@ function fireCompanyUpsert(company: Company): void {
 
 export function deleteCompany(companyId: string): Company[] {
   const companies = getCompanies();
+  const toDelete = companies.find((c) => c.id === companyId);
+  if (toDelete) addToDeletedCompaniesBlocklist(toDelete);
   const filtered = companies.filter((c) => c.id !== companyId);
   saveCompanies(filtered);
+  import('./api/sync').then(({ deleteCompanyFromServer }) => {
+    deleteCompanyFromServer(companyId);
+  });
   return filtered;
 }
 
@@ -115,7 +148,20 @@ export function getCompanyById(companyId: string): Company | undefined {
 export function findCompanyByName(name: string): Company | undefined {
   if (!name) return undefined;
   const normalized = name.trim().toLowerCase();
-  return getCompanies().find((c) => c.name.trim().toLowerCase() === normalized);
+  const exact = getCompanies().find((c) => c.name.trim().toLowerCase() === normalized);
+  if (exact) return exact;
+  const normIncoming = normalizeCompany(name);
+  if (!normIncoming || normIncoming.length < 3) return undefined;
+  return getCompanies().find((c) => {
+    const normExisting = normalizeCompany(c.name);
+    if (!normExisting || normExisting.length < 3) return false;
+    if (stringSimilarity(normIncoming, normExisting) >= 82) return true;
+    if (normExisting.length >= 4 && (
+      normIncoming.startsWith(normExisting + ' ') ||
+      normExisting.startsWith(normIncoming + ' ')
+    )) return true;
+    return false;
+  });
 }
 
 export function findCompanyByDomain(domain: string): Company | undefined {
@@ -205,12 +251,21 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
     const domain = websiteDomain || emailDomain;
     
     if (companyName) {
-      const normalized = normalizeCompanyName(companyName).toLowerCase();
-      if (normalized && !companyGroups.has(normalized)) {
-        companyGroups.set(normalized, { name: companyName, domain });
-      } else if (normalized && domain && !companyGroups.get(normalized)!.domain) {
-        // Update with domain if we have one
-        companyGroups.get(normalized)!.domain = domain;
+      const groupKey = normalizeCompany(companyName) || companyName.toLowerCase().trim();
+      if (groupKey) {
+        let canonicalKey = groupKey;
+        for (const existingKey of companyGroups.keys()) {
+          if (existingKey.length < 4 || groupKey.length < 4) continue;
+          if (groupKey.startsWith(existingKey + ' ') || existingKey.startsWith(groupKey + ' ')) {
+            canonicalKey = existingKey.length <= groupKey.length ? existingKey : groupKey;
+            break;
+          }
+        }
+        if (!companyGroups.has(canonicalKey)) {
+          companyGroups.set(canonicalKey, { name: companyName, domain });
+        } else if (domain && !companyGroups.get(canonicalKey)!.domain) {
+          companyGroups.get(canonicalKey)!.domain = domain;
+        }
       }
     } else if (domain) {
       // Fallback: use domain as company grouping
@@ -227,9 +282,10 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
   });
   
   // Create companies for groups that don't already exist
+  const deletedBlocklist = getDeletedCompaniesBlocklist();
   companyGroups.forEach(({ name, domain }) => {
     const normalizedName = normalizeCompanyName(name).toLowerCase();
-    
+
     // Check if company already exists by name or domain
     const existsByName = existingCompanies.some(
       (c) => normalizeCompanyName(c.name).toLowerCase() === normalizedName
@@ -237,8 +293,16 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
     const existsByDomain = domain && existingCompanies.some(
       (c) => c.domain?.toLowerCase() === domain.toLowerCase()
     );
-    
-    if (!existsByName && !existsByDomain) {
+
+    // Skip companies the user has intentionally deleted
+    const normForBlock = normalizeCompany(name) || normalizedName;
+    const isDeleted = deletedBlocklist.some(
+      (e) =>
+        (e.normName && e.normName === normForBlock) ||
+        (e.domain && domain && e.domain === domain.toLowerCase())
+    );
+
+    if (!existsByName && !existsByDomain && !isDeleted) {
       const newCompany = createCompany({ name, domain });
       newCompanies.push(newCompany);
     }

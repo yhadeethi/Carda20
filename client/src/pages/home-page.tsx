@@ -29,8 +29,6 @@ import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, Use
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { SiHubspot, SiSalesforce } from "react-icons/si";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
-import { VoiceDebriefRecorder } from "@/components/voice-debrief-recorder";
-import { VoiceDebriefReviewSheet } from "@/components/voice-debrief-review";
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -101,10 +99,6 @@ export default function HomePage() {
   const [showSalesforceProfile, setShowSalesforceProfile] = useState(false);
   const [captureMenuOpen, setCaptureMenuOpen] = useState(false);
   const [captureSheetMode, setCaptureSheetMode] = useState<"scan" | "paste" | null>(null);
-  const [debriefSheetOpen, setDebriefSheetOpen] = useState(false);
-  const [debriefPhase, setDebriefPhase] = useState<"recording" | "review" | "success">("recording");
-  const [debriefTranscript, setDebriefTranscript] = useState<string>("");
-  const [debriefSavedContactId, setDebriefSavedContactId] = useState<string | null>(null);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -302,39 +296,10 @@ export default function HomePage() {
     setCaptureMenuOpen(false);
     if (option === "scan" || option === "paste") {
       setCaptureSheetMode(option);
-    } else if (option === "debrief") {
-      setDebriefPhase("recording");
-      setDebriefTranscript("");
-      setDebriefSavedContactId(null);
-      setDebriefSheetOpen(true);
     }
   };
 
   const handleCaptureSheetClose = () => setCaptureSheetMode(null);
-
-  const handleDebriefTranscriptReady = (transcript: string) => {
-    setDebriefTranscript(transcript);
-    setDebriefPhase("review");
-  };
-
-  const handleDebriefComplete = (contactId: string) => {
-    setDebriefSavedContactId(contactId);
-    setDebriefPhase("success");
-  };
-
-  const handleDebriefClose = () => {
-    setDebriefSheetOpen(false);
-    if (debriefSavedContactId) {
-      const contact = loadContacts().find((c) => c.id === debriefSavedContactId);
-      if (contact) {
-        handleSelectContact(contact);
-      }
-    }
-  };
-
-  const handleDebriefCancel = () => {
-    setDebriefSheetOpen(false);
-  };
 
   const tabs = [
     { id: "contacts" as TabMode, label: "Network", icon: Users },
@@ -664,6 +629,7 @@ export default function HomePage() {
                 <button
                   onClick={() => handleCaptureOption("scan")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  data-testid="capture-scan"
                 >
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                     <Camera className="w-5 h-5" />
@@ -680,6 +646,7 @@ export default function HomePage() {
                 <button
                   onClick={() => handleCaptureOption("paste")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  data-testid="capture-paste"
                 >
                   <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                     <CreditCard className="w-5 h-5" />
@@ -696,6 +663,7 @@ export default function HomePage() {
                 <button
                   onClick={() => handleCaptureOption("debrief")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  data-testid="capture-debrief"
                 >
                   <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-600 dark:text-violet-400">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -757,58 +725,6 @@ export default function HomePage() {
                 onShowingContactChange={() => {}}
                 initialMode={captureSheetMode}
               />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Voice Debrief Bottom Sheet */}
-      <AnimatePresence>
-        {debriefSheetOpen && (
-          <>
-            <motion.div
-              className="fixed inset-0 bg-black/40 z-40"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={debriefPhase === "recording" ? handleDebriefCancel : undefined}
-            />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 bg-background rounded-t-3xl z-50 overflow-y-auto"
-              style={{ maxHeight: debriefPhase === "review" ? "92vh" : "60vh" }}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            >
-              {debriefPhase === "recording" && (
-                <VoiceDebriefRecorder
-                  onTranscriptReady={handleDebriefTranscriptReady}
-                  onCancel={handleDebriefCancel}
-                />
-              )}
-              {debriefPhase === "review" && (
-                <VoiceDebriefReviewSheet
-                  transcript={debriefTranscript}
-                  onComplete={handleDebriefComplete}
-                  onCancel={handleDebriefCancel}
-                />
-              )}
-              {debriefPhase === "success" && (
-                <div className="px-5 py-8 text-center">
-                  <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto mb-3 shadow-lg">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  </div>
-                  <h3 className="text-lg font-bold text-foreground">Debrief Saved</h3>
-                  <p className="text-sm text-muted-foreground mt-1">All updates applied successfully</p>
-                  <button
-                    onClick={handleDebriefClose}
-                    className="w-full mt-6 py-3 rounded-2xl bg-foreground text-background font-semibold text-sm"
-                  >
-                    Done
-                  </button>
-                </div>
-              )}
             </motion.div>
           </>
         )}

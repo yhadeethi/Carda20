@@ -318,6 +318,9 @@ export function deleteContact(id: string): void {
   const contacts = loadContacts();
   const filtered = contacts.filter((c) => c.id !== id);
   saveContacts(filtered);
+  import('./api/sync').then(({ deleteContactFromServer }) => {
+    deleteContactFromServer(id);
+  });
 }
 
 export function getUniqueEventNames(): string[] {
