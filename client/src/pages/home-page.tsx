@@ -14,6 +14,8 @@ import { CompanyDetail } from "@/components/company-detail";
 import { MyQRModal } from "@/components/my-qr-modal";
 import { HomeScoreboard } from "@/components/home/HomeScoreboard";
 import { CreateContactDrawer } from "@/components/create-contact-drawer";
+import { VoiceDebriefRecorder } from "@/components/voice-debrief-recorder";
+import { VoiceDebriefReviewSheet } from "@/components/voice-debrief-review";
 import { HubSpotProfile } from "@/components/hubspot/HubSpotProfile";
 import { SalesforceProfile } from "@/components/salesforce/SalesforceProfile";
 import { Button } from "@/components/ui/button";
@@ -25,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings, AlertTriangle, Plus } from "lucide-react";
+import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings, AlertTriangle, Plus, Mic, CheckCircle2 } from "lucide-react";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { SiHubspot, SiSalesforce } from "react-icons/si";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
@@ -99,6 +101,10 @@ export default function HomePage() {
   const [showSalesforceProfile, setShowSalesforceProfile] = useState(false);
   const [captureMenuOpen, setCaptureMenuOpen] = useState(false);
   const [captureSheetMode, setCaptureSheetMode] = useState<"scan" | "paste" | null>(null);
+  const [debriefSheetOpen, setDebriefSheetOpen] = useState(false);
+  const [debriefPhase, setDebriefPhase] = useState<"record" | "review" | "success">("record");
+  const [debriefTranscript, setDebriefTranscript] = useState("");
+  const [debriefSavedContactId, setDebriefSavedContactId] = useState<string | null>(null);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -296,7 +302,38 @@ export default function HomePage() {
     setCaptureMenuOpen(false);
     if (option === "scan" || option === "paste") {
       setCaptureSheetMode(option);
+    } else if (option === "debrief") {
+      setDebriefPhase("record");
+      setDebriefTranscript("");
+      setDebriefSavedContactId(null);
+      setDebriefSheetOpen(true);
     }
+  };
+
+  const handleDebriefTranscriptReady = (transcript: string) => {
+    setDebriefTranscript(transcript);
+    setDebriefPhase("review");
+  };
+
+  const handleDebriefComplete = (contactId: string) => {
+    setDebriefSavedContactId(contactId);
+    setDebriefPhase("success");
+    refreshContacts();
+  };
+
+  const handleDebriefClose = () => {
+    setDebriefSheetOpen(false);
+    if (debriefSavedContactId) {
+      const contacts = loadContacts();
+      const saved = contacts.find((c) => c.id === debriefSavedContactId);
+      if (saved) {
+        handleSelectContact(saved);
+      }
+    }
+  };
+
+  const handleDebriefCancel = () => {
+    setDebriefSheetOpen(false);
   };
 
   const handleCaptureSheetClose = () => setCaptureSheetMode(null);
@@ -666,11 +703,7 @@ export default function HomePage() {
                   data-testid="capture-debrief"
                 >
                   <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-600 dark:text-violet-400">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                      <line x1="12" x2="12" y1="19" y2="22" />
-                    </svg>
+                    <Mic className="w-5 h-5" />
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-semibold text-foreground">Voice Debrief</p>
@@ -725,6 +758,65 @@ export default function HomePage() {
                 onShowingContactChange={() => {}}
                 initialMode={captureSheetMode}
               />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Voice Debrief Bottom Sheet */}
+      <AnimatePresence>
+        {debriefSheetOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-black/40 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={debriefPhase === "record" ? handleDebriefCancel : undefined}
+            />
+            <motion.div
+              className="fixed bottom-0 left-0 right-0 bg-background rounded-t-3xl z-50 max-h-[92vh] overflow-y-auto"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            >
+              {debriefPhase === "record" && (
+                <VoiceDebriefRecorder
+                  onTranscriptReady={handleDebriefTranscriptReady}
+                  onCancel={handleDebriefCancel}
+                />
+              )}
+              {debriefPhase === "review" && (
+                <VoiceDebriefReviewSheet
+                  transcript={debriefTranscript}
+                  onComplete={handleDebriefComplete}
+                  onCancel={handleDebriefCancel}
+                />
+              )}
+              {debriefPhase === "success" && (
+                <div className="px-5 pt-4 pb-8">
+                  <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-5" />
+                  <div className="flex flex-col items-center gap-4 py-4">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                    </div>
+                    <div className="text-center">
+                      <h2 className="text-lg font-bold text-foreground">Debrief Saved</h2>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Notes, tasks, and reminders have been added to the contact.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleDebriefClose}
+                      className="mt-2 text-sm font-semibold px-6 py-2.5 rounded-xl bg-primary text-primary-foreground"
+                      data-testid="button-view-contact-debrief"
+                    >
+                      View Contact
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </>
         )}

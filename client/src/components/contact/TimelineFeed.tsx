@@ -17,6 +17,7 @@ import {
   Phone,
   Mail,
   Linkedin,
+  Mic,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -81,6 +82,8 @@ const EVENT_ICONS: Record<string, typeof StickyNote> = {
   event_attended: Calendar,
   contact_merged: Users,
   contact_updated: Edit,
+  followup_sent: Sparkles,
+  voice_debrief: Mic,
 };
 
 const EVENT_COLORS: Record<string, string> = {
@@ -103,6 +106,8 @@ const EVENT_COLORS: Record<string, string> = {
   event_attended: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
   contact_merged: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
   contact_updated: "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300",
+  followup_sent: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  voice_debrief: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
 };
 
 type FilterType = "all" | "notes" | "followups" | "reminders" | "crm";
