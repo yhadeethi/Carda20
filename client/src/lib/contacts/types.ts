@@ -40,7 +40,8 @@ export type TimelineEventType =
   | "contact_merged"
   | "contact_updated"
   | "hubspot_synced"
-  | "salesforce_synced";
+  | "salesforce_synced"
+  | "voice_debrief";
 
 // Timeline event
 export interface TimelineEvent {
