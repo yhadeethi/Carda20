@@ -29,6 +29,8 @@ export function normalizeCompany(company: string | undefined): string {
   return company
     .toLowerCase()
     .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .replace(/\b(pty|ltd|inc|llc|corp|gmbh|co|company|limited)\b\.?/gi, '')
     .trim();
@@ -67,7 +69,7 @@ function levenshteinDistance(a: string, b: string): number {
 }
 
 // Calculate similarity score (0-100)
-function stringSimilarity(a: string, b: string): number {
+export function stringSimilarity(a: string, b: string): number {
   if (a === b) return 100;
   if (!a || !b) return 0;
   

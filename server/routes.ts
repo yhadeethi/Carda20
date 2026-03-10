@@ -12,7 +12,7 @@ import { parseContactWithAI, convertAIResultToContact } from "./aiParseService";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
 import { db } from "./db";
-import OpenAI, { toFile } from "openai";
+import OpenAI from "openai";
 
 // Type definitions for authenticated requests
 interface ReplitAuthUser {
@@ -161,18 +161,6 @@ const upload = multer({
 
     cb(null, true);
   },
-});
-
-const audioUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB for audio
-  fileFilter: (_req, file, cb) => {
-    const allowed = [
-      'audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg',
-      'audio/wav', 'audio/x-m4a', 'audio/mp3'
-    ];
-    cb(null, allowed.includes(file.mimetype));
-  }
 });
 
 function userKeyGenerator(req: Request): string {
@@ -1031,124 +1019,6 @@ Return ONLY valid JSON, no markdown or explanation.`;
   });
 
   // ============================================
-  // Voice Debrief API Endpoints
-  // ============================================
-
-  app.post("/api/debrief/transcribe", isAuthenticated, aiRateLimiter, audioUpload.single('audio'), async (req: Request, res: Response) => {
-    try {
-      if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
-        return res.status(503).json({ error: "AI service not configured" });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({ error: "No audio file provided" });
-      }
-
-      const openai = new OpenAI({
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-      });
-
-      const audioFile = await toFile(req.file.buffer, 'audio.webm', { type: req.file.mimetype });
-
-      const transcription = await openai.audio.transcriptions.create({
-        model: 'whisper-1',
-        file: audioFile,
-      });
-
-      res.json({ transcript: transcription.text });
-    } catch (error) {
-      console.error("[Debrief] Transcription error:", error);
-      res.status(500).json({ error: "Transcription failed" });
-    }
-  });
-
-  app.post("/api/debrief/parse", isAuthenticated, aiRateLimiter, async (req: Request, res: Response) => {
-    try {
-      if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
-        return res.status(503).json({ error: "AI service not configured" });
-      }
-
-      const { transcript, contacts } = req.body;
-      if (!transcript || typeof transcript !== 'string') {
-        return res.status(400).json({ error: "transcript is required" });
-      }
-
-      const openai = new OpenAI({
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-      });
-
-      const systemPrompt = `You are a post-meeting debrief parser for a professional CRM app.
-
-The user just finished a meeting and recorded a quick voice note about it. Extract structured data from their transcript.
-
-You will also receive the user's contact list. Try to match any person names mentioned in the transcript to existing contacts. Use fuzzy matching — the user might say "Tom" when the contact is "Thomas Harrison", or "Sarah from Acme" when the contact is "Sarah Chen" at "Acme Corp".
-
-Return a JSON object with this exact shape:
-
-{
-  "matchedContact": {
-    "id": "UUID of matched contact or null if no match",
-    "name": "Name as mentioned by user",
-    "matchedName": "Full name from contact list if matched",
-    "company": "Company name mentioned or from matched contact",
-    "confidence": "high" | "medium" | "low"
-  },
-  "noteSummary": "Clean, concise summary of the meeting/interaction in 1-3 sentences. Write in third person past tense. Include key topics discussed, outcomes, and any commitments made.",
-  "sentiment": "positive" | "neutral" | "negative",
-  "warmthLevel": "hot" | "warm" | "neutral" | "cold",
-  "tasks": [
-    {
-      "title": "Short action item description",
-      "dueDescription": "natural language due date like 'next Tuesday' or 'end of month' or null"
-    }
-  ],
-  "reminders": [
-    {
-      "label": "What to be reminded about",
-      "whenDescription": "natural language time like 'next Tuesday' or 'in 2 weeks' or null"
-    }
-  ],
-  "rawTranscript": "The original transcript unchanged"
-}
-
-Rules:
-- Only extract tasks/reminders that the user explicitly or implicitly committed to. Do not invent actions.
-- If no contact match is found, set matchedContact.id to null and fill in the name/company from what was said.
-- If sentiment is unclear, default to "neutral".
-- Map warmth: enthusiastic/great meeting = hot, good/productive = warm, routine/standard = neutral, difficult/cold/unresponsive = cold.
-- Keep noteSummary professional and concise. No fluff.`;
-
-      const userMessage = `Transcript: "${transcript}"
-
-User's contacts:
-${JSON.stringify(contacts || [], null, 2)}`;
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        return res.status(500).json({ error: "Empty AI response" });
-      }
-
-      const parsed = JSON.parse(content);
-      res.json(parsed);
-    } catch (error) {
-      console.error("[Debrief] Parse error:", error);
-      res.status(500).json({ error: "Parse failed" });
-    }
-  });
-
-  // ============================================
   // Timeline Data API Endpoints
   // ============================================
 
@@ -1488,6 +1358,20 @@ ${JSON.stringify(contacts || [], null, 2)}`;
     } catch (error) {
       console.error("[Companies] List error:", error);
       res.status(500).json({ error: "Failed to list companies" });
+    }
+  });
+
+  // Companies - delete by publicId
+  app.delete("/api/companies/:id", isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      const company = await storage.getCompanyByPublicId(userId, req.params.id);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      await storage.deleteCompany(company.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting company:", error);
+      res.status(500).json({ message: "Failed to delete company" });
     }
   });
 

@@ -232,6 +232,13 @@ export function ContactDetailView({
   });
   const [meetingDuration, setMeetingDuration] = useState<number>(30);
 
+  // Quick log sheet state
+  const [showLogSheet, setShowLogSheet] = useState(false);
+  const [pendingLogType, setPendingLogType] = useState<string | null>(null);
+  const [pendingLogLabel, setPendingLogLabel] = useState<string>('');
+  const [logOutcome, setLogOutcome] = useState<'positive' | 'neutral' | 'negative' | null>(null);
+  const [logNote, setLogNote] = useState('');
+
   // Intel drawer state
   const [showIntel, setShowIntel] = useState(false);
   const intelV2 = useIntelV2();
@@ -274,6 +281,14 @@ export function ContactDetailView({
         detail:
           typeof t.meta === "object" && t.meta !== null
             ? ((t.meta as any).bodyPreview as string | undefined)
+            : undefined,
+        meta:
+          typeof t.meta === 'object' && t.meta !== null
+            ? {
+                outcome: (t.meta as any).outcome as 'positive' | 'neutral' | 'negative' | undefined,
+                note: (t.meta as any).note as string | undefined,
+                source: (t.meta as any).source as string | undefined,
+              }
             : undefined,
         at: t.at,
       }))
@@ -364,12 +379,43 @@ export function ContactDetailView({
     setIsAddingNote(false);
   };
 
-  const handleQuickLog = useCallback(async (type: TimelineEventType, summary: string) => {
-    if (!contactV2) return;
-    await addTimelineEvent(contact.id, type, summary, { source: "quick_log" });
+  const handleQuickLog = useCallback((type: TimelineEventType, summary: string, displayLabel: string) => {
+    setPendingLogType(type);
+    setPendingLogLabel(displayLabel);
+    setLogOutcome(null);
+    setLogNote('');
+    setShowLogSheet(true);
+  }, []);
+
+  const handleConfirmLog = useCallback(async (outcomeOverride?: 'positive' | 'neutral' | 'negative') => {
+    const resolvedOutcome = outcomeOverride ?? logOutcome;
+    if (!pendingLogType || !contactV2) return;
+    await addTimelineEvent(
+      contact.id,
+      pendingLogType as any,
+      pendingLogLabel,
+      { source: 'quick_log', outcome: resolvedOutcome, note: logNote }
+    );
+    if (resolvedOutcome === 'positive') {
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 3);
+      await addReminder(
+        contact.id,
+        `Follow up with ${contact.name || 'this contact'}`,
+        dueDate.toISOString()
+      );
+    }
     onUpdate();
-    toast({ title: `${summary} logged` });
-  }, [contact.id, contactV2, onUpdate, toast]);
+    setShowLogSheet(false);
+    setPendingLogType(null);
+    setLogNote('');
+    setLogOutcome(null);
+    toast({
+      title: resolvedOutcome === 'positive'
+        ? `${pendingLogLabel} logged — reminder set for 3 days`
+        : `${pendingLogLabel} logged`,
+    });
+  }, [pendingLogType, pendingLogLabel, logOutcome, logNote, contact.id, contact.name, contactV2, onUpdate, toast]);
 
   const handleSyncToHubspot = async () => {
     if (!contact.email) {
@@ -1099,6 +1145,71 @@ export function ContactDetailView({
               onRefresh={() => void openIntel(true)}
               companyName={companyNameForIntel || undefined}
             />
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Log Interaction Sheet */}
+      <Drawer open={showLogSheet} onOpenChange={setShowLogSheet}>
+        <DrawerContent className="rounded-t-3xl">
+          <DrawerHeader>
+            <DrawerTitle>
+              {pendingLogLabel ? `Log ${pendingLogLabel}` : 'Log Interaction'}
+            </DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4 pb-6 space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">How did it go?</p>
+              <div className="flex gap-2">
+                {([
+                  { value: 'positive', label: 'Worth following up', icon: '👍' },
+                  { value: 'neutral',  label: 'Neutral', icon: '😐' },
+                  { value: 'negative', label: 'Not interested', icon: '👎' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setLogOutcome(opt.value)}
+                    className={[
+                      "flex-1 py-2 px-2 rounded-xl border text-xs font-medium transition-colors",
+                      logOutcome === opt.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border/50 bg-card/60 hover:bg-muted/50",
+                    ].join(' ')}
+                    data-testid={`outcome-${opt.value}`}
+                  >
+                    {opt.icon} {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">
+                Quick note <span className="font-normal">(optional)</span>
+              </p>
+              <Textarea
+                placeholder="What was discussed, what you promised..."
+                value={logNote}
+                onChange={(e) => setLogNote(e.target.value)}
+                rows={2}
+                className="resize-none rounded-xl"
+                data-testid="input-log-note"
+              />
+            </div>
+            <Button
+              onClick={() => handleConfirmLog()}
+              className="w-full rounded-xl"
+              disabled={!logOutcome}
+              data-testid="button-confirm-log"
+            >
+              {logOutcome === 'positive' ? 'Log & Set Reminder' : 'Log Interaction'}
+            </Button>
+            <button
+              onClick={() => handleConfirmLog('neutral')}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+              data-testid="button-skip-log"
+            >
+              Skip — just log it
+            </button>
           </div>
         </DrawerContent>
       </Drawer>

@@ -35,6 +35,7 @@ export interface IStorage {
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: number, updates: Partial<Contact>): Promise<Contact | undefined>;
   deleteContact(id: number): Promise<boolean>;
+  deleteCompany(id: number): Promise<boolean>;
   findDuplicateContact(userId: number, email: string, companyName: string): Promise<Contact | undefined>;
   
   getCompanyByDomain(domain: string): Promise<Company | undefined>;
@@ -219,6 +220,11 @@ export class DatabaseStorage implements IStorage {
   async deleteContact(id: number): Promise<boolean> {
     const result = await db.delete(contacts).where(eq(contacts.id, id));
     // Drizzle returns an array-like result with rowCount property
+    return (result as any).rowCount > 0;
+  }
+
+  async deleteCompany(id: number): Promise<boolean> {
+    const result = await db.delete(companies).where(eq(companies.id, id));
     return (result as any).rowCount > 0;
   }
 

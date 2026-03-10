@@ -14,6 +14,9 @@ import {
   CloudUpload,
   Plus,
   Loader2,
+  Phone,
+  Mail,
+  Linkedin,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -43,6 +46,11 @@ export interface TimelineItem {
   type: TimelineEventType;
   title: string;
   detail?: string;
+  meta?: {
+    outcome?: 'positive' | 'neutral' | 'negative';
+    note?: string;
+    source?: string;
+  };
   at: string | Date;
 }
 
@@ -50,7 +58,7 @@ interface TimelineFeedProps {
   items: TimelineItem[];
   onAddNote: (text: string) => void;
   isAddingNote?: boolean;
-  onQuickLog?: (type: TimelineEventType, summary: string) => void;
+  onQuickLog?: (type: TimelineEventType, summary: string, displayLabel: string) => void;
 }
 
 const EVENT_ICONS: Record<string, typeof StickyNote> = {
@@ -116,15 +124,15 @@ function normalizeType(type: string): FilterType | null {
 }
 
 interface QuickLogBarProps {
-  onLog: (type: string, summary: string) => void;
+  onLog: (type: TimelineEventType, summary: string, displayLabel: string) => void;
 }
 
 function QuickLogBar({ onLog }: QuickLogBarProps) {
   const options = [
-    { type: "meeting_scheduled", label: "📅 Met" },
-    { type: "note_added",        label: "📞 Called" },
-    { type: "note_added",        label: "✉️ Emailed" },
-    { type: "note_added",        label: "💬 LinkedIn" },
+    { type: 'meeting_scheduled' as TimelineEventType, label: 'Met',      icon: <Users     className="w-3.5 h-3.5" /> },
+    { type: 'note_added'        as TimelineEventType, label: 'Called',   icon: <Phone     className="w-3.5 h-3.5" /> },
+    { type: 'note_added'        as TimelineEventType, label: 'Emailed',  icon: <Mail      className="w-3.5 h-3.5" /> },
+    { type: 'note_added'        as TimelineEventType, label: 'LinkedIn', icon: <Linkedin  className="w-3.5 h-3.5" /> },
   ];
 
   return (
@@ -134,11 +142,12 @@ function QuickLogBar({ onLog }: QuickLogBarProps) {
         {options.map((opt) => (
           <button
             key={opt.label}
-            onClick={() => onLog(opt.type, opt.label.replace(/^[^\s]+\s/, ""))}
-            className="shrink-0 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium hover:bg-muted/50 transition-colors active:scale-95"
+            onClick={() => onLog(opt.type, opt.label, opt.label)}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium hover:bg-muted/50 transition-colors active:scale-95"
             style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-            data-testid={`chip-log-${opt.label.replace(/^[^\s]+\s/, "").toLowerCase().replace(/\s+/g, "-")}`}
+            data-testid={`chip-log-${opt.label.toLowerCase()}`}
           >
+            {opt.icon}
             {opt.label}
           </button>
         ))}
@@ -305,11 +314,32 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
                       {formatEventTime(timelineItem.at)}
                     </span>
                   </div>
-                  {timelineItem.detail && (
-                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                      {timelineItem.detail}
-                    </p>
-                  )}
+                  {(() => {
+                    const outcomeConfig = timelineItem.meta?.outcome
+                      ? ({
+                          positive: { label: 'Worth following up', className: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
+                          neutral:  { label: 'Neutral',             className: 'bg-muted text-muted-foreground' },
+                          negative: { label: 'Not interested',      className: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+                        } as const)[timelineItem.meta.outcome]
+                      : null;
+                    return (
+                      <>
+                        {outcomeConfig && (
+                          <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${outcomeConfig.className}`}>
+                            {outcomeConfig.label}
+                          </span>
+                        )}
+                        {timelineItem.meta?.note && (
+                          <p className="text-xs text-muted-foreground mt-1 italic leading-relaxed">"{timelineItem.meta.note}"</p>
+                        )}
+                        {!timelineItem.meta?.note && timelineItem.detail && (
+                          <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
+                            {timelineItem.detail}
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             );
