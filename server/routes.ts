@@ -1037,22 +1037,22 @@ Return ONLY valid JSON, no markdown or explanation.`;
 
   app.post("/api/debrief/transcribe", isAuthenticated, aiRateLimiter, audioUpload.single('audio'), async (req: Request, res: Response) => {
     try {
-      if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
-        return res.status(503).json({ error: "AI service not configured" });
+      if (!process.env.OPENAI_DIRECT_API_KEY) {
+        return res.status(503).json({ error: "Whisper transcription not configured (missing OPENAI_DIRECT_API_KEY)" });
       }
 
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
       }
 
-      const openai = new OpenAI({
-        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+      // Use a direct OpenAI client (not the Replit proxy) — Whisper is not available via the proxy
+      const directOpenAI = new OpenAI({
+        apiKey: process.env.OPENAI_DIRECT_API_KEY,
       });
 
       const audioFile = await toFile(req.file.buffer, 'audio.webm', { type: req.file.mimetype });
 
-      const transcription = await openai.audio.transcriptions.create({
+      const transcription = await directOpenAI.audio.transcriptions.create({
         model: 'whisper-1',
         file: audioFile,
       });
