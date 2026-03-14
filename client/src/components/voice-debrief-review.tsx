@@ -3,6 +3,7 @@ import { Sparkles, Bell, CheckSquare, ChevronDown, Loader2, X, Check } from "luc
 import { loadContacts } from "@/lib/contactsStorage";
 import type { StoredContact } from "@/lib/contactsStorage";
 import {
+  addNote,
   addTask,
   addReminder,
   addTimelineEvent,
@@ -19,8 +20,6 @@ interface VoiceDebriefReviewProps {
   transcript: string;
   onComplete: (contactId: string) => void;
   onCancel: () => void;
-  /** If set, pre-selects this contact and skips fuzzy match */
-  preSelectedContactId?: string | null;
 }
 
 interface MatchedContact {
@@ -77,20 +76,18 @@ function getInitials(name: string): string {
     .join("");
 }
 
-export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preSelectedContactId }: VoiceDebriefReviewProps) {
+export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: VoiceDebriefReviewProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
 
-  // Editable state
   const [noteSummary, setNoteSummary] = useState("");
   const [sentiment, setSentiment] = useState<Sentiment>("neutral");
   const [warmthLevel, setWarmthLevel] = useState<WarmthLevel>("neutral");
   const [tasks, setTasks] = useState<ParsedTask[]>([]);
   const [reminders, setReminders] = useState<ParsedReminder[]>([]);
 
-  // Contact selection state
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isCreateNew, setIsCreateNew] = useState(false);
   const [newContactName, setNewContactName] = useState("");
@@ -107,16 +104,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
       fullName: c.name,
       companyName: c.company,
     }));
-
-    // If a contact was pre-selected (e.g. from Quick Actions on contact card),
-    // skip fuzzy match and pre-fill immediately.
-    if (preSelectedContactId) {
-      const preContact = contacts.find((c) => c.id === preSelectedContactId);
-      if (preContact) {
-        setSelectedContactId(preSelectedContactId);
-        setShowSuggestions(false);
-      }
-    }
 
     const fetchParse = async () => {
       try {
@@ -140,19 +127,16 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
         setTasks(data.tasks || []);
         setReminders(data.reminders || []);
 
-        // Only set matched contact from API if no pre-selection
-        if (!preSelectedContactId) {
-          if (data.matchedContact?.id) {
-            const localContact = contacts.find((c) => c.id === data.matchedContact.id);
-            if (localContact) {
-              setSelectedContactId(data.matchedContact.id);
-              setShowSuggestions(false);
-            } else {
-              handleLowConfidenceMatch(data, contacts);
-            }
+        if (data.matchedContact?.id) {
+          const localContact = contacts.find((c) => c.id === data.matchedContact.id);
+          if (localContact) {
+            setSelectedContactId(data.matchedContact.id);
+            setShowSuggestions(false);
           } else {
             handleLowConfidenceMatch(data, contacts);
           }
+        } else {
+          handleLowConfidenceMatch(data, contacts);
         }
       } catch (err) {
         console.error("[VoiceDebriefReview] Parse error:", err);
@@ -188,13 +172,12 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
     }
 
     fetchParse();
-  }, [transcript, preSelectedContactId]);
+  }, [transcript]);
 
   const handleConfirm = async () => {
     let contactId = selectedContactId;
 
     if (isCreateNew) {
-      // Create minimal new contact
       const now = new Date().toISOString();
       const newContact = {
         id: generateId(),
@@ -223,37 +206,24 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
 
     setSaving(true);
     try {
-      // 1. Save note text directly to the contact's notes field (no timeline event).
-      //    This avoids the duplicate entry that addNote() would create.
-      //    The voice_debrief timeline event below is the single record for this debrief.
       if (noteSummary.trim()) {
-        const existingContact = getContactById(contactId);
-        const existingNotes = existingContact?.notes || "";
-        const timestamp = new Date().toLocaleString();
-        const newNotes = existingNotes
-          ? `${existingNotes}\n\n[${timestamp}]\n${noteSummary.trim()}`
-          : `[${timestamp}]\n${noteSummary.trim()}`;
-        await updateContactV2(contactId, { notes: newNotes });
+        addNote(contactId, noteSummary.trim());
       }
 
-      // 2. Add tasks
       for (const task of tasks) {
         const dueDate = task.dueDescription ? parseNaturalDate(task.dueDescription) : null;
         await addTask(contactId, task.title, dueDate?.toISOString());
       }
 
-      // 3. Add reminders
       for (const reminder of reminders) {
         const remindAt = reminder.whenDescription
           ? parseNaturalDate(reminder.whenDescription)
           : null;
-        // remindAt is required — skip reminders with no parseable date
         if (remindAt) {
           await addReminder(contactId, reminder.label, remindAt.toISOString());
         }
       }
 
-      // 4. Update contact warmth + lastTouchedAt
       const existingContact = getContactById(contactId);
       const currentOrg = existingContact?.org ?? DEFAULT_ORG;
       await updateContactV2(contactId, {
@@ -264,7 +234,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
         lastTouchedAt: new Date().toISOString(),
       });
 
-      // 5. Single timeline event for this debrief (mic icon, violet)
       await addTimelineEvent(contactId, "voice_debrief", noteSummary.trim(), {
         rawTranscript: transcript,
         sentiment,
@@ -286,7 +255,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
 
   const canConfirm = (selectedContactId !== null || isCreateNew) && !saving;
 
-  // ── Skeleton Loading ──────────────────────────────────────────────
   if (loading) {
     return (
       <div className="px-5 pt-4 pb-8 space-y-4">
@@ -305,7 +273,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
     );
   }
 
-  // ── Error State ───────────────────────────────────────────────────
   if (error) {
     return (
       <div className="px-5 pt-4 pb-8 text-center space-y-4">
@@ -336,14 +303,13 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
 
   return (
     <div className="flex flex-col">
-      {/* Drag handle */}
       <div className="w-10 h-1 rounded-full bg-muted mx-auto mt-3 mb-0 flex-shrink-0" />
 
-      {/* Sticky header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-5 py-3 flex items-center justify-between border-b border-border/40">
         <button
           onClick={onCancel}
           className="text-sm text-muted-foreground font-medium px-1"
+          data-testid="button-discard-debrief"
         >
           Discard
         </button>
@@ -355,6 +321,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
           onClick={handleConfirm}
           disabled={!canConfirm}
           className="text-sm font-semibold px-3 py-1.5 rounded-xl bg-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+          data-testid="button-confirm-debrief"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Confirm
@@ -363,7 +330,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
 
       <div className="overflow-y-auto px-5 pb-8 space-y-5 pt-4">
 
-        {/* ── Contact Match ── */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact</p>
 
@@ -386,6 +352,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
               <button
                 onClick={() => { setShowSuggestions(true); setSelectedContactId(null); }}
                 className="text-xs text-muted-foreground underline underline-offset-2 flex-shrink-0"
+                data-testid="button-change-contact"
               >
                 Change
               </button>
@@ -406,12 +373,14 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
                 onChange={(e) => setNewContactName(e.target.value)}
                 placeholder="Full name"
                 className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                data-testid="input-new-contact-name"
               />
               <input
                 value={newContactCompany}
                 onChange={(e) => setNewContactCompany(e.target.value)}
                 placeholder="Company (optional)"
                 className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                data-testid="input-new-contact-company"
               />
             </div>
           ) : (
@@ -421,6 +390,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
                   key={contact.id}
                   onClick={() => { setSelectedContactId(contact.id); setIsCreateNew(false); setShowSuggestions(false); }}
                   className="w-full flex items-center gap-3 p-3 rounded-2xl bg-muted/40 text-left active:bg-muted/70 transition-colors"
+                  data-testid={`button-select-contact-${contact.id}`}
                 >
                   <div className="w-9 h-9 rounded-full bg-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center text-sm font-bold flex-shrink-0">
                     {getInitials(contact.fullName)}
@@ -436,6 +406,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
               <button
                 onClick={() => { setIsCreateNew(true); setShowSuggestions(false); }}
                 className="w-full flex items-center gap-2 p-3 rounded-2xl border border-dashed border-border text-sm text-muted-foreground"
+                data-testid="button-create-new-contact"
               >
                 <span className="text-base">+</span> Create new contact
               </button>
@@ -443,7 +414,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
           )}
         </div>
 
-        {/* ── Meeting Note ── */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Meeting Note</p>
           <textarea
@@ -452,15 +422,15 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
             rows={3}
             className="w-full text-sm bg-muted/40 rounded-2xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500/40 text-foreground placeholder:text-muted-foreground"
             placeholder="Summary of the meeting..."
+            data-testid="input-meeting-note"
           />
         </div>
 
-        {/* ── Sentiment ── */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sentiment</p>
           <div className="flex gap-2">
             {(["positive", "neutral", "negative"] as Sentiment[]).map((s) => {
-              const labels = { positive: "↗ Positive", neutral: "→ Neutral", negative: "↘ Negative" };
+              const labels = { positive: "Positive", neutral: "Neutral", negative: "Negative" };
               const colors: Record<Sentiment, string> = {
                 positive: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
                 neutral: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30",
@@ -474,6 +444,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
                   className={`flex-1 py-2 text-xs font-medium rounded-xl border transition-colors ${
                     isActive ? colors[s] : "bg-muted/40 text-muted-foreground border-transparent"
                   }`}
+                  data-testid={`button-sentiment-${s}`}
                 >
                   {labels[s]}
                 </button>
@@ -482,7 +453,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
           </div>
         </div>
 
-        {/* ── Warmth ── */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Warmth</p>
           <div className="flex gap-2">
@@ -501,6 +471,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
                   className={`flex-1 py-2 text-xs font-medium rounded-xl border capitalize transition-colors ${
                     isActive ? colors[w] : "bg-muted/40 text-muted-foreground border-transparent"
                   }`}
+                  data-testid={`button-warmth-${w}`}
                 >
                   {w.charAt(0).toUpperCase() + w.slice(1)}
                 </button>
@@ -509,7 +480,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
           </div>
         </div>
 
-        {/* ── Tasks ── */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Tasks {tasks.length > 0 && <span className="normal-case font-normal">({tasks.length})</span>}
@@ -531,6 +501,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
                     onClick={() => setTasks((prev) => prev.filter((_, idx) => idx !== i))}
                     className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                     aria-label="Remove task"
+                    data-testid={`button-remove-task-${i}`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -540,7 +511,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
           )}
         </div>
 
-        {/* ── Reminders ── */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Reminders {reminders.length > 0 && <span className="normal-case font-normal">({reminders.length})</span>}
@@ -562,6 +532,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
                     onClick={() => setReminders((prev) => prev.filter((_, idx) => idx !== i))}
                     className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                     aria-label="Remove reminder"
+                    data-testid={`button-remove-reminder-${i}`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -571,7 +542,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
           )}
         </div>
 
-        {/* ── Raw Transcript (collapsible) ── */}
         <details className="group">
           <summary className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none list-none">
             <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />

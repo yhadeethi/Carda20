@@ -38,13 +38,17 @@ import {
   ArrowLeft,
   Bell,
   Briefcase,
+  Calendar,
+  CloudUpload,
   Edit,
-  Mic,
+  Phone,
   Sparkles,
+  StickyNote,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
-
+import { SiHubspot, SiSalesforce } from "react-icons/si";
 
 import { CompanyIntelV2Card } from "@/components/company-intel-v2";
 import { ContactHeroCard, Contact } from "./ContactHeroCard";
@@ -97,8 +101,6 @@ interface ContactDetailViewProps {
    * Used by Home Scoreboard “Send follow-up” CTA to reduce taps.
    */
   autoOpenFollowUp?: boolean;
-  /** Called when user taps Voice Debrief from Quick Actions. */
-  onVoiceDebrief?: (contactId: string) => void;
 }
 
 function toDatetimeLocalValue(d: Date): string {
@@ -172,7 +174,6 @@ export function ContactDetailView({
   onViewInOrgMap,
   companyId,
   autoOpenFollowUp,
-  onVoiceDebrief,
 }: ContactDetailViewProps) {
   const { toast } = useToast();
 
@@ -716,45 +717,124 @@ export function ContactDetailView({
     );
   };
 
-  const quickActions: QuickAction[] = useMemo(() => [
-    {
-      id: "voice-debrief",
-      label: "Voice Debrief",
-      icon: <Mic className="w-5 h-5 text-violet-500 dark:text-violet-400" />,
-      onClick: () => onVoiceDebrief?.(contact.id),
-    },
-    {
-      id: "followup",
-      label: "Generate Follow-up",
-      icon: <Sparkles className="w-5 h-5" />,
-      onClick: () => {
-        setShowFollowUp(true);
-        setFollowUpResult(null);
+  const quickActions: QuickAction[] = useMemo(() => {
+    const actions: QuickAction[] = [
+      {
+        id: "log-call",
+        label: "Log Call",
+        icon: <Phone className="w-5 h-5" />,
+        onClick: () => {
+          addTimelineEvent(contact.id, "note_added", "Phone call", { source: "quick_action" });
+          onUpdate();
+          toast({ title: "Call logged" });
+        },
       },
-    },
-    {
-      id: "reminder",
-      label: "Add Reminder",
-      icon: <Bell className="w-5 h-5" />,
-      onClick: () => {
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 3);
-        addReminder(
-          contact.id,
-          `Follow up with ${contact.name || "this contact"}`,
-          dueDate.toISOString()
-        );
-        onUpdate();
-        toast({ title: "Reminder set for 3 days" });
+      {
+        id: "log-meeting",
+        label: "Log Meeting",
+        icon: <Users className="w-5 h-5" />,
+        onClick: () => {
+          addTimelineEvent(contact.id, "meeting_scheduled", "Meeting", { source: "quick_action" });
+          onUpdate();
+          toast({ title: "Meeting logged" });
+        },
       },
-    },
-    {
-      id: "intel",
-      label: "Company Brief",
-      icon: <Briefcase className="w-5 h-5" />,
-      onClick: () => void openIntel(false),
-    },
-  ], [contact.id, contact.name, onUpdate, onVoiceDebrief, toast]);
+      {
+        id: "followup",
+        label: "Generate Follow-up",
+        icon: <Sparkles className="w-5 h-5" />,
+        onClick: () => {
+          setShowFollowUp(true);
+          setFollowUpResult(null);
+        },
+      },
+      {
+        id: "reminder",
+        label: "Add Reminder",
+        icon: <Bell className="w-5 h-5" />,
+        onClick: () => {
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 3);
+          addReminder(
+            contact.id,
+            `Follow up with ${contact.name || "this contact"}`,
+            dueDate.toISOString()
+          );
+          onUpdate();
+          toast({ title: "Reminder set for 3 days" });
+        },
+      },
+      {
+        id: "meeting",
+        label: "Schedule Meeting",
+        icon: <Calendar className="w-5 h-5" />,
+        onClick: () => setShowMeeting(true),
+      },
+      {
+        id: "intel",
+        label: "Company Brief",
+        icon: <Briefcase className="w-5 h-5" />,
+        onClick: () => void openIntel(false),
+      },
+      {
+        id: "note",
+        label: "Add Note",
+        icon: <StickyNote className="w-5 h-5" />,
+        onClick: () => {
+          setTimeout(() => {
+            const el = document.querySelector('[data-testid="input-add-note"]') as HTMLTextAreaElement | null;
+            el?.focus();
+          }, 60);
+        },
+      },
+    ];
+
+    // CRM tiles: only show if connected. If neither connected, show one Connect CRM tile.
+    const hubspotConnected = hubspotStatus?.connected;
+    const salesforceConnected = salesforceStatus?.connected;
+
+    if (hubspotConnected) {
+      const isSynced = contactV2?.timeline?.some((t) => t.type === "hubspot_synced");
+      actions.push({
+        id: "hubspot",
+        label: "Sync to HubSpot",
+        icon: <SiHubspot className="w-5 h-5 text-[#FF7A59]" />,
+        status: isSynced ? "Synced" : undefined,
+        onClick: handleSyncToHubspot,
+      });
+    }
+
+    if (salesforceConnected) {
+      const isSynced = contactV2?.timeline?.some((t) => t.type === "salesforce_synced");
+      actions.push({
+        id: "salesforce",
+        label: "Sync to Salesforce",
+        icon: <SiSalesforce className="w-5 h-5 text-[#00A1E0]" />,
+        status: isSynced ? "Synced" : undefined,
+        onClick: handleSyncToSalesforce,
+      });
+    }
+
+    if (!hubspotConnected && !salesforceConnected) {
+      actions.push({
+        id: "connect-crm",
+        label: "Connect CRM",
+        icon: <CloudUpload className="w-5 h-5" />,
+        status: "Not set up",
+        onClick: async () => {
+          try {
+            const res = await apiRequest("POST", "/api/hubspot/connect");
+            const data = await res.json();
+            if (data.url) window.location.href = data.url;
+          } catch {
+            toast({ title: "Failed to open CRM settings", variant: "destructive" });
+          }
+        },
+      });
+    }
+
+    return actions;
+  }, [contact.id, contact.name, contactV2, hubspotStatus, salesforceStatus, toast, onUpdate]);
 
   const heroBottomLabel = useMemo(() => {
     // wording tweak
@@ -844,54 +924,12 @@ export function ContactDetailView({
             onEmail={handleEmail}
             onOpenWebsite={handleOpenWebsite}
             onOpenLinkedIn={handleOpenLinkedIn}
+            // OPTIONAL: if your ContactHeroCard supports it
+            // lastTouchedLabel={heroBottomLabel}
           />
 
-          {/* Visual separator between contact info and activity */}
-          <div className="mt-6 border-t border-border/30" />
-
-          {/* Pending tasks & reminders pinned at top */}
-          {(() => {
-            const pendingTasks = (contactV2?.tasks ?? []).filter((t) => !t.done);
-            const pendingReminders = (contactV2?.reminders ?? []).filter((r) => !r.done);
-            if (pendingTasks.length === 0 && pendingReminders.length === 0) return null;
-            return (
-              <div className="mt-4 rounded-2xl bg-card/60 border border-border/40 divide-y divide-border/30 overflow-hidden">
-                {pendingTasks.map((task) => (
-                  <div key={task.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="w-4 h-4 rounded border border-border/70 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">{task.title}</div>
-                      {task.dueAt && (
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {new Date(task.dueAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {pendingReminders.map((reminder) => (
-                  <div key={reminder.id} className="flex items-center gap-3 px-4 py-3">
-                    <Bell className="w-4 h-4 text-orange-500 dark:text-orange-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">{reminder.label}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(reminder.remindAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* Activity section with header */}
-          <div className="mt-4">
-            <div className="flex items-center gap-3 mb-4">
-              <h3 className="text-sm font-semibold text-foreground shrink-0">Activity</h3>
-              <div className="flex-1 h-px bg-border/50" />
-            </div>
-            {/* onQuickLog intentionally omitted — removes the "Log interaction" QuickLogBar */}
-            <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} />
+          <div className="mt-6">
+            <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} onQuickLog={handleQuickLog} />
           </div>
         </>
       )}

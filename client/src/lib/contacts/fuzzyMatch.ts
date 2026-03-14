@@ -26,15 +26,12 @@ export function fuzzyMatchContact(
 
     let score = 0;
 
-    // Exact full name match
     if (normalizedFull === normalizedQuery) {
       score = 100;
     }
-    // Last name exact match
     else if (lastName && normalizedQuery === lastName) {
       score = 80;
     }
-    // First name + company fragment match
     else if (
       firstName &&
       normalizedQuery.includes(firstName) &&
@@ -43,17 +40,14 @@ export function fuzzyMatchContact(
     ) {
       score = 70;
     }
-    // All query tokens present in full name or company
     else if (queryTokens.every((t) => normalizedFull.includes(t) || normalizedCompany.includes(t))) {
       score = 60;
     }
-    // Any query token matches a name token
     else if (
       queryTokens.some((t) => fullTokens.some((ft) => ft === t || ft.startsWith(t) || t.startsWith(ft)))
     ) {
       score = 50;
     }
-    // Any query token appears anywhere in name or company
     else if (queryTokens.some((t) => normalizedFull.includes(t) || normalizedCompany.includes(t))) {
       score = 40;
     }

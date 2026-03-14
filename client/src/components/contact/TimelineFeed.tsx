@@ -31,7 +31,6 @@ export type TimelineEventType =
   | "note_added"
   | "note_updated"
   | "followup_generated"
-  | "followup_sent"
   | "reminder_set"
   | "reminder_done"
   | "task_added"
@@ -41,8 +40,7 @@ export type TimelineEventType =
   | "contact_merged"
   | "contact_updated"
   | "hubspot_synced"
-  | "salesforce_synced"
-  | "voice_debrief";
+  | "salesforce_synced";
 
 export interface TimelineItem {
   id: string;
@@ -70,7 +68,6 @@ const EVENT_ICONS: Record<string, typeof StickyNote> = {
   note_updated: Edit,
   followup: Sparkles,
   followup_generated: Sparkles,
-  followup_sent: Sparkles,
   reminder: Bell,
   reminder_set: Bell,
   reminder_done: Bell,
@@ -85,6 +82,7 @@ const EVENT_ICONS: Record<string, typeof StickyNote> = {
   event_attended: Calendar,
   contact_merged: Users,
   contact_updated: Edit,
+  followup_sent: Sparkles,
   voice_debrief: Mic,
 };
 
@@ -94,7 +92,6 @@ const EVENT_COLORS: Record<string, string> = {
   note_updated: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   followup: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
   followup_generated: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
-  followup_sent: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
   reminder: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   reminder_set: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   reminder_done: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
@@ -104,12 +101,13 @@ const EVENT_COLORS: Record<string, string> = {
   created: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   scan_created: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   task_added: "bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300",
-  voice_debrief: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
   task_done: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
   meeting_scheduled: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
   event_attended: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
   contact_merged: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
   contact_updated: "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300",
+  followup_sent: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  voice_debrief: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
 };
 
 type FilterType = "all" | "notes" | "followups" | "reminders" | "crm";

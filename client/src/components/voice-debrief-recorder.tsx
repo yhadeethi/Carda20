@@ -40,7 +40,6 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
 
   const { toast } = useToast();
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -65,7 +64,7 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      recorder.start(100); // collect chunks every 100ms
+      recorder.start(100);
       setState("recording");
       setElapsed(0);
 
@@ -97,7 +96,6 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
     setState("processing");
 
     recorder.onstop = async () => {
-      // Stop the stream tracks
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
@@ -139,7 +137,6 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
 
   return (
     <div className="px-5 pt-4 pb-8">
-      {/* Drag handle */}
       <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-5" />
 
       {state === "idle" && (
@@ -170,6 +167,7 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
                 onClick={startRecording}
                 className="w-[72px] h-[72px] rounded-full bg-red-500 flex items-center justify-center shadow-lg shadow-red-500/30 active:scale-95 transition-transform"
                 aria-label="Start recording"
+                data-testid="button-start-recording"
               >
                 <Mic className="w-8 h-8 text-white" />
               </button>
@@ -177,6 +175,7 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
               <button
                 onClick={onCancel}
                 className="text-sm text-muted-foreground"
+                data-testid="button-cancel-recording"
               >
                 Cancel
               </button>
@@ -189,10 +188,9 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
         <div className="flex flex-col items-center gap-5">
           <div className="text-center">
             <h2 className="text-lg font-bold text-foreground">Recording...</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">{formatTime(elapsed)}</p>
+            <p className="text-sm text-muted-foreground mt-0.5" data-testid="text-recording-time">{formatTime(elapsed)}</p>
           </div>
 
-          {/* Waveform visualization */}
           <div className="flex items-end gap-1 h-10" aria-hidden="true">
             {Array.from({ length: 16 }).map((_, i) => (
               <div
@@ -214,7 +212,6 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
             }
           `}</style>
 
-          {/* Pulsing recording indicator */}
           <div className="flex items-center gap-2">
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
@@ -227,6 +224,7 @@ export function VoiceDebriefRecorder({ onTranscriptReady, onCancel }: VoiceDebri
             onClick={stopRecording}
             className="w-[72px] h-[72px] rounded-full bg-foreground flex items-center justify-center shadow-lg active:scale-95 transition-transform"
             aria-label="Stop recording"
+            data-testid="button-stop-recording"
           >
             <Square className="w-7 h-7 text-background fill-background" />
           </button>
