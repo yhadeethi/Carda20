@@ -21,6 +21,7 @@ import {
   Plus,
   Filter,
   CloudUpload,
+  Mic,
 } from "lucide-react";
 import { SiHubspot } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +39,7 @@ const EVENT_ICONS: Record<TimelineEventType, typeof StickyNote> = {
   note_added: StickyNote,
   note_updated: Edit,
   followup_generated: Sparkles,
+  followup_sent: Sparkles,
   reminder_set: Bell,
   reminder_done: Bell,
   task_added: CheckSquare,
@@ -48,6 +50,7 @@ const EVENT_ICONS: Record<TimelineEventType, typeof StickyNote> = {
   contact_updated: Edit,
   hubspot_synced: CloudUpload,
   salesforce_synced: CloudUpload,
+  voice_debrief: Mic,
 };
 
 const EVENT_COLORS: Record<TimelineEventType, string> = {
@@ -55,6 +58,7 @@ const EVENT_COLORS: Record<TimelineEventType, string> = {
   note_added: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   note_updated: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   followup_generated: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  followup_sent: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
   reminder_set: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   reminder_done: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
   task_added: "bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300",
@@ -65,6 +69,7 @@ const EVENT_COLORS: Record<TimelineEventType, string> = {
   contact_updated: "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300",
   hubspot_synced: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   salesforce_synced: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+  voice_debrief: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
 };
 
 const EVENT_LABELS: Record<TimelineEventType, string> = {
@@ -72,6 +77,7 @@ const EVENT_LABELS: Record<TimelineEventType, string> = {
   note_added: "Note",
   note_updated: "Note Updated",
   followup_generated: "Follow-Up",
+  followup_sent: "Follow-Up Sent",
   reminder_set: "Reminder",
   reminder_done: "Reminder Done",
   task_added: "Task",
@@ -82,6 +88,7 @@ const EVENT_LABELS: Record<TimelineEventType, string> = {
   contact_updated: "Updated",
   hubspot_synced: "HubSpot Sync",
   salesforce_synced: "Salesforce Sync",
+  voice_debrief: "Voice Debrief",
 };
 
 type FilterType = 'all' | TimelineEventType;

@@ -5,6 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTimelineSetup } from "@/hooks/useTimelineSetup";
 import { useToast } from "@/hooks/use-toast";
 import { ScanTab } from "@/components/scan-tab";
+import { VoiceDebriefRecorder } from "@/components/voice-debrief-recorder";
+import { VoiceDebriefReviewSheet } from "@/components/voice-debrief-review";
 import { RelationshipDetailView } from "@/components/relationship/RelationshipDetailView";
 import { ContactsHub } from "@/components/contacts-hub";
 import { EventsHub } from "@/components/events-hub";
@@ -99,6 +101,11 @@ export default function HomePage() {
   const [showSalesforceProfile, setShowSalesforceProfile] = useState(false);
   const [captureMenuOpen, setCaptureMenuOpen] = useState(false);
   const [captureSheetMode, setCaptureSheetMode] = useState<"scan" | "paste" | null>(null);
+  const [debriefSheetOpen, setDebriefSheetOpen] = useState(false);
+  const [debriefPhase, setDebriefPhase] = useState<"recording" | "review" | "success">("recording");
+  const [debriefTranscript, setDebriefTranscript] = useState<string>("");
+  const [debriefSavedContactId, setDebriefSavedContactId] = useState<string | null>(null);
+  const [debriefPreSelectedContactId, setDebriefPreSelectedContactId] = useState<string | null>(null);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -296,7 +303,39 @@ export default function HomePage() {
     setCaptureMenuOpen(false);
     if (option === "scan" || option === "paste") {
       setCaptureSheetMode(option);
+    } else if (option === "debrief") {
+      setDebriefPreSelectedContactId(null);
+      setDebriefPhase("recording");
+      setDebriefTranscript("");
+      setDebriefSavedContactId(null);
+      setDebriefSheetOpen(true);
     }
+  };
+
+  const handleDebriefTranscriptReady = (transcript: string) => {
+    setDebriefTranscript(transcript);
+    setDebriefPhase("review");
+  };
+
+  const handleDebriefComplete = (contactId: string) => {
+    setDebriefSavedContactId(contactId);
+    setDebriefPhase("success");
+  };
+
+  const handleDebriefClose = () => {
+    setDebriefSheetOpen(false);
+    if (debriefSavedContactId) {
+      const contact = loadContacts().find((c) => c.id === debriefSavedContactId);
+      if (contact) {
+        handleSelectContact(contact);
+      }
+    }
+    setDebriefPreSelectedContactId(null);
+  };
+
+  const handleDebriefCancel = () => {
+    setDebriefSheetOpen(false);
+    setDebriefPreSelectedContactId(null);
   };
 
   const handleCaptureSheetClose = () => setCaptureSheetMode(null);
@@ -436,6 +475,10 @@ export default function HomePage() {
                 onSelectContact={handleSelectUnifiedContact}
                 onSelectCompany={handleSelectCompany}
                 onRefresh={refreshContacts}
+                onSelectContactById={(id) => {
+                  const c = loadContacts().find((ct) => ct.id === id);
+                  if (c) handleSelectContact(c);
+                }}
               />
             </motion.div>
           )}
@@ -474,6 +517,13 @@ export default function HomePage() {
                 onContactUpdated={handleContactUpdated}
                 onViewInOrgMap={(companyId) => handleSelectCompany(companyId, "orgmap")}
                 initialAction={contactInitialAction || undefined}
+                onVoiceDebrief={(contactId) => {
+                  setDebriefPreSelectedContactId(contactId);
+                  setDebriefPhase("recording");
+                  setDebriefTranscript("");
+                  setDebriefSavedContactId(null);
+                  setDebriefSheetOpen(true);
+                }}
               />
             </motion.div>
           )}
@@ -725,6 +775,59 @@ export default function HomePage() {
                 onShowingContactChange={() => {}}
                 initialMode={captureSheetMode}
               />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Voice Debrief Bottom Sheet */}
+      <AnimatePresence>
+        {debriefSheetOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-black/40 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={debriefPhase === "recording" ? handleDebriefCancel : undefined}
+            />
+            <motion.div
+              className="fixed bottom-0 left-0 right-0 bg-background rounded-t-3xl z-50 overflow-y-auto"
+              style={{ maxHeight: debriefPhase === "review" ? "92vh" : "60vh" }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            >
+              {debriefPhase === "recording" && (
+                <VoiceDebriefRecorder
+                  onTranscriptReady={handleDebriefTranscriptReady}
+                  onCancel={handleDebriefCancel}
+                />
+              )}
+              {debriefPhase === "review" && (
+                <VoiceDebriefReviewSheet
+                  transcript={debriefTranscript}
+                  onComplete={handleDebriefComplete}
+                  onCancel={handleDebriefCancel}
+                  preSelectedContactId={debriefPreSelectedContactId}
+                />
+              )}
+              {debriefPhase === "success" && (
+                <div className="px-5 pt-6 pb-10 flex flex-col items-center gap-4 text-center">
+                  <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                    <span className="text-2xl">✓</span>
+                  </div>
+                  <p className="text-lg font-bold text-foreground">Debrief saved</p>
+                  <p className="text-sm text-muted-foreground">Note, tasks, and reminders have been saved.</p>
+                  <button
+                    onClick={handleDebriefClose}
+                    className="mt-2 px-6 py-2.5 rounded-2xl bg-foreground text-background text-sm font-semibold"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </motion.div>
           </>
         )}
