@@ -121,7 +121,7 @@ const EVENT_COLORS: Record<string, string> = {
 type FilterType = "all" | "notes" | "followups" | "reminders" | "crm";
 
 const FILTER_OPTIONS: Array<{ value: FilterType; label: string }> = [
-  { value: "all", label: "All activity" },
+  { value: "all", label: "All" },
   { value: "notes", label: "Notes" },
   { value: "followups", label: "Follow-ups" },
   { value: "reminders", label: "Reminders" },
@@ -216,7 +216,7 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
     return format(date, "MMM d");
   };
 
-  const currentFilterLabel = FILTER_OPTIONS.find(f => f.value === filter)?.label ?? "All activity";
+  const currentFilterLabel = FILTER_OPTIONS.find(f => f.value === filter)?.label ?? "All";
 
   return (
     <div className="space-y-3" data-testid="timeline-feed">
@@ -244,14 +244,15 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
           <div className="ml-auto">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium transition-colors hover:bg-muted/50"
+                <Button
+                  variant="outline"
+                  size="sm"
                   data-testid="button-filter-dropdown"
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
-                  {filter === "all" ? "Filter" : currentFilterLabel}
+                  {currentFilterLabel}
                   <ChevronDown className="w-3 h-3 opacity-60" />
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {FILTER_OPTIONS.map((opt) => (

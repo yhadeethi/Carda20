@@ -39,6 +39,7 @@ import {
   Bell,
   Briefcase,
   Calendar,
+  CheckSquare,
   CloudUpload,
   Edit,
   MoreHorizontal,
@@ -61,6 +62,7 @@ import { TimelineFeed, TimelineItem, TimelineEventType } from "./TimelineFeed";
 import { StoredContact } from "@/lib/contactsStorage";
 import {
   ContactV2,
+  addNote,
   addReminder,
   addTask,
   completeTask,
@@ -427,7 +429,7 @@ export function ContactDetailView({
   const handleAddNote = async (text: string) => {
     setIsAddingNote(true);
     try {
-      addTimelineEvent(contact.id, "note_added", text);
+      addNote(contact.id, text);
       onUpdate();
       toast({ title: "Note added" });
     } catch {
@@ -824,6 +826,17 @@ export function ContactDetailView({
           }, 60);
         },
       },
+      {
+        id: "add-task",
+        label: "Add Task",
+        icon: <CheckSquare className="w-5 h-5" />,
+        onClick: () => {
+          setTimeout(() => {
+            const el = document.querySelector('[data-testid="input-add-task"]') as HTMLInputElement | null;
+            el?.focus();
+          }, 60);
+        },
+      },
     ];
 
     // CRM tiles: only show if connected. If neither connected, show one Connect CRM tile.
@@ -965,13 +978,12 @@ export function ContactDetailView({
             // lastTouchedLabel={heroBottomLabel}
           />
 
-          {/* Tasks section */}
+          {/* Tasks section — only shown when there are tasks */}
+          {contactTasks.length > 0 && (
           <div className="mt-5">
-            {contactTasks.length > 0 && (
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">
-                Up next
-              </p>
-            )}
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">
+              Tasks
+            </p>
             <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
               {contactTasks.map((task) => (
                 <div
@@ -1081,6 +1093,7 @@ export function ContactDetailView({
               </div>
             </div>
           </div>
+          )}
 
           {/* Activity section divider */}
           <div className="mt-6 border-t border-border/40 pt-5">
