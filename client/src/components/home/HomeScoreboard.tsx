@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/command";
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 import { useScoreboard } from "@/hooks/useScoreboard";
-import { completeReminder } from "@/lib/contacts/storage";
+import { completeReminder, completeTask } from "@/lib/contacts/storage";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getCompanies } from "@/lib/companiesStorage";
 import { RecentCompanies } from "@/components/home/RecentCompanies";
 import { CalendarTeaser } from "@/components/home/CalendarTeaser";
@@ -68,6 +69,7 @@ export function HomeScoreboard({
     dueFollowUps,
     newCaptures,
     activeReminders,
+    pendingTasks,
     weeklyCapturesSeries,
     recentCompanies,
     suggestedCompany,
@@ -169,6 +171,64 @@ export function HomeScoreboard({
       <section>
         <CalendarTeaser />
       </section>
+
+      {/* Up next: pending tasks */}
+      {pendingTasks.length > 0 && (
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-2 px-1">Up next</h2>
+          <div
+            className="rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 divide-y divide-border/50 overflow-hidden"
+            style={{ backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
+          >
+            {pendingTasks.slice(0, 5).map((task) => (
+              <div
+                key={task.id}
+                className="flex items-start gap-3 p-4"
+                data-testid={`home-task-row-${task.id}`}
+              >
+                <Checkbox
+                  checked={false}
+                  onCheckedChange={async () => {
+                    await completeTask(task.contactId, task.id);
+                    onRefresh?.();
+                  }}
+                  className="mt-0.5 shrink-0"
+                  data-testid={`home-checkbox-task-${task.id}`}
+                />
+                <button
+                  className="flex-1 min-w-0 text-left"
+                  onClick={() => {
+                    const c = contacts.find((ct) => ct.id === task.contactId);
+                    if (c) onSelectContact?.(c);
+                  }}
+                  style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                >
+                  <div className="text-sm font-medium truncate">{task.title}</div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-xs text-muted-foreground truncate">{task.contactName}</span>
+                    {task.dueAt && (
+                      <>
+                        <span className="text-xs text-muted-foreground/40">·</span>
+                        <span className="text-xs text-muted-foreground/70">
+                          {formatRelativeDay(task.dueAt)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </button>
+              </div>
+            ))}
+            {pendingTasks.length > 5 && (
+              <button
+                onClick={onViewPeople}
+                className="w-full p-3 text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
+              >
+                +{pendingTasks.length - 5} more
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Weekly chart */}
       <section>

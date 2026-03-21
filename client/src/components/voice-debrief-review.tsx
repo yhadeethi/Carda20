@@ -3,7 +3,6 @@ import { Sparkles, Bell, CheckSquare, ChevronDown, Loader2, X, Check } from "luc
 import { loadContacts } from "@/lib/contactsStorage";
 import type { StoredContact } from "@/lib/contactsStorage";
 import {
-  addNote,
   addTask,
   addReminder,
   addTimelineEvent,
@@ -206,10 +205,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
 
     setSaving(true);
     try {
-      if (noteSummary.trim()) {
-        addNote(contactId, noteSummary.trim());
-      }
-
       for (const task of tasks) {
         const dueDate = task.dueDescription ? parseNaturalDate(task.dueDescription) : null;
         await addTask(contactId, task.title, dueDate?.toISOString());

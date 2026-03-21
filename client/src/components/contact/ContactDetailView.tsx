@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
@@ -41,7 +41,9 @@ import {
   Calendar,
   CloudUpload,
   Edit,
+  MoreHorizontal,
   Phone,
+  Plus,
   Sparkles,
   StickyNote,
   Trash2,
@@ -60,9 +62,20 @@ import { StoredContact } from "@/lib/contactsStorage";
 import {
   ContactV2,
   addReminder,
+  addTask,
+  completeTask,
+  deleteTask,
   addTimelineEvent,
   updateContactV2,
 } from "@/lib/contacts/storage";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   extractDomainFromEmail,
   extractDomainFromWebsite,
@@ -193,6 +206,31 @@ export function ContactDetailView({
   });
 
   const [isAddingNote, setIsAddingNote] = useState(false);
+  const [newTaskText, setNewTaskText] = useState("");
+
+  const contactTasks = useMemo(
+    () => (contactV2?.tasks || []).filter((t) => !t.done),
+    [contactV2]
+  );
+
+  const handleAddTask = async () => {
+    const text = newTaskText.trim();
+    if (!text) return;
+    setNewTaskText("");
+    await addTask(contact.id, text);
+    onUpdate();
+  };
+
+  const handleCompleteTask = async (taskId: string) => {
+    await completeTask(contact.id, taskId);
+    onUpdate();
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    await deleteTask(contact.id, taskId);
+    onUpdate();
+  };
+
   const [isSyncingHubspot, setIsSyncingHubspot] = useState(false);
   const [isSyncingSalesforce, setIsSyncingSalesforce] = useState(false);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
@@ -720,26 +758,6 @@ export function ContactDetailView({
   const quickActions: QuickAction[] = useMemo(() => {
     const actions: QuickAction[] = [
       {
-        id: "log-call",
-        label: "Log Call",
-        icon: <Phone className="w-5 h-5" />,
-        onClick: () => {
-          addTimelineEvent(contact.id, "note_added", "Phone call", { source: "quick_action" });
-          onUpdate();
-          toast({ title: "Call logged" });
-        },
-      },
-      {
-        id: "log-meeting",
-        label: "Log Meeting",
-        icon: <Users className="w-5 h-5" />,
-        onClick: () => {
-          addTimelineEvent(contact.id, "meeting_scheduled", "Meeting", { source: "quick_action" });
-          onUpdate();
-          toast({ title: "Meeting logged" });
-        },
-      },
-      {
         id: "followup",
         label: "Generate Follow-up",
         icon: <Sparkles className="w-5 h-5" />,
@@ -928,7 +946,103 @@ export function ContactDetailView({
             // lastTouchedLabel={heroBottomLabel}
           />
 
+          {/* Tasks section */}
+          <div className="mt-5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">
+              Up next
+            </p>
+            <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
+              {contactTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40 last:border-b-0"
+                  data-testid={`task-row-${task.id}`}
+                >
+                  <Checkbox
+                    checked={false}
+                    onCheckedChange={() => handleCompleteTask(task.id)}
+                    className="mt-0.5 shrink-0"
+                    data-testid={`checkbox-task-${task.id}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm">{task.title}</p>
+                    {task.dueAt && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {(() => {
+                          const d = new Date(task.dueAt);
+                          const now = new Date();
+                          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                          const target = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+                          const diff = Math.round((target - start) / 86400000);
+                          if (diff === 0) return "Today";
+                          if (diff === 1) return "Tomorrow";
+                          if (diff === -1) return "Yesterday";
+                          if (diff < 0) return `${Math.abs(diff)}d overdue`;
+                          return `In ${diff}d`;
+                        })()}
+                      </p>
+                    )}
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="opacity-50 hover:opacity-100 shrink-0"
+                        data-testid={`menu-task-${task.id}`}
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleCompleteTask(task.id)}>
+                        Mark complete
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => handleDeleteTask(task.id)}
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))}
+              {/* Add task row */}
+              <div className="flex items-center gap-2 px-3 py-2.5">
+                <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Add a task..."
+                  value={newTaskText}
+                  onChange={(e) => setNewTaskText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddTask();
+                  }}
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 min-w-0"
+                  data-testid="input-add-task"
+                />
+                {newTaskText.trim() && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleAddTask}
+                    className="shrink-0 h-7 px-2 text-xs"
+                    data-testid="button-save-task"
+                  >
+                    Add
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Activity section divider */}
           <div className="mt-6">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-0.5">
+              Activity
+            </p>
             <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} onQuickLog={handleQuickLog} />
           </div>
         </>

@@ -8,7 +8,12 @@ import {
   extractDomainFromWebsite,
   normalizeCompanyName,
 } from "@/lib/companiesStorage";
-import type { ContactReminder } from "@/lib/contacts/types";
+import type { ContactReminder, ContactTask } from "@/lib/contacts/types";
+
+export type PendingTask = ContactTask & {
+  contactId: string;
+  contactName: string;
+};
 
 const FOLLOWUP_DUE_AFTER_DAYS = 3;
 const NEW_CAPTURE_HOURS = 24;
@@ -348,12 +353,35 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
     };
   }, [recentCompanies]);
 
+  const pendingTasks = useMemo((): PendingTask[] => {
+    const list: PendingTask[] = [];
+    for (const { c } of enriched) {
+      if (!Array.isArray(c.tasks)) continue;
+      for (const t of c.tasks) {
+        if (t?.done) continue;
+        list.push({
+          ...t,
+          contactId: c.id,
+          contactName: c.name || c.email || "Unknown",
+        });
+      }
+    }
+    list.sort((a, b) => {
+      if (!a.dueAt && !b.dueAt) return 0;
+      if (!a.dueAt) return 1;
+      if (!b.dueAt) return -1;
+      return a.dueAt.localeCompare(b.dueAt);
+    });
+    return list;
+  }, [enriched]);
+
   return {
     contacts,
     dueFollowUps,
     newCaptures,
     eventSprints,
     activeReminders,
+    pendingTasks,
     weeklyCapturesSeries,
     recentCompanies,
     suggestedCompany,
@@ -363,6 +391,7 @@ export function useScoreboard(inputContacts: UnifiedContact[], refreshKey: numbe
       eventSprints: eventSprints.reduce((sum, e) => sum + e.pending, 0),
       recentScans,
       remindersCount,
+      pendingTasks: pendingTasks.length,
     },
     insights: {
       missingFieldsCount,

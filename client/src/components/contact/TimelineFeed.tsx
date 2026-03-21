@@ -1,7 +1,12 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import {
   StickyNote,
   Sparkles,
@@ -18,6 +23,9 @@ import {
   Mail,
   Linkedin,
   Mic,
+  ChevronDown,
+  SlidersHorizontal,
+  MessageSquarePlus,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -113,7 +121,7 @@ const EVENT_COLORS: Record<string, string> = {
 type FilterType = "all" | "notes" | "followups" | "reminders" | "crm";
 
 const FILTER_OPTIONS: Array<{ value: FilterType; label: string }> = [
-  { value: "all", label: "All" },
+  { value: "all", label: "All activity" },
   { value: "notes", label: "Notes" },
   { value: "followups", label: "Follow-ups" },
   { value: "reminders", label: "Reminders" },
@@ -128,42 +136,18 @@ function normalizeType(type: string): FilterType | null {
   return null;
 }
 
-interface QuickLogBarProps {
-  onLog: (type: TimelineEventType, summary: string, displayLabel: string) => void;
-}
-
-function QuickLogBar({ onLog }: QuickLogBarProps) {
-  const options = [
-    { type: 'meeting_scheduled' as TimelineEventType, label: 'Met',      icon: <Users     className="w-3.5 h-3.5" /> },
-    { type: 'note_added'        as TimelineEventType, label: 'Called',   icon: <Phone     className="w-3.5 h-3.5" /> },
-    { type: 'note_added'        as TimelineEventType, label: 'Emailed',  icon: <Mail      className="w-3.5 h-3.5" /> },
-    { type: 'note_added'        as TimelineEventType, label: 'LinkedIn', icon: <Linkedin  className="w-3.5 h-3.5" /> },
-  ];
-
-  return (
-    <div className="pb-2">
-      <p className="text-xs text-muted-foreground mb-2">Log interaction</p>
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-        {options.map((opt) => (
-          <button
-            key={opt.label}
-            onClick={() => onLog(opt.type, opt.label, opt.label)}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium hover:bg-muted/50 transition-colors active:scale-95"
-            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-            data-testid={`chip-log-${opt.label.toLowerCase()}`}
-          >
-            {opt.icon}
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+const LOG_CHIPS = [
+  { type: 'meeting_scheduled' as TimelineEventType, label: 'Met',      icon: <Users     className="w-3.5 h-3.5" /> },
+  { type: 'note_added'        as TimelineEventType, label: 'Called',   icon: <Phone     className="w-3.5 h-3.5" /> },
+  { type: 'note_added'        as TimelineEventType, label: 'Emailed',  icon: <Mail      className="w-3.5 h-3.5" /> },
+  { type: 'note_added'        as TimelineEventType, label: 'LinkedIn', icon: <Linkedin  className="w-3.5 h-3.5" /> },
+];
 
 export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: TimelineFeedProps) {
   const [filter, setFilter] = useState<FilterType>("all");
   const [noteText, setNoteText] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [logStripOpen, setLogStripOpen] = useState(false);
 
   const filteredItems = useMemo(() => {
     if (filter === "all") return items;
@@ -173,14 +157,12 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
     });
   }, [items, filter]);
 
-  // Group consecutive contact_updated events to reduce noise
   const groupedItems = useMemo(() => {
     const result: Array<TimelineItem | { type: "__group__"; label: string; id: string; at: string | Date }> = [];
     let i = 0;
     while (i < filteredItems.length) {
       const item = filteredItems[i];
       if (item.type === "contact_updated") {
-        // Collect consecutive contact_updated items
         const batch = [item];
         while (
           i + 1 < filteredItems.length &&
@@ -211,6 +193,12 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
     if (!noteText.trim()) return;
     onAddNote(noteText.trim());
     setNoteText("");
+    setNoteOpen(false);
+  };
+
+  const handleQuickLogChip = (type: TimelineEventType, label: string) => {
+    onQuickLog?.(type, label, label);
+    setLogStripOpen(false);
   };
 
   const formatEventTime = (at: string | Date): string => {
@@ -228,49 +216,127 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
     return format(date, "MMM d");
   };
 
+  const currentFilterLabel = FILTER_OPTIONS.find(f => f.value === filter)?.label ?? "All activity";
+
   return (
     <div className="space-y-4" data-testid="timeline-feed">
-      {/* Quick Log Bar */}
-      {onQuickLog && <QuickLogBar onLog={onQuickLog} />}
-
-      {/* Filter Chips */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-        {FILTER_OPTIONS.map((option) => (
-          <Button
-            key={option.value}
-            variant={filter === option.value ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilter(option.value)}
-            className="shrink-0"
-            data-testid={`filter-${option.value}`}
-          >
-            {option.label}
-          </Button>
-        ))}
-      </div>
-
-      {/* Inline Note Composer */}
-      <div className="flex gap-2">
-        <Textarea
-          placeholder="Add a note..."
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value)}
-          className="resize-none min-h-[60px] flex-1"
-          data-testid="input-add-note"
-        />
-        <Button
-          onClick={handleAddNote}
-          disabled={!noteText.trim() || isAddingNote}
-          size="sm"
-          className="self-end"
-          data-testid="button-add-note"
-        >
-          {isAddingNote ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Plus className="w-4 h-4" />
+      {/* Interaction bar */}
+      <div className="space-y-2">
+        {/* Top row: Log toggle + Filter dropdown */}
+        <div className="flex items-center gap-2">
+          {onQuickLog && (
+            <button
+              onClick={() => setLogStripOpen(!logStripOpen)}
+              className={[
+                "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
+                logStripOpen
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border/50 bg-card/60 text-foreground",
+              ].join(" ")}
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+              data-testid="button-toggle-log-strip"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Log
+            </button>
           )}
-        </Button>
+
+          <button
+            onClick={() => { setNoteOpen(!noteOpen); if (noteOpen) setNoteText(""); }}
+            className={[
+              "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
+              noteOpen
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-border/50 bg-card/60 text-foreground",
+            ].join(" ")}
+            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            data-testid="button-toggle-note"
+          >
+            <MessageSquarePlus className="w-3.5 h-3.5" />
+            Note
+          </button>
+
+          <div className="ml-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium transition-colors hover:bg-muted/50"
+                  data-testid="button-filter-dropdown"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  {filter === "all" ? "Filter" : currentFilterLabel}
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {FILTER_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt.value}
+                    onClick={() => setFilter(opt.value)}
+                    className={filter === opt.value ? "font-medium" : ""}
+                    data-testid={`filter-option-${opt.value}`}
+                  >
+                    {opt.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Collapsible log chips strip */}
+        {logStripOpen && onQuickLog && (
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {LOG_CHIPS.map((opt) => (
+              <button
+                key={opt.label}
+                onClick={() => handleQuickLogChip(opt.type, opt.label)}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium hover:bg-muted/50 transition-colors active:scale-95"
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                data-testid={`chip-log-${opt.label.toLowerCase()}`}
+              >
+                {opt.icon}
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Inline Note Composer */}
+        {noteOpen && (
+          <div className="rounded-xl bg-muted/30 border border-border/60 p-3 space-y-2">
+            <Textarea
+              placeholder="Add a note..."
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              className="resize-none min-h-[80px] bg-transparent border-0 shadow-none focus-visible:ring-0 p-0"
+              autoFocus
+              data-testid="input-add-note"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setNoteText(""); setNoteOpen(false); }}
+                data-testid="button-cancel-note"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAddNote}
+                disabled={!noteText.trim() || isAddingNote}
+                data-testid="button-add-note"
+              >
+                {isAddingNote ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Timeline List */}
