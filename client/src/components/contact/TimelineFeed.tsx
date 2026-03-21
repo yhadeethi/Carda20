@@ -25,7 +25,7 @@ import {
   Mic,
   ChevronDown,
   SlidersHorizontal,
-  MessageSquarePlus,
+  Check,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -219,11 +219,11 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
   const currentFilterLabel = FILTER_OPTIONS.find(f => f.value === filter)?.label ?? "All activity";
 
   return (
-    <div className="space-y-4" data-testid="timeline-feed">
+    <div className="space-y-3" data-testid="timeline-feed">
       {/* Interaction bar */}
       <div className="space-y-2">
-        {/* Top row: Log toggle + Filter dropdown */}
-        <div className="flex items-center gap-2">
+        {/* Top row: Log toggle + Note ghost row + Filter */}
+        <div className="flex items-center gap-2 flex-wrap">
           {onQuickLog && (
             <button
               onClick={() => setLogStripOpen(!logStripOpen)}
@@ -241,26 +241,11 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
             </button>
           )}
 
-          <button
-            onClick={() => { setNoteOpen(!noteOpen); if (noteOpen) setNoteText(""); }}
-            className={[
-              "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
-              noteOpen
-                ? "border-primary/50 bg-primary/10 text-primary"
-                : "border-border/50 bg-card/60 text-foreground",
-            ].join(" ")}
-            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-            data-testid="button-toggle-note"
-          >
-            <MessageSquarePlus className="w-3.5 h-3.5" />
-            Note
-          </button>
-
           <div className="ml-auto">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium transition-colors hover:bg-muted/50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/60 text-xs font-medium transition-colors hover:bg-muted/50"
                   data-testid="button-filter-dropdown"
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -273,10 +258,11 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
                   <DropdownMenuItem
                     key={opt.value}
                     onClick={() => setFilter(opt.value)}
-                    className={filter === opt.value ? "font-medium" : ""}
+                    className="flex items-center justify-between"
                     data-testid={`filter-option-${opt.value}`}
                   >
                     {opt.label}
+                    {filter === opt.value && <Check className="w-3.5 h-3.5 ml-2 opacity-70" />}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -284,9 +270,12 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
           </div>
         </div>
 
-        {/* Collapsible log chips strip */}
-        {logStripOpen && onQuickLog && (
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {/* Log chips strip — always in DOM, visibility toggled to avoid layout shift */}
+        {onQuickLog && (
+          <div
+            style={{ visibility: logStripOpen ? "visible" : "hidden" }}
+            className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1"
+          >
             {LOG_CHIPS.map((opt) => (
               <button
                 key={opt.label}
@@ -302,11 +291,20 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
           </div>
         )}
 
-        {/* Inline Note Composer */}
-        {noteOpen && (
+        {/* Note — ghost row or compose box */}
+        {!noteOpen ? (
+          <button
+            onClick={() => setNoteOpen(true)}
+            className="w-full text-left px-3 py-2 rounded-xl border border-dashed border-border/50 text-sm text-muted-foreground/70 hover:border-border/80 hover:text-muted-foreground transition-colors"
+            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            data-testid="button-open-note"
+          >
+            Add a note…
+          </button>
+        ) : (
           <div className="rounded-xl bg-muted/30 border border-border/60 p-3 space-y-2">
             <Textarea
-              placeholder="Add a note..."
+              placeholder="What happened?"
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               className="resize-none min-h-[80px] bg-transparent border-0 shadow-none focus-visible:ring-0 p-0"
@@ -318,9 +316,9 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
                 variant="ghost"
                 size="sm"
                 onClick={() => { setNoteText(""); setNoteOpen(false); }}
-                data-testid="button-cancel-note"
+                data-testid="button-discard-note"
               >
-                Cancel
+                Discard
               </Button>
               <Button
                 size="sm"

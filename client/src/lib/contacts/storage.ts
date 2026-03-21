@@ -328,6 +328,18 @@ export function getTasks(contactId: string): ContactTask[] {
   return contact?.tasks || [];
 }
 
+export async function updateTaskTitle(contactId: string, taskId: string, title: string): Promise<boolean> {
+  const contact = getContactById(contactId);
+  if (!contact) return false;
+
+  const tasks = (contact.tasks || []).map(t =>
+    t.id === taskId ? { ...t, title } : t
+  );
+
+  updateContactV2(contactId, { tasks });
+  return true;
+}
+
 // ============ REMINDERS ============
 
 export async function addReminder(contactId: string, label: string, remindAt: string): Promise<ContactReminder | null> {

@@ -65,6 +65,7 @@ import {
   addTask,
   completeTask,
   deleteTask,
+  updateTaskTitle,
   addTimelineEvent,
   updateContactV2,
 } from "@/lib/contacts/storage";
@@ -207,6 +208,8 @@ export function ContactDetailView({
 
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskText, setEditingTaskText] = useState("");
 
   const contactTasks = useMemo(
     () => (contactV2?.tasks || []).filter((t) => !t.done),
@@ -229,6 +232,22 @@ export function ContactDetailView({
   const handleDeleteTask = async (taskId: string) => {
     await deleteTask(contact.id, taskId);
     onUpdate();
+  };
+
+  const handleStartEditTask = (taskId: string, currentTitle: string) => {
+    setEditingTaskId(taskId);
+    setEditingTaskText(currentTitle);
+  };
+
+  const handleSaveTaskEdit = async () => {
+    if (!editingTaskId) return;
+    const text = editingTaskText.trim();
+    if (text) {
+      await updateTaskTitle(contact.id, editingTaskId, text);
+      onUpdate();
+    }
+    setEditingTaskId(null);
+    setEditingTaskText("");
   };
 
   const [isSyncingHubspot, setIsSyncingHubspot] = useState(false);
@@ -948,14 +967,16 @@ export function ContactDetailView({
 
           {/* Tasks section */}
           <div className="mt-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">
-              Up next
-            </p>
+            {contactTasks.length > 0 && (
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">
+                Up next
+              </p>
+            )}
             <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
               {contactTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40 last:border-b-0"
+                  className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40"
                   data-testid={`task-row-${task.id}`}
                 >
                   <Checkbox
@@ -965,8 +986,28 @@ export function ContactDetailView({
                     data-testid={`checkbox-task-${task.id}`}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm">{task.title}</p>
-                    {task.dueAt && (
+                    {editingTaskId === task.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editingTaskText}
+                          onChange={(e) => setEditingTaskText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveTaskEdit();
+                            if (e.key === "Escape") { setEditingTaskId(null); setEditingTaskText(""); }
+                          }}
+                          autoFocus
+                          className="flex-1 bg-transparent text-sm outline-none border-b border-border min-w-0"
+                          data-testid={`input-edit-task-${task.id}`}
+                        />
+                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs shrink-0" onClick={handleSaveTaskEdit}>
+                          Save
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-sm">{task.title}</p>
+                    )}
+                    {task.dueAt && editingTaskId !== task.id && (
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {(() => {
                           const d = new Date(task.dueAt);
@@ -991,12 +1032,15 @@ export function ContactDetailView({
                         className="opacity-50 hover:opacity-100 shrink-0"
                         data-testid={`menu-task-${task.id}`}
                       >
-                        <MoreHorizontal className="w-4 h-4" />
+                        <MoreHorizontal className="w-5 h-5" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => handleCompleteTask(task.id)}>
                         Mark complete
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleStartEditTask(task.id, task.title)}>
+                        Edit
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -1039,7 +1083,7 @@ export function ContactDetailView({
           </div>
 
           {/* Activity section divider */}
-          <div className="mt-6">
+          <div className="mt-6 border-t border-border/40 pt-5">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-0.5">
               Activity
             </p>

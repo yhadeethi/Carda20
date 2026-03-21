@@ -180,7 +180,7 @@ export function HomeScoreboard({
             className="rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 divide-y divide-border/50 overflow-hidden"
             style={{ backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
           >
-            {pendingTasks.slice(0, 5).map((task) => (
+            {pendingTasks.map((task) => (
               <div
                 key={task.id}
                 className="flex items-start gap-3 p-4"
@@ -218,14 +218,6 @@ export function HomeScoreboard({
                 </button>
               </div>
             ))}
-            {pendingTasks.length > 5 && (
-              <button
-                onClick={onViewPeople}
-                className="w-full p-3 text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
-              >
-                +{pendingTasks.length - 5} more
-              </button>
-            )}
           </div>
         </section>
       )}
