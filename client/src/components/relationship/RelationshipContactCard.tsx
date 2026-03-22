@@ -85,7 +85,6 @@ export function RelationshipContactCard({
   };
 
   const personName = contact.name?.trim() || contact.email?.trim() || "Unknown";
-  const hasName = !!contact.name?.trim();
   const { initials, bg, fg } = getInitialsAndColor(personName);
 
   return (
@@ -105,7 +104,7 @@ export function RelationshipContactCard({
           style={{ backgroundColor: bg, color: fg }}
           aria-hidden="true"
         >
-          {hasName ? initials : <User className="w-5 h-5" style={{ color: fg }} />}
+          {initials}
         </div>
 
         {/* Content */}
@@ -122,13 +121,13 @@ export function RelationshipContactCard({
               </div>
 
               {/* Title — secondary line */}
-              {contact.title ? (
+              {contact.title?.trim() ? (
                 <div
                   className="text-sm text-muted-foreground mt-0.5 truncate"
-                  title={contact.title}
+                  title={contact.title.trim()}
                   data-testid={`text-contact-title-${contact.id}`}
                 >
-                  {contact.title}
+                  {contact.title.trim()}
                 </div>
               ) : null}
 
