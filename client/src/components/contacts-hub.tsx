@@ -24,7 +24,7 @@ import {
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-import { StoredContact, loadContacts, deleteContact, getUniqueEventNames } from "@/lib/contactsStorage";
+import { StoredContact, loadContacts, deleteContact, updateContact, getUniqueEventNames } from "@/lib/contactsStorage";
 import {
   Company,
   getCompanies,
@@ -33,6 +33,7 @@ import {
   deleteCompany,
   autoGenerateCompaniesFromContacts,
   getContactCountForCompany,
+  resolveCompanyIdForContact,
 } from "@/lib/companiesStorage";
 
 import { Search, Plus, Bell, Merge, Users } from "lucide-react";
@@ -86,6 +87,27 @@ export function ContactsHub({
 
     const updatedCompanies = autoGenerateCompaniesFromContacts(loadedContacts);
     setCompanies(updatedCompanies);
+
+    // Repair pass: link any contacts that are missing a companyId
+    const unlinked = loadedContacts.filter((c) => !c.companyId);
+    if (unlinked.length > 0) {
+      let anyUpdated = false;
+      unlinked.forEach((c) => {
+        const resolvedId = resolveCompanyIdForContact({
+          companyId: c.companyId,
+          company: c.company,
+          email: c.email,
+          website: c.website,
+        });
+        if (resolvedId) {
+          updateContact(c.id, { companyId: resolvedId });
+          anyUpdated = true;
+        }
+      });
+      if (anyUpdated) {
+        setContacts(loadContacts());
+      }
+    }
   }, [refreshKey]);
 
   // Sync activeTab with initialTab when it changes

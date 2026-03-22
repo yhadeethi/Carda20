@@ -1,0 +1,37 @@
+#6 - Company Management Bug Fixes
+What & Why
+Two company bugs need fixing together since they share the same files.
+
+Bug 1 — Contacts not linked to their company (0 contacts shown): When a business card is scanned, the contact's email or website reveals the company (e.g., revera.energy), so a company record is auto-created. But the contact's companyId field is never written back to the contact record — it stays null. The company card therefore shows "0 contacts" because getContactCountForCompany matches by companyId first, then exact company name, then email domain. All three fail when the contact has no company name text (only a website URL) and companyId is never set.
+
+Bug 2 — Deleted company reappears after page refresh (Wärtsilä, etc.): Two sub-causes:
+
+The delete blocklist stores names with diacritics stripped (normalizeCompany → "wartsila"), but hydrateFromServer checks server-returned names with only .toLowerCase() (no diacritics removal), so "Wärtsilä" from the server becomes "wärtsilä" which doesn't match "wartsila" in the blocklist → isDeleted = false → company is restored from server into localStorage.
+deleteCompanyFromServer is fire-and-forget. If the user refreshes before the server delete completes, the server still has the company. If the blocklist check also fails (sub-cause 1), hydration writes it back to localStorage and it reappears on next load.
+Done looks like
+After a scan, the company card immediately shows the correct contact count — no manual linking needed.
+Contacts already saved without a companyId get linked on the next page load (one-time repair pass).
+Deleting a company with special characters (e.g., "Wärtsilä") and refreshing does not bring it back.
+Deleting any company and immediately refreshing does not bring it back.
+Out of scope
+Server-side company/contact linking.
+Subsidiary name deduplication.
+Server-side deletion retry logic.
+Tasks
+Persist companyId at scan save time — In scan-tab.tsx's saveContactToStorage, after autoGenerateCompaniesFromContacts runs, call resolveCompanyIdForContact on the freshly saved contact and immediately call updateContact(id, { companyId }) if a match is found. This is the primary fix for Bug 1.
+
+Repair pass on contacts load — In contacts-hub.tsx, after autoGenerateCompaniesFromContacts runs, iterate contacts where companyId == null, resolve each via resolveCompanyIdForContact, and call updateContact for any that resolve. This fixes existing contacts already saved without a companyId.
+
+Fix hydration normalization — In hydration.ts, import normalizeCompany from dedupe.ts and use it (instead of the simple .toLowerCase()) when normalizing the server-returned company name before checking the deleted blocklist. This fixes Bug 2 for non-ASCII names like "Wärtsilä".
+
+Post-hydration blocklist cleanup — After hydration writes the merged company list to localStorage (saveCompanies(mergedCompanies)), immediately filter out any company in the saved list whose normalized name or domain is in the deleted blocklist. This catches the async-race case where the server delete was still in flight at refresh time.
+
+Guard upsertCompany against blocklisted companies — In companiesStorage.ts, add a deleted-blocklist check at the top of upsertCompany. If the incoming company's normalized name or domain is in the blocklist, return early without writing. Prevents any sync callback path from silently restoring a deleted company.
+
+Relevant files
+client/src/components/scan-tab.tsx:271-296
+client/src/components/contacts-hub.tsx:83-89
+client/src/lib/companiesStorage.ts:27-35,95-115,321-349
+client/src/lib/hydration.ts:61-121
+client/src/lib/contacts/dedupe.ts:27-37
+client/src/lib/contactsStorage.ts:336-356

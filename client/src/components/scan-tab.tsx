@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { StoredContact, saveContact, loadContacts } from "@/lib/contactsStorage";
+import { StoredContact, saveContact, loadContacts, updateContact } from "@/lib/contactsStorage";
 import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
 import { findFuzzyCompanyMatch } from "@/lib/contacts/dedupe";
 import { generateId as generateTimelineId } from "@/lib/contacts/ids";
@@ -30,6 +30,8 @@ import {
   findCompanyByName,
   extractDomainFromEmail,
   findCompanyByDomain,
+  autoGenerateCompaniesFromContacts,
+  resolveCompanyIdForContact,
 } from "@/lib/companiesStorage";
 
 import { Camera, FileText, Loader2, Upload, X, Download, Check, Layers, Calendar } from "lucide-react";
@@ -345,6 +347,22 @@ export function ScanTab({
 
       upsertContactV2(v2Contact);
       setContactV2(v2Contact);
+
+      // Persist companyId: auto-generate companies first, then resolve and link
+      autoGenerateCompaniesFromContacts(loadContacts());
+      const resolvedCompanyId = resolveCompanyIdForContact({
+        companyId: savedContact.companyId,
+        company: savedContact.company,
+        email: savedContact.email,
+        website: savedContact.website,
+      });
+      if (resolvedCompanyId && resolvedCompanyId !== savedContact.companyId) {
+        updateContact(savedContact.id, { companyId: resolvedCompanyId });
+        const linkedV2 = { ...v2Contact, companyId: resolvedCompanyId };
+        upsertContactV2(linkedV2);
+        setContactV2(linkedV2);
+        savedContact.companyId = resolvedCompanyId;
+      }
 
       onContactSaved?.(savedContact);
       return savedContact;

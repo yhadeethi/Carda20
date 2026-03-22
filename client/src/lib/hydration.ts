@@ -2,6 +2,7 @@ import { loadContacts, saveContacts, type StoredContact } from './contactsStorag
 import { getCompanies, saveCompanies, type Company } from './companiesStorage';
 import { upsertContactToServer, upsertCompanyToServer } from './api/sync';
 import { normalizeServerContact, normalizeServerCompany } from './contacts/normalize';
+import { normalizeCompany } from './contacts/dedupe';
 
 interface ServerContactRaw {
   id: number;
@@ -77,6 +78,27 @@ export async function hydrateFromServer(): Promise<void> {
     const serverCompaniesRaw: ServerCompany[] = await companiesRes.json();
     const normalizedCompanies = serverCompaniesRaw.map(c => normalizeServerCompany(c));
 
+    // Load the deleted blocklist once for use throughout hydration
+    const deletedList: Array<{ normName: string; domain?: string | null }> = (() => {
+      try { return JSON.parse(localStorage.getItem('carda_deleted_companies') || '[]'); } catch { return []; }
+    })();
+
+    // Helper: check if a company (by name + domain) is in the deleted blocklist.
+    // FIX (Bug 2, Task 3): Use normalizeCompany (strips diacritics) instead of
+    // plain .toLowerCase() so "Wärtsilä" → "wartsila" matches the stored blocklist entry.
+    function isDeletedCompany(name: string, domain: string | null): boolean {
+      if (deletedList.length === 0) return false;
+      // FIX: normalizeCompany strips diacritics/punctuation, matching the format
+      // used when the entry was written to the blocklist via addToDeletedCompaniesBlocklist
+      const normName = normalizeCompany(name);
+      const normDomain = (domain || '').toLowerCase();
+      return deletedList.some(
+        (e) =>
+          (e.normName && normName && e.normName === normName) ||
+          (e.domain && normDomain && e.domain === normDomain)
+      );
+    }
+
     // --- COMPANIES ---
     const localCompanies = getCompanies();
     const localCompanyMap = new Map(localCompanies.map(c => [c.id, c]));
@@ -90,22 +112,15 @@ export async function hydrateFromServer(): Promise<void> {
           localCompanyMap.set(uuid, merged);
         }
       } else {
-        const deletedList: Array<{ normName: string; domain?: string | null }> = (() => {
-          try { return JSON.parse(localStorage.getItem('carda_deleted_companies') || '[]'); } catch { return []; }
-        })();
         const serverName = (server as any).name || '';
-        const serverDomain = ((server as any).domain || '').toLowerCase();
-        const serverNorm = serverName.trim().toLowerCase().replace(/\s+/g, ' ');
-        const isDeleted = deletedList.some(
-          (e) => (e.normName && serverNorm.includes(e.normName)) ||
-                  (e.domain && serverDomain && e.domain === serverDomain)
-        );
-        if (!isDeleted) {
+        const serverDomain = (server as any).domain || null;
+
+        if (!isDeletedCompany(serverName, serverDomain)) {
           localCompanyMap.set(uuid, {
             id: uuid,
             dbId: server.dbId,
             name: serverName,
-            domain: (server as any).domain || null,
+            domain: serverDomain,
             city: (server as any).city || null,
             state: (server as any).state || null,
             country: (server as any).country || null,
@@ -117,7 +132,12 @@ export async function hydrateFromServer(): Promise<void> {
       }
     }
 
-    const mergedCompanies = Array.from(localCompanyMap.values());
+    // FIX (Bug 2, Task 4): After merging, scrub any blocklisted company that
+    // may have slipped in via the existing-local-company path (async race condition
+    // where server delete was still in flight at the time of the last refresh).
+    const mergedCompanies = Array.from(localCompanyMap.values()).filter(
+      (c) => !isDeletedCompany(c.name, c.domain || null)
+    );
     saveCompanies(mergedCompanies);
 
     // --- CONTACTS ---
