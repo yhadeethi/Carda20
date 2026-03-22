@@ -95,7 +95,7 @@ export function saveCompanies(companies: Company[]): void {
 export function upsertCompany(company: Company): Company[] {
   const companies = getCompanies();
   const existingIndex = companies.findIndex((c) => c.id === company.id);
-  
+
   if (existingIndex >= 0) {
     companies[existingIndex] = { ...company, updatedAt: new Date().toISOString(), _needsUpsert: true };
   } else {
@@ -107,7 +107,7 @@ export function upsertCompany(company: Company): Company[] {
       _needsUpsert: true,
     });
   }
-  
+
   saveCompanies(companies);
   const saved = companies.find((c) => c.id === (company.id || companies[companies.length - 1].id));
   if (saved) fireCompanyUpsert(saved);
@@ -239,17 +239,17 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
 }>): Company[] {
   const existingCompanies = getCompanies();
   const newCompanies: Company[] = [];
-  
+
   // Group contacts by normalized company name
   const companyGroups = new Map<string, { name: string; domain: string | null }>();
-  
+
   contacts.forEach((contact) => {
     const companyName = contact.company?.trim();
     // Priority: website domain > email domain
     const websiteDomain = extractDomainFromWebsite(contact.website || '');
     const emailDomain = extractDomainFromEmail(contact.email);
     const domain = websiteDomain || emailDomain;
-    
+
     if (companyName) {
       const groupKey = normalizeCompany(companyName) || companyName.toLowerCase().trim();
       if (groupKey) {
@@ -280,22 +280,18 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
       }
     }
   });
-  
+
   // Create companies for groups that don't already exist
   const deletedBlocklist = getDeletedCompaniesBlocklist();
   companyGroups.forEach(({ name, domain }) => {
-    const normalizedName = normalizeCompanyName(name).toLowerCase();
-
-    // Check if company already exists by name or domain
-    const existsByName = existingCompanies.some(
-      (c) => normalizeCompanyName(c.name).toLowerCase() === normalizedName
-    );
-    const existsByDomain = domain && existingCompanies.some(
-      (c) => c.domain?.toLowerCase() === domain.toLowerCase()
-    );
+    // FIX: Use findCompanyByName (fuzzy + prefix + domain match) instead of
+    // exact string comparison. This prevents subsidiary names like
+    // "Wärtsilä Energy" from creating a duplicate when "Wärtsilä" already exists.
+    const existsByName = !!findCompanyByName(name);
+    const existsByDomain = domain && !!findCompanyByDomain(domain);
 
     // Skip companies the user has intentionally deleted
-    const normForBlock = normalizeCompany(name) || normalizedName;
+    const normForBlock = normalizeCompany(name) || normalizeCompanyName(name).toLowerCase();
     const isDeleted = deletedBlocklist.some(
       (e) =>
         (e.normName && e.normName === normForBlock) ||
@@ -307,14 +303,14 @@ export function autoGenerateCompaniesFromContacts(contacts: Array<{
       newCompanies.push(newCompany);
     }
   });
-  
+
   // Save all new companies
   if (newCompanies.length > 0) {
     const allCompanies = [...existingCompanies, ...newCompanies];
     saveCompanies(allCompanies);
     return allCompanies;
   }
-  
+
   return existingCompanies;
 }
 
@@ -332,20 +328,20 @@ export function resolveCompanyIdForContact(contact: {
     const company = getCompanyById(contact.companyId);
     if (company) return contact.companyId;
   }
-  
+
   // Try to find by company name
   if (contact.company) {
     const byName = findCompanyByName(contact.company);
     if (byName) return byName.id;
   }
-  
+
   // Try to find by email domain
   const domain = extractDomainFromEmail(contact.email);
   if (domain) {
     const byDomain = findCompanyByDomain(domain);
     if (byDomain) return byDomain.id;
   }
-  
+
   return null;
 }
 
@@ -355,7 +351,7 @@ export function resolveCompanyIdForContact(contact: {
 export function getContactCountForCompany(companyId: string, contacts: Array<{ companyId?: string | null; company: string; email: string }>): number {
   const company = getCompanyById(companyId);
   if (!company) return 0;
-  
+
   return contacts.filter((c) => {
     // Linked by companyId
     if (c.companyId === companyId) return true;
@@ -376,7 +372,7 @@ export function getContactCountForCompany(companyId: string, contacts: Array<{ c
 export function getContactsForCompany(companyId: string, contacts: Array<{ id: string; companyId?: string | null; company: string; email: string }>): string[] {
   const company = getCompanyById(companyId);
   if (!company) return [];
-  
+
   return contacts.filter((c) => {
     if (c.companyId === companyId) return true;
     if (c.company && normalizeCompanyName(c.company).toLowerCase() === normalizeCompanyName(company.name).toLowerCase()) return true;
