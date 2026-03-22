@@ -16,13 +16,44 @@ interface RelationshipContactCardProps {
   contact: StoredContact;
   onOpen: () => void;
 
-  // Optional actions (Relationships list uses these; Scan preview can omit)
   onDelete?: () => void;
   onContactUpdated?: () => void;
 
-  // Optional UI tweaks
   showActionsMenu?: boolean;
   showMeta?: boolean;
+}
+
+const AVATAR_COLORS = [
+  ["#3B82F6", "#EFF6FF"],
+  ["#8B5CF6", "#F5F3FF"],
+  ["#10B981", "#ECFDF5"],
+  ["#F59E0B", "#FFFBEB"],
+  ["#EF4444", "#FEF2F2"],
+  ["#06B6D4", "#ECFEFF"],
+  ["#F97316", "#FFF7ED"],
+  ["#84CC16", "#F7FEE7"],
+  ["#EC4899", "#FDF2F8"],
+  ["#6366F1", "#EEF2FF"],
+];
+
+function getInitialsAndColor(name: string): { initials: string; bg: string; fg: string } {
+  const trimmed = name.trim();
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  let initials = "";
+  if (words.length >= 2) {
+    initials = (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  } else if (words.length === 1) {
+    initials = trimmed.slice(0, 2).toUpperCase();
+  } else {
+    initials = "?";
+  }
+
+  let hash = 0;
+  for (let i = 0; i < trimmed.length; i++) {
+    hash = (hash * 31 + trimmed.charCodeAt(i)) >>> 0;
+  }
+  const [fg, bg] = AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  return { initials, bg, fg };
 }
 
 export function RelationshipContactCard({
@@ -34,6 +65,7 @@ export function RelationshipContactCard({
   showMeta = true,
 }: RelationshipContactCardProps) {
   const [showLinker, setShowLinker] = useState(false);
+
   const formatDate = (dateStr: string) => {
     try {
       return format(new Date(dateStr), "d MMM yyyy");
@@ -52,9 +84,9 @@ export function RelationshipContactCard({
     }
   };
 
-  const displayCompany = (c: StoredContact) => (c.company?.trim() ? c.company.trim() : "Unknown company");
-  const displayName = (c: StoredContact) =>
-    c.name?.trim() ? c.name.trim() : c.email?.trim() ? c.email.trim() : "Unknown";
+  const personName = contact.name?.trim() || contact.email?.trim() || "Unknown";
+  const hasName = !!contact.name?.trim();
+  const { initials, bg, fg } = getInitialsAndColor(personName);
 
   return (
     <div
@@ -67,29 +99,54 @@ export function RelationshipContactCard({
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
     >
       <div className="p-4 flex items-start gap-3">
-        {/* Avatar */}
-        <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-          <User className="w-5 h-5 text-muted-foreground" />
+        {/* Initials avatar */}
+        <div
+          className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-semibold select-none"
+          style={{ backgroundColor: bg, color: fg }}
+          aria-hidden="true"
+        >
+          {hasName ? initials : <User className="w-5 h-5" style={{ color: fg }} />}
         </div>
 
         {/* Content */}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              {/* Company-first */}
-              <div className="font-semibold leading-5 truncate" title={displayCompany(contact)}>
-                {displayCompany(contact)}
+            <div className="min-w-0 flex-1">
+              {/* Person name — primary headline */}
+              <div
+                className="font-semibold leading-5 truncate"
+                title={personName}
+                data-testid={`text-contact-name-${contact.id}`}
+              >
+                {personName}
               </div>
 
-              {/* Name + title */}
-              <div className="text-sm text-muted-foreground mt-0.5 min-w-0 truncate" title={displayName(contact)}>
-                <span className="font-medium text-foreground">{displayName(contact)}</span>
-                {contact.title ? <span className="text-muted-foreground"> · {contact.title}</span> : null}
-              </div>
+              {/* Title — secondary line */}
+              {contact.title ? (
+                <div
+                  className="text-sm text-muted-foreground mt-0.5 truncate"
+                  title={contact.title}
+                  data-testid={`text-contact-title-${contact.id}`}
+                >
+                  {contact.title}
+                </div>
+              ) : null}
+
+              {/* Company — tertiary line */}
+              {contact.company?.trim() ? (
+                <div
+                  className="text-xs text-muted-foreground/80 mt-0.5 inline-flex items-center gap-1 min-w-0 truncate"
+                  title={contact.company}
+                  data-testid={`text-contact-company-${contact.id}`}
+                >
+                  <Building className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{contact.company.trim()}</span>
+                </div>
+              ) : null}
             </div>
 
             {/* Actions */}
-            {showActionsMenu && (onDelete || true) ? (
+            {showActionsMenu ? (
               <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -129,7 +186,7 @@ export function RelationshipContactCard({
             ) : null}
           </div>
 
-          {/* Meta row */}
+          {/* Meta row — scan date + event tag only */}
           {showMeta ? (
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               {contact.createdAt && isNew(contact.createdAt) && (
@@ -150,15 +207,6 @@ export function RelationshipContactCard({
                 >
                   <Tag className="w-3 h-3 shrink-0" />
                   <span className="truncate">{contact.eventName}</span>
-                </span>
-              ) : null}
-
-              {(contact.company || contact.title) ? (
-                <span className="text-xs text-muted-foreground inline-flex items-center gap-1 min-w-0">
-                  <Building className="w-3 h-3 shrink-0" />
-                  <span className="truncate max-w-[260px]">
-                    {[contact.company, contact.title].filter(Boolean).join(" · ")}
-                  </span>
                 </span>
               ) : null}
             </div>
