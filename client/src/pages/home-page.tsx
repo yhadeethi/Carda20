@@ -1,7 +1,10 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
+// Add to imports at top:
+import type { Contact } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { logDebriefEvent } from "@/lib/debriefEvents";
 import { useTimelineSetup } from "@/hooks/useTimelineSetup";
 import { useToast } from "@/hooks/use-toast";
 import { ScanTab } from "@/components/scan-tab";
@@ -290,11 +293,25 @@ export default function HomePage() {
     setCaptureSheetMode("scan");
   };
 
-  const handleContactSelectedFromEvent = (contact: StoredContact) => {
-    setSelectedContact(contact);
+  const handleContactSelectedFromEvent = (contact: Contact) => {
+    const stored: StoredContact = {
+      id: String(contact.id),
+      createdAt: new Date().toISOString(),
+      name: contact.fullName || "",
+      company: contact.companyName || "",
+      title: contact.jobTitle || "",
+      email: contact.email || "",
+      phone: contact.phone || "",
+      website: contact.website || "",
+      linkedinUrl: contact.linkedinUrl || "",
+      address:  "",
+      eventName: null,
+    };
+    setSelectedContact(stored);
     setContactInitialAction(null);
     setViewMode("contact-detail");
   };
+
 
   const handleCaptureToggle = () => setCaptureMenuOpen(prev => !prev);
 
@@ -316,6 +333,7 @@ export default function HomePage() {
   };
 
   const handleDebriefComplete = (contactId: string) => {
+    logDebriefEvent(contactId);
     setDebriefSavedContactId(contactId);
     setDebriefPhase("success");
     refreshContacts();

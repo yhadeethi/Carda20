@@ -42,6 +42,7 @@ import {
   CheckSquare,
   CloudUpload,
   Edit,
+  Mail,
   MoreHorizontal,
   Phone,
   Plus,
@@ -65,6 +66,7 @@ import {
   addNote,
   addReminder,
   addTask,
+  clearTaskDraftBody,
   completeTask,
   deleteTask,
   updateTaskTitle,
@@ -212,6 +214,8 @@ export function ContactDetailView({
   const [newTaskText, setNewTaskText] = useState("");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState("");
+  const [expandedDraftTaskId, setExpandedDraftTaskId] = useState<string | null>(null);
+  const [draftSentConfirmTaskId, setDraftSentConfirmTaskId] = useState<string | null>(null);
 
   const contactTasks = useMemo(
     () => (contactV2?.tasks || []).filter((t) => !t.done),
@@ -250,6 +254,30 @@ export function ContactDetailView({
     }
     setEditingTaskId(null);
     setEditingTaskText("");
+  };
+  const handleDraftTaskSend = (task: { id: string; draftBody?: string }) => {
+    if (contact.email) {
+      const mailto = `mailto:${contact.email}?subject=${encodeURIComponent("Following up")}&body=${encodeURIComponent(task.draftBody ?? "")}`;
+      window.location.href = mailto;
+    } else {
+      navigator.clipboard.writeText(task.draftBody ?? "").catch(() => {});
+      toast({ title: "No email on file — copied to clipboard" });
+    }
+    setDraftSentConfirmTaskId(task.id);
+  };
+
+  const handleDraftSentYes = async (taskId: string, taskTitle: string) => {
+    await completeTask(contact.id, taskId);
+    await addTimelineEvent(contact.id, "followup_sent", `Sent draft: ${taskTitle}`);
+    setDraftSentConfirmTaskId(null);
+    setExpandedDraftTaskId(null);
+    onUpdate();
+  };
+
+  const handleDiscardDraftBody = async (taskId: string) => {
+    await clearTaskDraftBody(contact.id, taskId);
+    setExpandedDraftTaskId(null);
+    onUpdate();
   };
 
   const [isSyncingHubspot, setIsSyncingHubspot] = useState(false);
@@ -985,12 +1013,81 @@ export function ContactDetailView({
               Tasks
             </p>
             <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
-              {contactTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40"
-                  data-testid={`task-row-${task.id}`}
+          {contactTasks.map((task) => (
+            <div
+              key={task.id}
+              className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40"
+              data-testid={`task-row-${task.id}`}
+            >
+              {task.draftBody ? (
+                <button
+                  className="flex-1 flex items-start gap-3 text-left"
+                  onClick={() =>
+                    setExpandedDraftTaskId(
+                      expandedDraftTaskId === task.id ? null : task.id
+                    )
+                  }
                 >
+                  <Mail className="w-4 h-4 text-violet-500 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm">{task.title}</p>
+                    {expandedDraftTaskId === task.id && (
+                      <div className="mt-2 space-y-2">
+                        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                          {task.draftBody}
+                        </p>
+                        {draftSentConfirmTaskId === task.id ? (
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium text-foreground">Did you send it?</p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDraftSentYes(task.id, task.title);
+                                }}
+                                className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDraftSentConfirmTaskId(null);
+                                }}
+                                className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent"
+                              >
+                                No
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDraftTaskSend(task);
+                              }}
+                              className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30"
+                            >
+                              Send
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDiscardDraftBody(task.id);
+                              }}
+                              className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent"
+                            >
+                              Discard Draft
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ) : (
+                <>
                   <Checkbox
                     checked={false}
                     onCheckedChange={() => handleCompleteTask(task.id)}
@@ -1063,47 +1160,51 @@ export function ContactDetailView({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
-              ))}
-              {/* Add task row */}
-              <div className="flex items-center gap-2 px-3 py-2.5">
-                <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Add a task..."
-                  value={newTaskText}
-                  onChange={(e) => setNewTaskText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleAddTask();
-                  }}
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 min-w-0"
-                  data-testid="input-add-task"
-                />
-                {newTaskText.trim() && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleAddTask}
-                    className="shrink-0 h-7 px-2 text-xs"
-                    data-testid="button-save-task"
-                  >
-                    Add
-                  </Button>
-                )}
-              </div>
+                </>
+              )}
             </div>
+          ))}
+          {/* Add task row */}
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              placeholder="Add a task..."
+              value={newTaskText}
+              onChange={(e) => setNewTaskText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAddTask();
+              }}
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 min-w-0"
+              data-testid="input-add-task"
+            />
+            {newTaskText.trim() && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleAddTask}
+                className="shrink-0 h-7 px-2 text-xs"
+                data-testid="button-save-task"
+              >
+                Add
+              </Button>
+            )}
           </div>
-          )}
 
-          {/* Activity section divider */}
-          <div className="mt-6 border-t border-border/40 pt-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-0.5">
-              Activity
-            </p>
-            <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} onQuickLog={handleQuickLog} />
-          </div>
-        </>
-      )}
+
+                  </div>
+                </div>
+                )}
+                {/* Activity section divider */}
+                <div className="mt-6 border-t border-border/40 pt-5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-0.5">
+                    Activity
+                  </p>
+                  <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} onQuickLog={handleQuickLog} />
+                </div>
+              </>
+            )}
+
 
       {/* Delete Confirmation */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

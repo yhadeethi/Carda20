@@ -12,6 +12,7 @@ export interface ContactTask {
   createdAt: string; // ISO
   completedAt?: string; // ISO
   dueAt?: string; // ISO optional
+  draftBody?: string; // optional draft message for communication intent tasks
 }
 
 // Reminder per contact
@@ -88,4 +89,21 @@ export interface FollowUpResponse {
   subject?: string;
   body: string;
   bullets: string[];
+}
+
+// Communication intent extracted from voice debrief
+export interface CommunicationIntent {
+  recipientName: string;
+  recipientCompany: string;
+  intentDescription: string;
+  suggestedTone: "warm" | "friendly" | "direct" | "formal";
+}
+
+// Draft action generated from a communication intent
+export interface DraftAction {
+  recipientName: string;
+  recipientCompany: string;
+  subject: string | null;
+  body: string;
+  status: "pending" | "ready" | "dismissed";
 }

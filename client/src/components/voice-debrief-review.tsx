@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, Bell, CheckSquare, ChevronDown, Loader2, X, Check } from "lucide-react";
+import { Sparkles, Bell, CheckSquare, ChevronDown, Loader2, X, Check, Mail } from "lucide-react";
 import { loadContacts } from "@/lib/contactsStorage";
 import type { StoredContact } from "@/lib/contactsStorage";
 import {
@@ -10,6 +10,7 @@ import {
   upsertContact,
   getContactById,
 } from "@/lib/contacts/storage";
+import type { CommunicationIntent, DraftAction } from "@/lib/contacts/types";
 import { fuzzyMatchContact } from "@/lib/contacts/fuzzyMatch";
 import { parseNaturalDate } from "@/lib/contacts/dateParser";
 import { generateId } from "@/lib/contacts/ids";
@@ -32,6 +33,7 @@ interface MatchedContact {
 interface ParsedTask {
   title: string;
   dueDescription: string | null;
+  draftBody?: string;
 }
 
 interface ParsedReminder {
@@ -46,6 +48,7 @@ interface ParseResult {
   warmthLevel: "hot" | "warm" | "neutral" | "cold";
   tasks: ParsedTask[];
   reminders: ParsedReminder[];
+  communicationIntents: CommunicationIntent[];
   rawTranscript: string;
 }
 
@@ -94,6 +97,13 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
   const [fuzzySuggestions, setFuzzySuggestions] = useState<Array<{ contact: StoredContact & { fullName: string; companyName: string }; score: number }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  const [draftActions, setDraftActions] = useState<DraftAction[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [expandedDraftIdx, setExpandedDraftIdx] = useState<number | null>(null);
+  const [editingDraftIdx, setEditingDraftIdx] = useState<number | null>(null);
+  const [editingDraftBody, setEditingDraftBody] = useState("");
+  const [sentConfirmIdx, setSentConfirmIdx] = useState<number | null>(null);
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -136,6 +146,52 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           }
         } else {
           handleLowConfidenceMatch(data, contacts);
+        }
+
+        // Fire draft generation in parallel, independently of rest of review sheet
+        const intents: CommunicationIntent[] = data.communicationIntents || [];
+        if (intents.length > 0) {
+          setDraftsLoading(true);
+          Promise.allSettled(
+            intents.map((intent) =>
+              fetch("/api/followup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  contact: {
+                    name: intent.recipientName,
+                    company: intent.recipientCompany,
+                  },
+                  request: {
+                    mode: "email_followup",
+                    tone: intent.suggestedTone,
+                    length: "short",
+                    goal: intent.intentDescription,
+                  },
+                }),
+              }).then((r) => {
+                if (!r.ok) throw new Error("followup failed");
+                return r.json();
+              })
+            )
+          ).then((results) => {
+            const drafts: DraftAction[] = [];
+            results.forEach((result, i) => {
+              if (result.status === "fulfilled") {
+                drafts.push({
+                  recipientName: intents[i].recipientName,
+                  recipientCompany: intents[i].recipientCompany,
+                  subject: result.value.subject ?? null,
+                  body: result.value.body,
+                  status: "ready",
+                });
+              }
+              // rejected → silently skip
+            });
+            setDraftActions(drafts);
+            setDraftsLoading(false);
+          });
         }
       } catch (err) {
         console.error("[VoiceDebriefReview] Parse error:", err);
@@ -207,7 +263,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
     try {
       for (const task of tasks) {
         const dueDate = task.dueDescription ? parseNaturalDate(task.dueDescription) : null;
-        await addTask(contactId, task.title, dueDate?.toISOString());
+        await addTask(contactId, task.title, dueDate?.toISOString(), task.draftBody);
       }
 
       for (const reminder of reminders) {
@@ -246,6 +302,51 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDraftSend = (idx: number, body: string, subject: string | null) => {
+    const contacts = loadContacts();
+    const contact = selectedContactId ? contacts.find((c) => c.id === selectedContactId) : null;
+    if (contact?.email) {
+      const mailto = `mailto:${contact.email}?subject=${encodeURIComponent(subject ?? "")}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailto;
+    } else {
+      navigator.clipboard.writeText(body).catch(() => {});
+      toast({ title: "No email on file — copied to clipboard" });
+    }
+    setSentConfirmIdx(idx);
+  };
+
+  const handleDraftSentYes = (idx: number) => {
+    if (selectedContactId) {
+      addTimelineEvent(
+        selectedContactId,
+        "followup_sent",
+        `Sent draft to ${draftActions[idx]?.recipientName}`
+      );
+    }
+    setDraftActions((prev) => prev.filter((_, i) => i !== idx));
+    setSentConfirmIdx(null);
+    setExpandedDraftIdx(null);
+  };
+
+  const handleDraftSentNo = (idx: number) => {
+    handleDraftDismiss(idx);
+    setSentConfirmIdx(null);
+  };
+
+  const handleDraftDismiss = (idx: number) => {
+    const draft = draftActions[idx];
+    setDraftActions((prev) => prev.filter((_, i) => i !== idx));
+    setTasks((prev) => [
+      ...prev,
+      {
+        title: `Send note to ${draft.recipientName}`,
+        dueDescription: null,
+        draftBody: draft.body,
+      },
+    ]);
+    setExpandedDraftIdx(null);
   };
 
   const canConfirm = (selectedContactId !== null || isCreateNew) && !saving;
@@ -485,7 +586,11 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
             <div className="space-y-2">
               {tasks.map((task, i) => (
                 <div key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-muted/40">
-                  <CheckSquare className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  {task.draftBody ? (
+                    <Mail className="w-4 h-4 text-violet-500 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <CheckSquare className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground">{task.title}</p>
                     {task.dueDescription && (
@@ -536,6 +641,126 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
             </div>
           )}
         </div>
+
+        {/* Drafts section — loads independently after parse */}
+        {(draftsLoading || draftActions.length > 0) && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Drafts
+            </p>
+            {draftsLoading && draftActions.length === 0 ? (
+              <div className="h-16 rounded-2xl bg-muted animate-pulse" />
+            ) : (
+              <div className="space-y-2">
+                {draftActions.map((draft, idx) => (
+                  <div key={idx} className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
+                    <button
+                      className="w-full flex items-start gap-3 p-3 text-left"
+                      onClick={() => setExpandedDraftIdx(expandedDraftIdx === idx ? null : idx)}
+                    >
+                      <Mail className="w-4 h-4 text-violet-500 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">
+                          {draft.recipientName}
+                          {draft.recipientCompany ? ` · ${draft.recipientCompany}` : ""}
+                        </p>
+                        {draft.subject && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{draft.subject}</p>
+                        )}
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${
+                          expandedDraftIdx === idx ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+
+                    {expandedDraftIdx === idx && (
+                      <div className="px-3 pb-3 space-y-3">
+                        {editingDraftIdx === idx ? (
+                          <textarea
+                            value={editingDraftBody}
+                            onChange={(e) => setEditingDraftBody(e.target.value)}
+                            rows={5}
+                            className="w-full text-sm bg-muted/40 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                          />
+                        ) : (
+                          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                            {draft.body}
+                          </p>
+                        )}
+
+                        {sentConfirmIdx === idx ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-center text-foreground">Did you send it?</p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleDraftSentYes(idx)}
+                                className="flex-1 py-2 text-xs font-medium rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => handleDraftSentNo(idx)}
+                                className="flex-1 py-2 text-xs font-medium rounded-xl bg-muted/40 text-muted-foreground border border-transparent"
+                              >
+                                No
+                              </button>
+                            </div>
+                          </div>
+                        ) : editingDraftIdx === idx ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setDraftActions((prev) =>
+                                  prev.map((d, i) =>
+                                    i === idx ? { ...d, body: editingDraftBody } : d
+                                  )
+                                );
+                                setEditingDraftIdx(null);
+                                handleDraftSend(idx, editingDraftBody, draft.subject);
+                              }}
+                              className="flex-1 py-2 text-xs font-medium rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30"
+                            >
+                              Save + Send
+                            </button>
+                            <button
+                              onClick={() => { setEditingDraftIdx(null); setEditingDraftBody(""); }}
+                              className="flex-1 py-2 text-xs font-medium rounded-xl bg-muted/40 text-muted-foreground border border-transparent"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDraftSend(idx, draft.body, draft.subject)}
+                              className="flex-1 py-2 text-xs font-medium rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30"
+                            >
+                              Send
+                            </button>
+                            <button
+                              onClick={() => { setEditingDraftIdx(idx); setEditingDraftBody(draft.body); }}
+                              className="flex-1 py-2 text-xs font-medium rounded-xl bg-muted/40 text-muted-foreground border border-transparent"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDraftDismiss(idx)}
+                              className="flex-1 py-2 text-xs font-medium rounded-xl bg-muted/40 text-muted-foreground border border-transparent"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <details className="group">
           <summary className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none list-none">

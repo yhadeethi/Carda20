@@ -1080,46 +1080,58 @@ Return ONLY valid JSON, no markdown or explanation.`;
         apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
       });
 
-      const systemPrompt = `You are a post-meeting debrief parser for a professional CRM app.
+            const systemPrompt = `You are a post-meeting debrief parser for a professional CRM app.
 
-The user just finished a meeting and recorded a quick voice note about it. Extract structured data from their transcript.
+      The user just finished a meeting and recorded a quick voice note about it. Extract structured data from their transcript.
 
-You will also receive the user's contact list. Try to match any person names mentioned in the transcript to existing contacts. Use fuzzy matching — the user might say "Tom" when the contact is "Thomas Harrison", or "Sarah from Acme" when the contact is "Sarah Chen" at "Acme Corp".
+      You will also receive the user's contact list. Try to match any person names mentioned in the transcript to existing contacts. Use fuzzy matching — the user might say "Tom" when the contact is "Thomas Harrison", or "Sarah from Acme" when the contact is "Sarah Chen" at "Acme Corp".
 
-Return a JSON object with this exact shape:
+      Return a JSON object with this exact shape:
 
-{
-  "matchedContact": {
-    "id": "UUID of matched contact or null if no match",
-    "name": "Name as mentioned by user",
-    "matchedName": "Full name from contact list if matched",
-    "company": "Company name mentioned or from matched contact",
-    "confidence": "high" | "medium" | "low"
-  },
-  "noteSummary": "Clean, concise summary of the meeting/interaction in 1-3 sentences. Write in third person past tense. Include key topics discussed, outcomes, and any commitments made.",
-  "sentiment": "positive" | "neutral" | "negative",
-  "warmthLevel": "hot" | "warm" | "neutral" | "cold",
-  "tasks": [
-    {
-      "title": "Short action item description",
-      "dueDescription": "natural language due date like 'next Tuesday' or 'end of month' or null"
-    }
-  ],
-  "reminders": [
-    {
-      "label": "What to be reminded about",
-      "whenDescription": "natural language time like 'next Tuesday' or 'in 2 weeks' or null"
-    }
-  ],
-  "rawTranscript": "The original transcript unchanged"
-}
+      {
+        "matchedContact": {
+          "id": "UUID of matched contact or null if no match",
+          "name": "Name as mentioned by user",
+          "matchedName": "Full name from contact list if matched",
+          "company": "Company name mentioned or from matched contact",
+          "confidence": "high" | "medium" | "low"
+        },
+        "noteSummary": "Clean, concise summary of the meeting/interaction in 1-3 sentences. Write in third person past tense. Include key topics discussed, outcomes, and any commitments made.",
+        "sentiment": "positive" | "neutral" | "negative",
+        "warmthLevel": "hot" | "warm" | "neutral" | "cold",
+        "tasks": [
+          {
+            "title": "Short action item description",
+            "dueDescription": "natural language due date like 'next Tuesday' or 'end of month' or null"
+          }
+        ],
+        "reminders": [
+          {
+            "label": "What to be reminded about",
+            "whenDescription": "natural language time like 'next Tuesday' or 'in 2 weeks' or null"
+          }
+        ],
+        "communicationIntents": [
+          {
+            "recipientName": "Name as mentioned by user",
+            "recipientCompany": "Company if mentioned, or empty string",
+            "intentDescription": "Brief description of what to send e.g. follow-up note after meeting",
+            "suggestedTone": "warm" | "friendly" | "direct" | "formal"
+          }
+        ],
+        "rawTranscript": "The original transcript unchanged"
+      }
 
-Rules:
-- Only extract tasks/reminders that the user explicitly or implicitly committed to. Do not invent actions.
-- If no contact match is found, set matchedContact.id to null and fill in the name/company from what was said.
-- If sentiment is unclear, default to "neutral".
-- Map warmth: enthusiastic/great meeting = hot, good/productive = warm, routine/standard = neutral, difficult/cold/unresponsive = cold.
-- Keep noteSummary professional and concise. No fluff.`;
+      Rules:
+      - Only extract tasks/reminders that the user explicitly or implicitly committed to. Do not invent actions.
+      - If no contact match is found, set matchedContact.id to null and fill in the name/company from what was said.
+      - If sentiment is unclear, default to "neutral".
+      - Map warmth: enthusiastic/great meeting = hot, good/productive = warm, routine/standard = neutral, difficult/cold/unresponsive = cold.
+      - Keep noteSummary professional and concise. No fluff.
+      - If the user mentions sending a message, note, email, or follow-up to a specific person, extract it as a communicationIntent instead of a task. Do not also add it as a task.
+      - Do not extract generic actions like "send the contract to legal" as communicationIntents — only person-directed messages.
+      - If no communication intents exist, return an empty array for communicationIntents.`;
+
 
       const userMessage = `Transcript: "${transcript}"
 
@@ -1142,7 +1154,11 @@ ${JSON.stringify(contacts || [], null, 2)}`;
       }
 
       const parsed = JSON.parse(content);
-      res.json(parsed);
+        res.json({
+          ...parsed,
+          communicationIntents: parsed.communicationIntents ?? [],
+        });
+
     } catch (error) {
       console.error("[Debrief] Parse error:", error);
       res.status(500).json({ error: "Parse failed" });

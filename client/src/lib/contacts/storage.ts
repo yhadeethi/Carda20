@@ -226,7 +226,12 @@ export function getTimeline(contactId: string): TimelineEvent[] {
 
 // ============ TASKS ============
 
-export async function addTask(contactId: string, title: string, dueAt?: string): Promise<ContactTask | null> {
+export async function addTask(
+  contactId: string,
+  title: string,
+  dueAt?: string,
+  draftBody?: string
+): Promise<ContactTask | null> {
   const contact = getContactById(contactId);
   if (!contact) return null;
 
@@ -239,6 +244,7 @@ export async function addTask(contactId: string, title: string, dueAt?: string):
     done: false,
     createdAt: new Date().toISOString(),
     dueAt,
+    ...(draftBody !== undefined ? { draftBody } : {}),
   };
 
   const tasks = [...(contact.tasks || []), task];
@@ -250,11 +256,11 @@ export async function addTask(contactId: string, title: string, dueAt?: string):
   // Add timeline event
   addTimelineEvent(contactId, 'task_added', `Task added: ${title}`);
 
-  // Sync to server
+  // Sync to server (draftBody is client-only, not sent to server)
   try {
     const serverTask = await createTaskAPI(contactId, { clientId, title, dueAt });
 
-    // Update localStorage with server ID
+    // Update localStorage with server ID, preserving draftBody
     const updatedTasks = tasks.map(t =>
       t.id === clientId ? { ...t, id: serverTask.id.toString() } : t
     );
@@ -337,6 +343,20 @@ export async function updateTaskTitle(contactId: string, taskId: string, title: 
   );
 
   updateContactV2(contactId, { tasks });
+  return true;
+}
+
+export async function clearTaskDraftBody(contactId: string, taskId: string): Promise<boolean> {
+  const contact = getContactById(contactId);
+  if (!contact) return false;
+
+  const tasks = (contact.tasks || []).map(t => {
+    if (t.id !== taskId) return t;
+    const { draftBody: _removed, ...rest } = t;
+    return rest;
+  });
+
+  await updateContactV2(contactId, { tasks });
   return true;
 }
 
@@ -484,13 +504,13 @@ export function addNote(contactId: string, noteText: string): boolean {
   // Append to notes field
   const existingNotes = contact.notes || '';
   const timestamp = new Date().toLocaleString();
-  const newNotes = existingNotes 
+  const newNotes = existingNotes
     ? `${existingNotes}\n\n[${timestamp}]\n${noteText}`
     : `[${timestamp}]\n${noteText}`;
 
-  updateContactV2(contactId, { 
+  updateContactV2(contactId, {
     notes: newNotes,
-    lastTouchedAt: new Date().toISOString() 
+    lastTouchedAt: new Date().toISOString()
   });
 
   addTimelineEvent(contactId, 'note_added', noteText.slice(0, 100), { fullNote: noteText });
