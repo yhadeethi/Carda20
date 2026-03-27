@@ -12,9 +12,6 @@ import {
   Edit,
   CloudUpload,
   Loader2,
-  Phone,
-  Mail,
-  Linkedin,
   Mic,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -62,30 +59,7 @@ interface TimelineFeedProps {
   onQuickLog?: (type: TimelineEventType, summary: string, displayLabel: string) => void;
 }
 
-// FIX #4: Smaller icon map, same types
-const EVENT_ICONS: Record<string, typeof StickyNote> = {
-  note: StickyNote,
-  note_added: StickyNote,
-  note_updated: Edit,
-  followup: Sparkles,
-  followup_generated: Sparkles,
-  reminder: Bell,
-  reminder_set: Bell,
-  reminder_done: Bell,
-  crm: CloudUpload,
-  hubspot_synced: CloudUpload,
-  salesforce_synced: CloudUpload,
-  created: Scan,
-  scan_created: Scan,
-  task_added: CheckSquare,
-  task_done: CheckSquare,
-  meeting_scheduled: Calendar,
-  event_attended: Calendar,
-  contact_merged: Users,
-  contact_updated: Edit,
-  followup_sent: Sparkles,
-  voice_debrief: Mic,
-};
+
 
 const EVENT_COLORS: Record<string, string> = {
   note: "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300",
@@ -116,18 +90,10 @@ type GroupedEntry =
   | TimelineItem
   | { type: "__group__"; label: string; id: string; at: string | Date; eventType: string };
 
-function isSameDay(a: string | Date, b: string | Date): boolean {
-  const da = typeof a === "string" ? new Date(a) : a;
-  const db = typeof b === "string" ? new Date(b) : b;
-  return (
-    da.getFullYear() === db.getFullYear() &&
-    da.getMonth() === db.getMonth() &&
-    da.getDate() === db.getDate()
-  );
-}
+
 
 // Types that are meaningful to show individually — never collapse these
-const NEVER_COLLAPSE: Set<TimelineEventType> = new Set([
+  const NEVER_COLLAPSE = new Set<TimelineEventType>([
   "note",
   "note_added",
   "note_updated",
@@ -138,60 +104,57 @@ const NEVER_COLLAPSE: Set<TimelineEventType> = new Set([
 ]);
 
 function groupTimelineItems(items: TimelineItem[]): GroupedEntry[] {
+  const seen = new Map<string, number>();
+  const seenIds = new Map<string, string>();
+
+  for (const item of items) {
+    if (NEVER_COLLAPSE.has(item.type)) continue;
+    const date = typeof item.at === "string" ? new Date(item.at) : item.at;
+    const key = `${item.type}__${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+    if (!seenIds.has(key)) seenIds.set(key, item.id);
+  }
+
+  const emitted = new Set<string>();
   const result: GroupedEntry[] = [];
-  let i = 0;
 
-  while (i < items.length) {
-    const item = items[i];
-
-    // Never collapse important events — show individually
+  for (const item of items) {
     if (NEVER_COLLAPSE.has(item.type)) {
       result.push(item);
-      i++;
       continue;
     }
+    const date = typeof item.at === "string" ? new Date(item.at) : item.at;
+    const key = `${item.type}__${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const count = seen.get(key) ?? 1;
 
-    // Try to batch same-type events on the same day
-    const batch = [item];
-    while (
-      i + 1 < items.length &&
-      items[i + 1].type === item.type &&
-      isSameDay(items[i + 1].at, item.at) &&
-      !NEVER_COLLAPSE.has(items[i + 1].type)
-    ) {
-      i++;
-      batch.push(items[i]);
-    }
-
-    if (batch.length >= 2) {
-      // Produce a friendly label per type
-      const typeLabel: Partial<Record<TimelineEventType, string>> = {
-        reminder_set: "reminders set",
-        contact_updated: "profile edits",
-        task_added: "tasks added",
-        task_done: "tasks completed",
-        hubspot_synced: "HubSpot syncs",
-        salesforce_synced: "Salesforce syncs",
-      };
-      const label = `${batch.length} ${typeLabel[item.type] ?? "events"}`;
-      result.push({
-        type: "__group__",
-        label,
-        id: `group-${batch[0].id}`,
-        at: batch[0].at,
-        eventType: item.type,
-      });
+    if (count >= 2) {
+      if (!emitted.has(key)) {
+        emitted.add(key);
+        const typeLabel: Partial<Record<TimelineEventType, string>> = {
+          reminder_set: "reminders set",
+          contact_updated: "profile edits",
+          task_added: "tasks added",
+          task_done: "tasks completed",
+          hubspot_synced: "HubSpot syncs",
+          salesforce_synced: "Salesforce syncs",
+        };
+        result.push({
+          type: "__group__",
+          label: `${count} ${typeLabel[item.type] ?? "events"}`,
+          id: `group-${seenIds.get(key)}`,
+          at: item.at,
+          eventType: item.type,
+        });
+      }
     } else {
       result.push(item);
     }
-
-    i++;
   }
 
   return result;
 }
 
-export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: TimelineFeedProps) {
+  export function TimelineFeed({ items, onAddNote, isAddingNote }: TimelineFeedProps) {
   const [noteText, setNoteText] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
 
@@ -280,14 +243,12 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
             // Collapsed group row
             if ("label" in item && item.type === "__group__") {
               const groupItem = item as { type: "__group__"; label: string; id: string; at: string | Date; eventType: string };
-              const Icon = EVENT_ICONS[groupItem.eventType] || Edit;
+             
               const colorClass = EVENT_COLORS[groupItem.eventType] || EVENT_COLORS.contact_updated;
               return (
                 <div key={groupItem.id} className="flex items-center gap-3 py-2">
                   {/* FIX #4: Smaller icon — w-6 h-6 instead of w-8 h-8 */}
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${colorClass}`}>
-                    <Icon className="w-3 h-3" />
-                  </div>
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${colorClass.split(" ")[0]}`} />
                   <p className="flex-1 text-xs text-muted-foreground">{groupItem.label}</p>
                   <span className="text-xs text-muted-foreground shrink-0">
                     {formatEventTime(groupItem.at)}
@@ -298,7 +259,7 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
 
             // Individual event row
             const timelineItem = item as TimelineItem;
-            const Icon = EVENT_ICONS[timelineItem.type] || StickyNote;
+          
             const colorClass = EVENT_COLORS[timelineItem.type] || EVENT_COLORS.note;
 
             const outcomeConfig = timelineItem.meta?.outcome
@@ -316,9 +277,7 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
                 data-testid={`timeline-item-${timelineItem.id}`}
               >
                 {/* FIX #4: Smaller icon — w-6 h-6, icon w-3.5 h-3.5 */}
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${colorClass}`}>
-                  <Icon className="w-3.5 h-3.5" />
-                </div>
+                <div className={`w-2 h-2 rounded-full shrink-0 mt-2 ${colorClass.split(" ")[0]}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium leading-snug">{timelineItem.title}</p>
