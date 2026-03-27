@@ -865,7 +865,7 @@ export function ContactDetailView({
             <div className="grid grid-cols-2 gap-3 mb-3">
               <button
                 onClick={() => { setShowFollowUp(true); setFollowUpResult(null); }}
-                className="rounded-2xl bg-primary text-primary-foreground p-4 text-left hover:opacity-90 transition-opacity"
+                className="rounded-2xl bg-primary/80 text-primary-foreground p-4 text-left hover:bg-primary/90 transition-colors"
                 style={{ touchAction: "manipulation" } as React.CSSProperties}
               >
                 <Sparkles className="w-5 h-5 mb-2 opacity-90" />
@@ -1072,7 +1072,7 @@ export function ContactDetailView({
 
           {/* ── Section 5: Timeline ───────────────────────────────────── */}
           {/* FIX #6: Visually distinct section with own background */}
-          <div className="rounded-2xl bg-muted/30 border border-border/40 p-4 mt-2">
+          <div className="mt-6 pt-5 border-t border-border/40">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Activity</p>
             </div>

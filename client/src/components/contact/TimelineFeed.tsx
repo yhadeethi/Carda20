@@ -225,54 +225,7 @@ export function TimelineFeed({ items, onAddNote, isAddingNote, onQuickLog }: Tim
     <div className="space-y-3" data-testid="timeline-feed">
       {/* Interaction bar */}
       <div className="space-y-2">
-        {/* Top row: Log toggle + Note ghost row + Filter */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {onQuickLog && (
-            <button
-              onClick={() => setLogStripOpen(!logStripOpen)}
-              className={[
-                "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
-                logStripOpen
-                  ? "border-primary/50 bg-primary/10 text-primary"
-                  : "border-border/50 bg-card/60 text-foreground",
-              ].join(" ")}
-              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-              data-testid="button-toggle-log-strip"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Log
-            </button>
-          )}
-
-          <div className="ml-auto">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  data-testid="button-filter-dropdown"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  {currentFilterLabel}
-                  <ChevronDown className="w-3 h-3 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {FILTER_OPTIONS.map((opt) => (
-                  <DropdownMenuItem
-                    key={opt.value}
-                    onClick={() => setFilter(opt.value)}
-                    className="flex items-center justify-between"
-                    data-testid={`filter-option-${opt.value}`}
-                  >
-                    {opt.label}
-                    {filter === opt.value && <Check className="w-3.5 h-3.5 ml-2 opacity-70" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+       
 
         {/* Log chips strip — always in DOM, visibility toggled to avoid layout shift */}
         {onQuickLog && (
