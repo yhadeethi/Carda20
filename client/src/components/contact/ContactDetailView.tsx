@@ -39,13 +39,12 @@ import {
   Bell,
   Briefcase,
   Calendar,
-  CheckSquare,
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  CloudUpload,
   Edit,
   Globe,
+  Linkedin,
   Mail,
   MoreHorizontal,
   Phone,
@@ -53,12 +52,12 @@ import {
   Sparkles,
   StickyNote,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { SiHubspot, SiLinkedin, SiSalesforce } from "react-icons/si";
 
 import { CompanyIntelV2Card } from "@/components/company-intel-v2";
-import { ContactBottomBar } from "./ContactBottomBar";
 import { TimelineFeed, TimelineItem, TimelineEventType } from "./TimelineFeed";
 
 import { StoredContact, RelationshipStrength } from "@/lib/contactsStorage";
@@ -115,18 +114,12 @@ interface ContactDetailViewProps {
   onDownloadVCard: () => void;
   onViewInOrgMap?: (companyId: string) => void;
   companyId?: string | null;
-  /**
-   * If true, opens the follow-up composer panel on mount.
-   * Used by Home Scoreboard "Send follow-up" CTA to reduce taps.
-   */
   autoOpenFollowUp?: boolean;
 }
 
 function toDatetimeLocalValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours()
-  )}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function buildFollowUpCopyText(res: FollowUpResponse): string {
@@ -141,57 +134,55 @@ function sanitizePhone(p?: string | null): string | null {
 }
 
 function openMailto(to: string, subject: string | undefined, body: string) {
-  let href = `mailto:${encodeURIComponent(to)}?`;
   const params: string[] = [];
   if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
   params.push(`body=${encodeURIComponent(body)}`);
-  window.location.href = href + params.join("&");
+  window.location.href = `mailto:${encodeURIComponent(to)}?${params.join("&")}`;
 }
 
 function openSms(phone: string, body: string) {
   window.location.href = `sms:${encodeURIComponent(phone)}?&body=${encodeURIComponent(body)}`;
 }
 
-function formatRelativeTime(dateStr: string | Date | undefined | null): string {
-  if (!dateStr) return "";
-  const d = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
-  if (Number.isNaN(d.getTime())) return "";
-  const diffMs = Date.now() - d.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays <= 0) return "today";
-  if (diffDays === 1) return "yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return `${Math.floor(diffDays / 30)}mo ago`;
-}
-
 function useKeyboardInset(active: boolean) {
   const [inset, setInset] = useState(0);
-
   useEffect(() => {
-    if (!active) {
-      setInset(0);
-      return;
-    }
-
+    if (!active) { setInset(0); return; }
     const vv = window.visualViewport;
     if (!vv) return;
-
     const compute = () => {
       const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       setInset(Math.min(420, Math.round(keyboard)));
     };
-
     compute();
     vv.addEventListener("resize", compute);
     vv.addEventListener("scroll", compute);
-    return () => {
-      vv.removeEventListener("resize", compute);
-      vv.removeEventListener("scroll", compute);
-    };
+    return () => { vv.removeEventListener("resize", compute); vv.removeEventListener("scroll", compute); };
   }, [active]);
-
   return inset;
+}
+
+// FIX #1: Company logo via favicon, falls back to initials
+function CompanyLogo({ company, domain }: { company?: string | null; domain?: string | null }) {
+  const [imgError, setImgError] = useState(false);
+  const src = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : null;
+  const initials = (company || "?").slice(0, 2).toUpperCase();
+
+  if (src && !imgError) {
+    return (
+      <img
+        src={src}
+        alt={company || ""}
+        onError={() => setImgError(true)}
+        className="w-4 h-4 rounded-sm object-contain"
+      />
+    );
+  }
+  return (
+    <span className="w-4 h-4 rounded-sm bg-white/20 flex items-center justify-center text-[8px] font-bold text-white/80 shrink-0">
+      {initials}
+    </span>
+  );
 }
 
 export function ContactDetailView({
@@ -212,12 +203,8 @@ export function ContactDetailView({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [cardExpanded, setCardExpanded] = useState(false);
+  const [showLogStrip, setShowLogStrip] = useState(false);
   const [timelineFilter, setTimelineFilter] = useState<"all" | "note" | "meeting" | "followup">("all");
-
-  // ── Warmth ────────────────────────────────────────────────────────────────
-  const [warmth, setWarmth] = useState<RelationshipStrength>(
-    contactV2?.org?.relationshipStrength ?? "UNKNOWN"
-  );
 
   // ── Edit form ─────────────────────────────────────────────────────────────
   const [editedFields, setEditedFields] = useState({
@@ -261,10 +248,7 @@ export function ContactDetailView({
 
   useEffect(() => {
     if (!autoOpenFollowUp) return;
-    const t = window.setTimeout(() => {
-      setShowFollowUp(true);
-      setFollowUpResult(null);
-    }, 0);
+    const t = window.setTimeout(() => { setShowFollowUp(true); setFollowUpResult(null); }, 0);
     return () => window.clearTimeout(t);
   }, [autoOpenFollowUp]);
 
@@ -290,15 +274,15 @@ export function ContactDetailView({
   const [showIntel, setShowIntel] = useState(false);
   const intelV2 = useIntelV2();
 
-  // ── CRM status queries ────────────────────────────────────────────────────
-  const { data: hubspotStatus } = useQuery<{ connected: boolean }>({
-    queryKey: ["/api/hubspot/status"],
-  });
-  const { data: salesforceStatus } = useQuery<{ connected: boolean }>({
-    queryKey: ["/api/salesforce/status"],
-  });
+  // ── CRM status ────────────────────────────────────────────────────────────
+  const { data: hubspotStatus } = useQuery<{ connected: boolean }>({ queryKey: ["/api/hubspot/status"] });
+  const { data: salesforceStatus } = useQuery<{ connected: boolean }>({ queryKey: ["/api/salesforce/status"] });
 
-  // ── Computed values ───────────────────────────────────────────────────────
+  // ── Computed ──────────────────────────────────────────────────────────────
+
+  // FIX #2: Derive warmth directly from prop — never stale on remount
+  const currentWarmth: RelationshipStrength = contactV2?.org?.relationshipStrength ?? "UNKNOWN";
+
   const scannedDaysAgo = useMemo(() => {
     if (!contact.createdAt) return null;
     const days = Math.round((Date.now() - new Date(contact.createdAt).getTime()) / 86400000);
@@ -363,8 +347,9 @@ export function ContactDetailView({
   }, [timelineItems, timelineFilter]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+
+  // FIX #2: Write to storage directly, no local warmth state
   const handleUpdateWarmth = async (value: RelationshipStrength) => {
-    setWarmth(value);
     await updateContactV2(contact.id, {
       org: {
         department: contactV2?.org?.department ?? "UNKNOWN",
@@ -403,18 +388,14 @@ export function ContactDetailView({
   const handleSaveTaskEdit = async () => {
     if (!editingTaskId) return;
     const text = editingTaskText.trim();
-    if (text) {
-      await updateTaskTitle(contact.id, editingTaskId, text);
-      onUpdate();
-    }
+    if (text) { await updateTaskTitle(contact.id, editingTaskId, text); onUpdate(); }
     setEditingTaskId(null);
     setEditingTaskText("");
   };
 
   const handleDraftTaskSend = (task: { id: string; draftBody?: string }) => {
     if (contact.email) {
-      const mailto = `mailto:${contact.email}?subject=${encodeURIComponent("Following up")}&body=${encodeURIComponent(task.draftBody ?? "")}`;
-      window.location.href = mailto;
+      window.location.href = `mailto:${contact.email}?subject=${encodeURIComponent("Following up")}&body=${encodeURIComponent(task.draftBody ?? "")}`;
     } else {
       navigator.clipboard.writeText(task.draftBody ?? "").catch(() => {});
       toast({ title: "No email on file — copied to clipboard" });
@@ -445,11 +426,8 @@ export function ContactDetailView({
       toast({ title: "Contact updated" });
       onUpdate();
       onContactUpdated?.(contact.id);
-      try {
-        addTimelineEvent(contact.id, "contact_updated", "Contact details updated");
-      } catch (timelineErr) {
-        console.warn("[ContactDetailView] Timeline event failed:", timelineErr);
-      }
+      try { addTimelineEvent(contact.id, "contact_updated", "Contact details updated"); }
+      catch (e) { console.warn("[ContactDetailView] Timeline event failed:", e); }
     } catch (e) {
       console.error("[ContactDetailView] Save failed:", e);
       toast({ title: "Failed to save changes", variant: "destructive" });
@@ -458,38 +436,25 @@ export function ContactDetailView({
     }
   };
 
-  const handleCall = () => {
-    if (contact.phone) window.location.href = `tel:${contact.phone}`;
-  };
-
-  const handleEmail = () => {
-    if (contact.email) window.location.href = `mailto:${contact.email}`;
-  };
-
+  const handleCall = () => { if (contact.phone) window.location.href = `tel:${contact.phone}`; };
+  const handleEmail = () => { if (contact.email) window.location.href = `mailto:${contact.email}`; };
   const handleOpenWebsite = () => {
     if (!contact.website) return;
     const url = contact.website.includes("://") ? contact.website : `https://${contact.website}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
-
   const handleOpenLinkedIn = () => {
     if (contact.linkedinUrl) {
       window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
     } else {
-      const name = encodeURIComponent(contact.name || "");
-      window.open(`https://www.linkedin.com/search/results/people/?keywords=${name}`, "_blank", "noopener,noreferrer");
+      window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(contact.name || "")}`, "_blank", "noopener,noreferrer");
     }
   };
 
   const handleAddNote = async (text: string) => {
     setIsAddingNote(true);
-    try {
-      addNote(contact.id, text);
-      onUpdate();
-      toast({ title: "Note added" });
-    } catch {
-      toast({ title: "Failed to add note", variant: "destructive" });
-    }
+    try { addNote(contact.id, text); onUpdate(); toast({ title: "Note added" }); }
+    catch { toast({ title: "Failed to add note", variant: "destructive" }); }
     setIsAddingNote(false);
   };
 
@@ -504,23 +469,25 @@ export function ContactDetailView({
     []
   );
 
+  const handleOpenLogSheet = useCallback(() => {
+    setPendingLogType(null);
+    setPendingLogLabel("Interaction");
+    setLogOutcome(null);
+    setLogNote("");
+    setShowLogSheet(true);
+  }, []);
+
   const handleConfirmLog = useCallback(
     async (outcomeOverride?: "positive" | "neutral" | "negative") => {
       const resolvedOutcome = outcomeOverride ?? logOutcome;
       if (!pendingLogType || !contactV2) return;
       await addTimelineEvent(contact.id, pendingLogType as any, pendingLogLabel, {
-        source: "quick_log",
-        outcome: resolvedOutcome,
-        note: logNote,
+        source: "quick_log", outcome: resolvedOutcome, note: logNote,
       });
       if (resolvedOutcome === "positive") {
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 3);
-        await addReminder(
-          contact.id,
-          `Follow up with ${contact.name || "this contact"}`,
-          dueDate.toISOString()
-        );
+        await addReminder(contact.id, `Follow up with ${contact.name || "this contact"}`, dueDate.toISOString());
       }
       onUpdate();
       setShowLogSheet(false);
@@ -528,10 +495,9 @@ export function ContactDetailView({
       setLogNote("");
       setLogOutcome(null);
       toast({
-        title:
-          resolvedOutcome === "positive"
-            ? `${pendingLogLabel} logged — reminder set for 3 days`
-            : `${pendingLogLabel} logged`,
+        title: resolvedOutcome === "positive"
+          ? `${pendingLogLabel} logged — reminder set for 3 days`
+          : `${pendingLogLabel} logged`,
       });
     },
     [pendingLogType, pendingLogLabel, logOutcome, logNote, contact.id, contact.name, contactV2, onUpdate, toast]
@@ -545,13 +511,10 @@ export function ContactDetailView({
     setIsSyncingHubspot(true);
     try {
       const nameParts = (contact.name || "").split(" ");
-      const firstname = nameParts[0] || "";
-      const lastname = nameParts.slice(1).join(" ") || "";
       const response = await apiRequest("POST", "/api/hubspot/sync", {
-        email: contact.email, firstname, lastname,
-        phone: contact.phone, company: contact.company,
-        jobtitle: contact.title, website: contact.website,
-        linkedinUrl: contact.linkedinUrl,
+        email: contact.email, firstname: nameParts[0] || "", lastname: nameParts.slice(1).join(" ") || "",
+        phone: contact.phone, company: contact.company, jobtitle: contact.title,
+        website: contact.website, linkedinUrl: contact.linkedinUrl,
       });
       const result = await response.json();
       if (result.success) {
@@ -575,13 +538,10 @@ export function ContactDetailView({
     setIsSyncingSalesforce(true);
     try {
       const nameParts = (contact.name || "").split(" ");
-      const firstname = nameParts[0] || "";
-      const lastname = nameParts.slice(1).join(" ") || "";
       const response = await apiRequest("POST", "/api/salesforce/sync", {
-        email: contact.email, firstname, lastname,
-        phone: contact.phone, company: contact.company,
-        jobtitle: contact.title, website: contact.website,
-        linkedinUrl: contact.linkedinUrl,
+        email: contact.email, firstname: nameParts[0] || "", lastname: nameParts.slice(1).join(" ") || "",
+        phone: contact.phone, company: contact.company, jobtitle: contact.title,
+        website: contact.website, linkedinUrl: contact.linkedinUrl,
       });
       const result = await response.json();
       if (result.success) {
@@ -600,51 +560,28 @@ export function ContactDetailView({
   const launchFollowUpComposer = async (res: FollowUpResponse) => {
     const body = buildFollowUpCopyText(res);
     const mode = String(followUpMode);
-
     const logFollowUpAction = (channel: string, note?: string) => {
       try {
         addTimelineEvent(contact.id, "followup_sent", `Follow-up sent (${channel})`, {
           channel, note, subject: res.subject, bodyPreview: res.body?.slice?.(0, 160),
         });
         onUpdate();
-      } catch (e) {
-        console.warn("[ContactDetailView] Failed to log followup_sent:", e);
-      }
+      } catch (e) { console.warn("[ContactDetailView] Failed to log followup_sent:", e); }
     };
-
     if (mode.includes("email")) {
-      if (!contact.email) {
-        await navigator.clipboard.writeText(body);
-        toast({ title: "Copied", description: "No email. Copied to clipboard." });
-        logFollowUpAction("copied", "no_email");
-        return;
-      }
-      logFollowUpAction("email");
-      openMailto(contact.email, res.subject || undefined, res.body);
-      return;
+      if (!contact.email) { await navigator.clipboard.writeText(body); toast({ title: "Copied", description: "No email. Copied to clipboard." }); logFollowUpAction("copied", "no_email"); return; }
+      logFollowUpAction("email"); openMailto(contact.email, res.subject || undefined, res.body); return;
     }
     if (mode.includes("sms") || mode.includes("text") || mode.includes("message")) {
       const p = sanitizePhone(contact.phone);
-      if (!p) {
-        await navigator.clipboard.writeText(body);
-        toast({ title: "Copied", description: "No phone. Copied to clipboard." });
-        logFollowUpAction("copied", "no_phone");
-        return;
-      }
-      logFollowUpAction("sms");
-      openSms(p, body);
-      return;
+      if (!p) { await navigator.clipboard.writeText(body); toast({ title: "Copied", description: "No phone. Copied to clipboard." }); logFollowUpAction("copied", "no_phone"); return; }
+      logFollowUpAction("sms"); openSms(p, body); return;
     }
     if (mode.includes("linkedin")) {
-      await navigator.clipboard.writeText(body);
-      toast({ title: "Copied", description: "Copied. Opening LinkedIn…" });
-      logFollowUpAction("linkedin");
-      if (contact.linkedinUrl) window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
-      return;
+      await navigator.clipboard.writeText(body); toast({ title: "Copied", description: "Copied. Opening LinkedIn…" }); logFollowUpAction("linkedin");
+      if (contact.linkedinUrl) window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer"); return;
     }
-    await navigator.clipboard.writeText(body);
-    toast({ title: "Copied" });
-    logFollowUpAction("copied", "fallback");
+    await navigator.clipboard.writeText(body); toast({ title: "Copied" }); logFollowUpAction("copied", "fallback");
   };
 
   const handleGenerateFollowUp = async () => {
@@ -678,9 +615,7 @@ export function ContactDetailView({
       addTimelineEvent(contact.id, "followup_sent", "Follow-up copied", { channel: "copied", bodyPreview: followUpResult.body.slice(0, 160) });
       onUpdate();
       toast({ title: "Copied" });
-    } catch {
-      toast({ title: "Copy failed", variant: "destructive" });
-    }
+    } catch { toast({ title: "Copy failed", variant: "destructive" }); }
   };
 
   const handleCreateMeetingInvite = () => {
@@ -688,14 +623,10 @@ export function ContactDetailView({
       toast({ title: "Pick a valid time", variant: "destructive" });
       return;
     }
-    const ics = createMeetingWithContact(
-      contact.name || "Contact", contact.company || undefined, contact.email || undefined, meetingStart, meetingDuration
-    );
+    const ics = createMeetingWithContact(contact.name || "Contact", contact.company || undefined, contact.email || undefined, meetingStart, meetingDuration);
     const safeName = (contact.name || "contact").trim().replace(/\s+/g, "-").toLowerCase();
     downloadIcsFile(ics, `carda-meeting-${safeName}.ics`);
-    addTimelineEvent(contact.id, "meeting_scheduled", "Meeting invite created", {
-      startIso: meetingStart.toISOString(), durationMinutes: meetingDuration,
-    });
+    addTimelineEvent(contact.id, "meeting_scheduled", "Meeting invite created", { startIso: meetingStart.toISOString(), durationMinutes: meetingDuration });
     onUpdate();
     toast({ title: "Downloaded .ics invite" });
     setShowMeeting(false);
@@ -719,18 +650,26 @@ export function ContactDetailView({
     toast({ title: "Reminder set for 3 days" });
   };
 
+  // FIX #4: Log interaction quick chips
+  const LOG_INTERACTION_CHIPS = [
+    { type: "meeting_scheduled" as TimelineEventType, label: "Met",      icon: <Users className="w-3.5 h-3.5" /> },
+    { type: "note_added" as TimelineEventType,        label: "Called",   icon: <Phone className="w-3.5 h-3.5" /> },
+    { type: "note_added" as TimelineEventType,        label: "Emailed",  icon: <Mail className="w-3.5 h-3.5" /> },
+    { type: "note_added" as TimelineEventType,        label: "LinkedIn", icon: <Linkedin className="w-3.5 h-3.5" /> },
+  ];
+
   // ── Warmth config ─────────────────────────────────────────────────────────
   const warmthConfig: { value: RelationshipStrength; label: string; active: string; inactive: string }[] = [
-    { value: "CASUAL", label: "Casual", active: "bg-muted text-foreground border-border", inactive: "bg-transparent text-muted-foreground border-border/40" },
-    { value: "NORMAL", label: "Normal", active: "bg-blue-500 text-white border-blue-500", inactive: "bg-transparent text-muted-foreground border-border/40" },
-    { value: "CLOSE",  label: "Close",  active: "bg-red-500 text-white border-red-500",  inactive: "bg-transparent text-muted-foreground border-border/40" },
+    { value: "CASUAL", label: "Casual", active: "bg-muted text-foreground border-border",        inactive: "bg-transparent text-muted-foreground border-border/40" },
+    { value: "NORMAL", label: "Normal", active: "bg-blue-500 text-white border-blue-500",         inactive: "bg-transparent text-muted-foreground border-border/40" },
+    { value: "CLOSE",  label: "Close",  active: "bg-red-500 text-white border-red-500",           inactive: "bg-transparent text-muted-foreground border-border/40" },
   ];
 
   // ── Timeline filter config ────────────────────────────────────────────────
   const tlFilters: { value: "all" | "note" | "meeting" | "followup"; label: string }[] = [
-    { value: "all", label: "All" },
-    { value: "note", label: "Notes" },
-    { value: "meeting", label: "Meetings" },
+    { value: "all",      label: "All" },
+    { value: "note",     label: "Notes" },
+    { value: "meeting",  label: "Meetings" },
     { value: "followup", label: "Follow-ups" },
   ];
 
@@ -742,23 +681,14 @@ export function ContactDetailView({
 
       {/* ── Nav header ────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-2 mb-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          className="gap-1 -ml-2"
-          data-testid="button-back-to-contacts"
-        >
+        <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 -ml-2" data-testid="button-back-to-contacts">
           <ArrowLeft className="w-4 h-4" />
           Back
         </Button>
-
         <div className="flex items-center gap-1">
           <Button size="sm" variant="ghost" onClick={() => setIsEditing(!isEditing)}>
             {isEditing ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
           </Button>
-
-          {/* CRM + Delete overflow menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="icon" variant="ghost" className="text-muted-foreground">
@@ -778,14 +708,9 @@ export function ContactDetailView({
                   {isSyncingSalesforce ? "Syncing…" : "Sync to Salesforce"}
                 </DropdownMenuItem>
               )}
-              {(hubspotStatus?.connected || salesforceStatus?.connected) && onDelete && (
-                <DropdownMenuSeparator />
-              )}
+              {(hubspotStatus?.connected || salesforceStatus?.connected) && onDelete && <DropdownMenuSeparator />}
               {onDelete && (
-                <DropdownMenuItem
-                  className="text-destructive"
-                  onClick={() => setShowDeleteConfirm(true)}
-                >
+                <DropdownMenuItem className="text-destructive" onClick={() => setShowDeleteConfirm(true)}>
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete contact
                 </DropdownMenuItem>
@@ -798,75 +723,47 @@ export function ContactDetailView({
       {/* ── Edit mode ─────────────────────────────────────────────────────── */}
       {isEditing ? (
         <div className="space-y-3 mb-6 p-4 rounded-2xl bg-muted/30">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Full Name</Label>
-            <Input value={editedFields.name} onChange={(e) => setEditedFields((f) => ({ ...f, name: e.target.value }))} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Job Title</Label>
-            <Input value={editedFields.title} onChange={(e) => setEditedFields((f) => ({ ...f, title: e.target.value }))} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Company</Label>
-            <Input value={editedFields.company} onChange={(e) => setEditedFields((f) => ({ ...f, company: e.target.value }))} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Email</Label>
-            <Input type="email" value={editedFields.email} onChange={(e) => setEditedFields((f) => ({ ...f, email: e.target.value }))} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Phone</Label>
-            <Input type="tel" value={editedFields.phone} onChange={(e) => setEditedFields((f) => ({ ...f, phone: e.target.value }))} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Website</Label>
-            <Input value={editedFields.website} onChange={(e) => setEditedFields((f) => ({ ...f, website: e.target.value }))} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">LinkedIn</Label>
-            <Input value={editedFields.linkedinUrl} onChange={(e) => setEditedFields((f) => ({ ...f, linkedinUrl: e.target.value }))} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Address</Label>
-            <Input value={editedFields.address} onChange={(e) => setEditedFields((f) => ({ ...f, address: e.target.value }))} />
-          </div>
+          {[
+            { label: "Full Name",  key: "name",        type: "text" },
+            { label: "Job Title",  key: "title",       type: "text" },
+            { label: "Company",    key: "company",     type: "text" },
+            { label: "Email",      key: "email",       type: "email" },
+            { label: "Phone",      key: "phone",       type: "tel" },
+            { label: "Website",    key: "website",     type: "text" },
+            { label: "LinkedIn",   key: "linkedinUrl", type: "text" },
+            { label: "Address",    key: "address",     type: "text" },
+          ].map(({ label, key, type }) => (
+            <div key={key} className="space-y-1">
+              <Label className="text-xs text-muted-foreground">{label}</Label>
+              <Input type={type} value={(editedFields as any)[key]} onChange={(e) => setEditedFields((f) => ({ ...f, [key]: e.target.value }))} />
+            </div>
+          ))}
           <Button onClick={handleSaveEdits} disabled={isSavingEdits} className="w-full mt-2">
             {isSavingEdits ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       ) : (
         <>
-          {/* ── Section 1: Business Card ──────────────────────────────────── */}
-          <div className="bg-[#1C1C1E] rounded-2xl p-4 text-white relative overflow-hidden mb-0">
-            {/* Subtle decorative circles */}
+          {/* ── Section 1: Business Card ───────────────────────────────── */}
+          <div className="bg-[#1C1C1E] rounded-2xl p-4 text-white relative overflow-hidden">
             <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/[0.03] pointer-events-none" />
             <div className="absolute -bottom-6 left-6 w-24 h-24 rounded-full bg-white/[0.02] pointer-events-none" />
 
-            {/* Company badge */}
+            {/* FIX #1: Company favicon logo */}
             {contact.company && (
               <div className="inline-flex items-center gap-1.5 bg-white/10 rounded-full px-2.5 py-1 mb-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                <CompanyLogo company={contact.company} domain={domainForIntel} />
                 <span className="text-xs text-white/70 font-medium">{contact.company}</span>
               </div>
             )}
 
-            {/* Name + Title */}
-            <h2 className="text-2xl font-semibold text-white leading-tight">
-              {contact.name || "Unknown"}
-            </h2>
-            {contact.title && (
-              <p className="text-sm text-white/50 mt-0.5">{contact.title}</p>
-            )}
+            <h2 className="text-2xl font-semibold text-white leading-tight">{contact.name || "Unknown"}</h2>
+            {contact.title && <p className="text-sm text-white/50 mt-0.5">{contact.title}</p>}
 
-            {/* Bottom row */}
             <div className="flex items-end justify-between mt-4">
               <div className="space-y-0.5">
-                {contact.phone && (
-                  <p className="text-sm text-white/60">{contact.phone}</p>
-                )}
-                {contact.email && (
-                  <p className="text-sm text-white/40 truncate max-w-[200px]">{contact.email}</p>
-                )}
+                {contact.phone && <p className="text-sm text-white/60">{contact.phone}</p>}
+                {contact.email && <p className="text-sm text-white/40 truncate max-w-[200px]">{contact.email}</p>}
               </div>
               {scannedDaysAgo && (
                 <div className="text-right shrink-0 ml-3">
@@ -888,16 +785,11 @@ export function ContactDetailView({
             {cardExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
 
-          {/* Collapsible contact detail drawer */}
+          {/* Collapsible contact rows */}
           {cardExpanded && (
             <div className="rounded-xl border border-border/60 bg-card overflow-hidden mb-4">
               {contact.phone && (
-                <button
-                  onClick={handleCall}
-                  className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left"
-                  style={{ touchAction: "manipulation" } as React.CSSProperties}
-                  data-testid="row-phone"
-                >
+                <button onClick={handleCall} className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left" data-testid="row-phone">
                   <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
                     <Phone className="w-4 h-4 text-green-600 dark:text-green-400" />
                   </div>
@@ -908,14 +800,8 @@ export function ContactDetailView({
                   <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 </button>
               )}
-
               {contact.email && (
-                <button
-                  onClick={handleEmail}
-                  className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left"
-                  style={{ touchAction: "manipulation" } as React.CSSProperties}
-                  data-testid="row-email"
-                >
+                <button onClick={handleEmail} className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left" data-testid="row-email">
                   <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
                     <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   </div>
@@ -926,13 +812,7 @@ export function ContactDetailView({
                   <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 </button>
               )}
-
-              <button
-                onClick={handleOpenLinkedIn}
-                className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left"
-                style={{ touchAction: "manipulation" } as React.CSSProperties}
-                data-testid="row-linkedin"
-              >
+              <button onClick={handleOpenLinkedIn} className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left" data-testid="row-linkedin">
                 <div className="w-8 h-8 rounded-lg bg-[#0A66C2]/10 flex items-center justify-center shrink-0">
                   <SiLinkedin className="w-4 h-4 text-[#0A66C2]" />
                 </div>
@@ -942,14 +822,8 @@ export function ContactDetailView({
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
               </button>
-
               {contact.website && (
-                <button
-                  onClick={handleOpenWebsite}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left last:border-0"
-                  style={{ touchAction: "manipulation" } as React.CSSProperties}
-                  data-testid="row-website"
-                >
+                <button onClick={handleOpenWebsite} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left" data-testid="row-website">
                   <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
                     <Globe className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   </div>
@@ -963,11 +837,9 @@ export function ContactDetailView({
             </div>
           )}
 
-          {/* ── Section 2: Warmth Selector ───────────────────────────────── */}
+          {/* ── Section 2: Warmth Selector ────────────────────────────── */}
           <div className="mb-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Relationship
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Relationship</p>
             <div className="flex gap-2">
               {warmthConfig.map(({ value, label, active, inactive }) => (
                 <button
@@ -975,7 +847,8 @@ export function ContactDetailView({
                   onClick={() => handleUpdateWarmth(value)}
                   className={[
                     "flex-1 py-2 px-3 rounded-full border text-xs font-medium transition-all",
-                    warmth === value ? active : inactive,
+                    // FIX #2: derived from prop, always correct on remount
+                    currentWarmth === value ? active : inactive,
                   ].join(" ")}
                   style={{ touchAction: "manipulation" } as React.CSSProperties}
                 >
@@ -985,15 +858,11 @@ export function ContactDetailView({
             </div>
           </div>
 
-          {/* ── Section 3: Smart CTAs ────────────────────────────────────── */}
+          {/* ── Section 3: Smart CTAs ─────────────────────────────────── */}
           <div className="mb-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Suggested actions
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Suggested actions</p>
 
-            {/* Primary 2-card row */}
             <div className="grid grid-cols-2 gap-3 mb-3">
-              {/* Follow-up email */}
               <button
                 onClick={() => { setShowFollowUp(true); setFollowUpResult(null); }}
                 className="rounded-2xl bg-primary text-primary-foreground p-4 text-left hover:opacity-90 transition-opacity"
@@ -1005,8 +874,6 @@ export function ContactDetailView({
                   {daysSinceLastTouch != null ? `${daysSinceLastTouch}d since last touch` : "Draft with AI"}
                 </p>
               </button>
-
-              {/* Set reminder */}
               <button
                 onClick={handleSetReminder}
                 className="rounded-2xl bg-card border border-border/60 p-4 text-left hover:bg-muted/30 transition-colors"
@@ -1018,7 +885,7 @@ export function ContactDetailView({
               </button>
             </div>
 
-            {/* Secondary 3-chip row */}
+            {/* FIX #4: Secondary row with Log submenu */}
             <div className="flex gap-2">
               <button
                 onClick={() => void openIntel(false)}
@@ -1037,31 +904,55 @@ export function ContactDetailView({
                 Schedule
               </button>
               <button
-                onClick={() => {
-                  setPendingLogType(null);
-                  setPendingLogLabel("Interaction");
-                  setLogOutcome(null);
-                  setLogNote("");
-                  setShowLogSheet(true);
-                }}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-card border border-border/60 text-xs font-medium hover:bg-muted/30 transition-colors"
+                onClick={() => setShowLogStrip(!showLogStrip)}
+                className={[
+                  "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-medium transition-colors",
+                  showLogStrip
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-card border-border/60 hover:bg-muted/30",
+                ].join(" ")}
                 style={{ touchAction: "manipulation" } as React.CSSProperties}
               >
-                <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+                <Plus className="w-3.5 h-3.5" />
                 Log
               </button>
             </div>
+
+            {/* Log chip strip */}
+            {showLogStrip && (
+              <div className="flex gap-2 mt-2 overflow-x-auto pb-0.5 -mx-1 px-1">
+                {LOG_INTERACTION_CHIPS.map((chip) => (
+                  <button
+                    key={chip.label}
+                    onClick={() => { setShowLogStrip(false); handleQuickLog(chip.type, chip.label, chip.label); }}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card text-xs font-medium hover:bg-muted/50 transition-colors"
+                    style={{ touchAction: "manipulation" } as React.CSSProperties}
+                  >
+                    {chip.icon}
+                    {chip.label}
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setShowLogStrip(false); handleOpenLogSheet(); }}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card text-xs font-medium hover:bg-muted/50 transition-colors text-muted-foreground"
+                  style={{ touchAction: "manipulation" } as React.CSSProperties}
+                >
+                  <StickyNote className="w-3.5 h-3.5" />
+                  Other
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* ── Section 4: Tags ──────────────────────────────────────────── */}
+          {/* ── Section 4: Tags ───────────────────────────────────────── */}
           <div className="mb-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Tags
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Tags</p>
             {/* TODO: wire to tag system — ContactV2 has no tags field yet */}
-            <div className="flex flex-wrap gap-2">
-              <p className="text-xs text-muted-foreground py-1">No tags yet</p>
+            <div className="flex flex-wrap gap-2 items-center">
+              <p className="text-xs text-muted-foreground">No tags yet</p>
+              {/* FIX #5: Toast instead of silent no-op */}
               <button
+                onClick={() => toast({ title: "Tags coming soon", description: "Tag support is being added in the next update." })}
                 className="text-xs rounded-full px-3 py-1 border border-dashed border-border/50 text-muted-foreground hover:border-border transition-colors"
                 style={{ touchAction: "manipulation" } as React.CSSProperties}
               >
@@ -1070,56 +961,33 @@ export function ContactDetailView({
             </div>
           </div>
 
-          {/* ── Tasks (only when tasks exist) ────────────────────────────── */}
+          {/* ── Tasks ─────────────────────────────────────────────────── */}
           {contactTasks.length > 0 && (
             <div className="mb-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">
-                Tasks
-              </p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">Tasks</p>
               <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
                 {contactTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40 last:border-0"
-                    data-testid={`task-row-${task.id}`}
-                  >
+                  <div key={task.id} className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40 last:border-0" data-testid={`task-row-${task.id}`}>
                     {task.draftBody ? (
-                      <button
-                        className="flex-1 flex items-start gap-3 text-left"
-                        onClick={() => setExpandedDraftTaskId(expandedDraftTaskId === task.id ? null : task.id)}
-                      >
+                      <button className="flex-1 flex items-start gap-3 text-left" onClick={() => setExpandedDraftTaskId(expandedDraftTaskId === task.id ? null : task.id)}>
                         <Mail className="w-4 h-4 text-violet-500 mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm">{task.title}</p>
                           {expandedDraftTaskId === task.id && (
                             <div className="mt-2 space-y-2">
-                              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                                {task.draftBody}
-                              </p>
+                              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{task.draftBody}</p>
                               {draftSentConfirmTaskId === task.id ? (
                                 <div className="space-y-1">
                                   <p className="text-xs font-medium text-foreground">Did you send it?</p>
                                   <div className="flex gap-2">
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); handleDraftSentYes(task.id, task.title); }}
-                                      className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                                    >Yes</button>
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); setDraftSentConfirmTaskId(null); }}
-                                      className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent"
-                                    >No</button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDraftSentYes(task.id, task.title); }} className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Yes</button>
+                                    <button onClick={(e) => { e.stopPropagation(); setDraftSentConfirmTaskId(null); }} className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent">No</button>
                                   </div>
                                 </div>
                               ) : (
                                 <div className="flex gap-2">
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleDraftTaskSend(task); }}
-                                    className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30"
-                                  >Send</button>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleDiscardDraftBody(task.id); }}
-                                    className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent"
-                                  >Discard Draft</button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDraftTaskSend(task); }} className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30">Send</button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDiscardDraftBody(task.id); }} className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent">Discard Draft</button>
                                 </div>
                               )}
                             </div>
@@ -1128,12 +996,7 @@ export function ContactDetailView({
                       </button>
                     ) : (
                       <>
-                        <Checkbox
-                          checked={false}
-                          onCheckedChange={() => handleCompleteTask(task.id)}
-                          className="mt-0.5 shrink-0"
-                          data-testid={`checkbox-task-${task.id}`}
-                        />
+                        <Checkbox checked={false} onCheckedChange={() => handleCompleteTask(task.id)} className="mt-0.5 shrink-0" data-testid={`checkbox-task-${task.id}`} />
                         <div className="flex-1 min-w-0">
                           {editingTaskId === task.id ? (
                             <div className="flex items-center gap-2">
@@ -1149,9 +1012,7 @@ export function ContactDetailView({
                                 className="flex-1 bg-transparent text-sm outline-none border-b border-border min-w-0"
                                 data-testid={`input-edit-task-${task.id}`}
                               />
-                              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs shrink-0" onClick={handleSaveTaskEdit}>
-                                Save
-                              </Button>
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs shrink-0" onClick={handleSaveTaskEdit}>Save</Button>
                             </div>
                           ) : (
                             <p className="text-sm">{task.title}</p>
@@ -1190,8 +1051,6 @@ export function ContactDetailView({
                     )}
                   </div>
                 ))}
-
-                {/* Add task row */}
                 <div className="flex items-center gap-2 px-3 py-2.5">
                   <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
                   <input
@@ -1204,38 +1063,36 @@ export function ContactDetailView({
                     data-testid="input-add-task"
                   />
                   {newTaskText.trim() && (
-                    <Button size="sm" variant="ghost" onClick={handleAddTask} className="shrink-0 h-7 px-2 text-xs" data-testid="button-save-task">
-                      Add
-                    </Button>
+                    <Button size="sm" variant="ghost" onClick={handleAddTask} className="shrink-0 h-7 px-2 text-xs" data-testid="button-save-task">Add</Button>
                   )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── Section 5: Timeline ──────────────────────────────────────── */}
-          <div className="border-t border-border/40 pt-5 mt-1">
-            {/* Header */}
+          {/* ── Section 5: Timeline ───────────────────────────────────── */}
+          {/* FIX #6: Visually distinct section with own background */}
+          <div className="rounded-2xl bg-muted/30 border border-border/40 p-4 mt-2">
             <div className="flex items-center justify-between mb-3">
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-                {tlFilters.map((f) => (
-                  <button
-                    key={f.value}
-                    onClick={() => setTimelineFilter(f.value)}
-                    className={[
-                      "shrink-0 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
-                      timelineFilter === f.value
-                        ? "bg-foreground text-background border-foreground"
-                        : "bg-transparent text-muted-foreground border-border/40 hover:border-border",
-                    ].join(" ")}
-                    style={{ touchAction: "manipulation" } as React.CSSProperties}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Activity</p>
             </div>
-
+            <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 -mx-1 px-1">
+              {tlFilters.map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => setTimelineFilter(f.value)}
+                  className={[
+                    "shrink-0 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
+                    timelineFilter === f.value
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-background text-muted-foreground border-border/40 hover:border-border",
+                  ].join(" ")}
+                  style={{ touchAction: "manipulation" } as React.CSSProperties}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
             <TimelineFeed
               items={filteredTimelineItems}
               onAddNote={handleAddNote}
@@ -1257,14 +1114,7 @@ export function ContactDetailView({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                onDelete?.(contact.id);
-                setShowDeleteConfirm(false);
-              }}
-            >
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={() => { onDelete?.(contact.id); setShowDeleteConfirm(false); }}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1274,36 +1124,23 @@ export function ContactDetailView({
         <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
           <DrawerHeader>
             <DrawerTitle>Follow-up</DrawerTitle>
-            <DrawerClose asChild>
-              <Button variant="ghost" size="sm">Done</Button>
-            </DrawerClose>
+            <DrawerClose asChild><Button variant="ghost" size="sm">Done</Button></DrawerClose>
           </DrawerHeader>
-          <div
-            className="flex-1 overflow-y-auto px-4"
-            style={{ paddingBottom: Math.max(16, keyboardInset + 16) }}
-          >
+          <div className="flex-1 overflow-y-auto px-4" style={{ paddingBottom: Math.max(16, keyboardInset + 16) }}>
             <div className="space-y-4 pb-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Mode</Label>
                   <Select value={followUpMode} onValueChange={(v) => setFollowUpMode(v as FollowUpMode)}>
                     <SelectTrigger><SelectValue placeholder="Mode" /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(FOLLOWUP_MODE_LABELS).map(([k, label]) => (
-                        <SelectItem key={k} value={k}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectContent>{Object.entries(FOLLOWUP_MODE_LABELS).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Tone</Label>
                   <Select value={followUpTone} onValueChange={(v) => setFollowUpTone(v as FollowUpTone)}>
                     <SelectTrigger><SelectValue placeholder="Tone" /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(FOLLOWUP_TONE_LABELS).map(([k, label]) => (
-                        <SelectItem key={k} value={k}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectContent>{Object.entries(FOLLOWUP_TONE_LABELS).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
@@ -1311,39 +1148,23 @@ export function ContactDetailView({
                 <Label className="text-xs text-muted-foreground">Length</Label>
                 <Select value={followUpLength} onValueChange={(v) => setFollowUpLength(v as FollowUpLength)}>
                   <SelectTrigger><SelectValue placeholder="Length" /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(FOLLOWUP_LENGTH_LABELS).map(([k, label]) => (
-                      <SelectItem key={k} value={k}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectContent>{Object.entries(FOLLOWUP_LENGTH_LABELS).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Goal</Label>
-                <Textarea
-                  value={followUpGoal}
-                  onChange={(e) => setFollowUpGoal(e.target.value)}
-                  placeholder="e.g., book a 20-min call next week"
-                  className="min-h-[110px] resize-none"
-                />
+                <Textarea value={followUpGoal} onChange={(e) => setFollowUpGoal(e.target.value)} placeholder="e.g., book a 20-min call next week" className="min-h-[110px] resize-none" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Context (optional)</Label>
-                <Textarea
-                  value={followUpContext}
-                  onChange={(e) => setFollowUpContext(e.target.value)}
-                  placeholder="e.g., met at All-Energy Melbourne"
-                  className="min-h-[90px] resize-none"
-                />
+                <Textarea value={followUpContext} onChange={(e) => setFollowUpContext(e.target.value)} placeholder="e.g., met at All-Energy Melbourne" className="min-h-[90px] resize-none" />
               </div>
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1 gap-2" onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp}>
                   <Sparkles className="w-4 h-4" />
                   {isGeneratingFollowUp ? "Generating..." : "Generate"}
                 </Button>
-                <Button variant="outline" className="flex-1" onClick={handleCopyFollowUp} disabled={!followUpResult}>
-                  Copy
-                </Button>
+                <Button variant="outline" className="flex-1" onClick={handleCopyFollowUp} disabled={!followUpResult}>Copy</Button>
               </div>
               {followUpResult && (
                 <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
@@ -1366,22 +1187,14 @@ export function ContactDetailView({
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Meeting Invite</DrawerTitle>
-            <DrawerClose asChild>
-              <Button variant="ghost" size="sm">Done</Button>
-            </DrawerClose>
+            <DrawerClose asChild><Button variant="ghost" size="sm">Done</Button></DrawerClose>
           </DrawerHeader>
           <div className="px-4 pb-4 space-y-4">
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Quick slots</Label>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {quickSlots.map((s) => (
-                  <Button
-                    key={s.label}
-                    variant={toDatetimeLocalValue(meetingStart) === toDatetimeLocalValue(s.getTime()) ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setMeetingStart(s.getTime())}
-                    className="shrink-0"
-                  >
+                  <Button key={s.label} variant={toDatetimeLocalValue(meetingStart) === toDatetimeLocalValue(s.getTime()) ? "default" : "outline"} size="sm" onClick={() => setMeetingStart(s.getTime())} className="shrink-0">
                     {s.label}
                   </Button>
                 ))}
@@ -1389,24 +1202,13 @@ export function ContactDetailView({
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Custom time</Label>
-              <Input
-                type="datetime-local"
-                value={toDatetimeLocalValue(meetingStart)}
-                onChange={(e) => {
-                  const d = new Date(e.target.value);
-                  if (!Number.isNaN(d.getTime())) setMeetingStart(d);
-                }}
-              />
+              <Input type="datetime-local" value={toDatetimeLocalValue(meetingStart)} onChange={(e) => { const d = new Date(e.target.value); if (!Number.isNaN(d.getTime())) setMeetingStart(d); }} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Duration</Label>
               <Select value={String(meetingDuration)} onValueChange={(v) => setMeetingDuration(Number(v))}>
                 <SelectTrigger><SelectValue placeholder="Duration" /></SelectTrigger>
-                <SelectContent>
-                  {[15, 30, 45, 60].map((m) => (
-                    <SelectItem key={m} value={String(m)}>{m} minutes</SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectContent>{[15, 30, 45, 60].map((m) => <SelectItem key={m} value={String(m)}>{m} minutes</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="p-3 rounded-xl bg-muted/30 border border-border/60 text-sm">
@@ -1416,9 +1218,7 @@ export function ContactDetailView({
             </div>
           </div>
           <DrawerFooter>
-            <Button className="w-full" onClick={handleCreateMeetingInvite}>
-              Download .ics invite
-            </Button>
+            <Button className="w-full" onClick={handleCreateMeetingInvite}>Download .ics invite</Button>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
@@ -1428,9 +1228,7 @@ export function ContactDetailView({
         <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
           <DrawerHeader>
             <DrawerTitle>Company Brief</DrawerTitle>
-            <DrawerClose asChild>
-              <Button variant="ghost" size="sm">Done</Button>
-            </DrawerClose>
+            <DrawerClose asChild><Button variant="ghost" size="sm">Done</Button></DrawerClose>
           </DrawerHeader>
           <div className="flex-1 overflow-y-auto px-4 pb-6">
             <CompanyIntelV2Card
@@ -1448,9 +1246,7 @@ export function ContactDetailView({
       <Drawer open={showLogSheet} onOpenChange={setShowLogSheet}>
         <DrawerContent className="rounded-t-3xl">
           <DrawerHeader>
-            <DrawerTitle>
-              {pendingLogLabel ? `Log ${pendingLogLabel}` : "Log Interaction"}
-            </DrawerTitle>
+            <DrawerTitle>{pendingLogLabel ? `Log ${pendingLogLabel}` : "Log Interaction"}</DrawerTitle>
           </DrawerHeader>
           <div className="px-4 pb-6 space-y-4">
             <div className="space-y-2">
@@ -1464,12 +1260,7 @@ export function ContactDetailView({
                   <button
                     key={opt.value}
                     onClick={() => setLogOutcome(opt.value)}
-                    className={[
-                      "flex-1 py-2 px-2 rounded-xl border text-xs font-medium transition-colors",
-                      logOutcome === opt.value
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border/50 bg-card/60 hover:bg-muted/50",
-                    ].join(" ")}
+                    className={["flex-1 py-2 px-2 rounded-xl border text-xs font-medium transition-colors", logOutcome === opt.value ? "bg-primary text-primary-foreground border-primary" : "border-border/50 bg-card/60 hover:bg-muted/50"].join(" ")}
                     data-testid={`outcome-${opt.value}`}
                   >
                     {opt.icon} {opt.label}
@@ -1478,31 +1269,13 @@ export function ContactDetailView({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">
-                Quick note <span className="font-normal">(optional)</span>
-              </p>
-              <Textarea
-                placeholder="What was discussed, what you promised..."
-                value={logNote}
-                onChange={(e) => setLogNote(e.target.value)}
-                rows={2}
-                className="resize-none rounded-xl"
-                data-testid="input-log-note"
-              />
+              <p className="text-xs text-muted-foreground font-medium">Quick note <span className="font-normal">(optional)</span></p>
+              <Textarea placeholder="What was discussed, what you promised..." value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={2} className="resize-none rounded-xl" data-testid="input-log-note" />
             </div>
-            <Button
-              onClick={() => handleConfirmLog()}
-              className="w-full rounded-xl"
-              disabled={!logOutcome}
-              data-testid="button-confirm-log"
-            >
+            <Button onClick={() => handleConfirmLog()} className="w-full rounded-xl" disabled={!logOutcome} data-testid="button-confirm-log">
               {logOutcome === "positive" ? "Log & Set Reminder" : "Log Interaction"}
             </Button>
-            <button
-              onClick={() => handleConfirmLog("neutral")}
-              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
-              data-testid="button-skip-log"
-            >
+            <button onClick={() => handleConfirmLog("neutral")} className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1" data-testid="button-skip-log">
               Skip — just log it
             </button>
           </div>
@@ -1510,12 +1283,17 @@ export function ContactDetailView({
       </Drawer>
 
       {/* ── Bottom Bar ───────────────────────────────────────────────────── */}
-      <ContactBottomBar
-        isSaved={true}
-        onSave={onDownloadVCard}
-        onQuickActions={() => {}}
-        onUpdate={onDownloadVCard}
-      />
+      {/* FIX #7: Single-tap vCard save — direct call, no intermediate drawer */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-xl border-t border-border"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <Button onClick={onDownloadVCard} className="w-full gap-2" variant="default">
+            Save to Phone
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
