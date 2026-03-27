@@ -40,8 +40,12 @@ import {
   Briefcase,
   Calendar,
   CheckSquare,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   CloudUpload,
   Edit,
+  Globe,
   Mail,
   MoreHorizontal,
   Phone,
@@ -49,18 +53,15 @@ import {
   Sparkles,
   StickyNote,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
-import { SiHubspot, SiSalesforce } from "react-icons/si";
+import { SiHubspot, SiLinkedin, SiSalesforce } from "react-icons/si";
 
 import { CompanyIntelV2Card } from "@/components/company-intel-v2";
-import { ContactHeroCard, Contact } from "./ContactHeroCard";
 import { ContactBottomBar } from "./ContactBottomBar";
-import { QuickActionsSheet, QuickAction } from "./QuickActionsSheet";
 import { TimelineFeed, TimelineItem, TimelineEventType } from "./TimelineFeed";
 
-import { StoredContact } from "@/lib/contactsStorage";
+import { StoredContact, RelationshipStrength } from "@/lib/contactsStorage";
 import {
   ContactV2,
   addNote,
@@ -116,7 +117,7 @@ interface ContactDetailViewProps {
   companyId?: string | null;
   /**
    * If true, opens the follow-up composer panel on mount.
-   * Used by Home Scoreboard “Send follow-up” CTA to reduce taps.
+   * Used by Home Scoreboard "Send follow-up" CTA to reduce taps.
    */
   autoOpenFollowUp?: boolean;
 }
@@ -151,6 +152,19 @@ function openSms(phone: string, body: string) {
   window.location.href = `sms:${encodeURIComponent(phone)}?&body=${encodeURIComponent(body)}`;
 }
 
+function formatRelativeTime(dateStr: string | Date | undefined | null): string {
+  if (!dateStr) return "";
+  const d = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
+  if (Number.isNaN(d.getTime())) return "";
+  const diffMs = Date.now() - d.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays <= 0) return "today";
+  if (diffDays === 1) return "yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
+}
+
 function useKeyboardInset(active: boolean) {
   const [inset, setInset] = useState(0);
 
@@ -164,9 +178,8 @@ function useKeyboardInset(active: boolean) {
     if (!vv) return;
 
     const compute = () => {
-      // innerHeight stays large on iOS; visualViewport shrinks when keyboard shows.
       const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setInset(Math.min(420, Math.round(keyboard))); // cap so we don't go crazy
+      setInset(Math.min(420, Math.round(keyboard)));
     };
 
     compute();
@@ -195,10 +208,18 @@ export function ContactDetailView({
 }: ContactDetailViewProps) {
   const { toast } = useToast();
 
+  // ── UI state ──────────────────────────────────────────────────────────────
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showQuickActions, setShowQuickActions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [cardExpanded, setCardExpanded] = useState(false);
+  const [timelineFilter, setTimelineFilter] = useState<"all" | "note" | "meeting" | "followup">("all");
 
+  // ── Warmth ────────────────────────────────────────────────────────────────
+  const [warmth, setWarmth] = useState<RelationshipStrength>(
+    contactV2?.org?.relationshipStrength ?? "UNKNOWN"
+  );
+
+  // ── Edit form ─────────────────────────────────────────────────────────────
   const [editedFields, setEditedFields] = useState({
     name: contact.name || "",
     title: contact.title || "",
@@ -209,7 +230,9 @@ export function ContactDetailView({
     linkedinUrl: contact.linkedinUrl || "",
     address: contact.address || "",
   });
+  const [isSavingEdits, setIsSavingEdits] = useState(false);
 
+  // ── Tasks ─────────────────────────────────────────────────────────────────
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -221,6 +244,138 @@ export function ContactDetailView({
     () => (contactV2?.tasks || []).filter((t) => !t.done),
     [contactV2]
   );
+
+  // ── CRM sync ──────────────────────────────────────────────────────────────
+  const [isSyncingHubspot, setIsSyncingHubspot] = useState(false);
+  const [isSyncingSalesforce, setIsSyncingSalesforce] = useState(false);
+
+  // ── Follow-up drawer ──────────────────────────────────────────────────────
+  const [showFollowUp, setShowFollowUp] = useState(false);
+  const [followUpMode, setFollowUpMode] = useState<FollowUpMode>("email_followup");
+  const [followUpTone, setFollowUpTone] = useState<FollowUpTone>("friendly");
+  const [followUpLength, setFollowUpLength] = useState<FollowUpLength>("medium");
+  const [followUpGoal, setFollowUpGoal] = useState("");
+  const [followUpContext, setFollowUpContext] = useState("");
+  const [followUpResult, setFollowUpResult] = useState<FollowUpResponse | null>(null);
+  const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+
+  useEffect(() => {
+    if (!autoOpenFollowUp) return;
+    const t = window.setTimeout(() => {
+      setShowFollowUp(true);
+      setFollowUpResult(null);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [autoOpenFollowUp]);
+
+  const keyboardInset = useKeyboardInset(showFollowUp);
+
+  // ── Meeting drawer ────────────────────────────────────────────────────────
+  const quickSlots = useMemo(() => getQuickTimeSlots(), []);
+  const [showMeeting, setShowMeeting] = useState(false);
+  const [meetingStart, setMeetingStart] = useState<Date>(() => {
+    const d = quickSlots[0]?.getTime();
+    return d ? d : new Date();
+  });
+  const [meetingDuration, setMeetingDuration] = useState<number>(30);
+
+  // ── Log sheet ─────────────────────────────────────────────────────────────
+  const [showLogSheet, setShowLogSheet] = useState(false);
+  const [pendingLogType, setPendingLogType] = useState<string | null>(null);
+  const [pendingLogLabel, setPendingLogLabel] = useState<string>("");
+  const [logOutcome, setLogOutcome] = useState<"positive" | "neutral" | "negative" | null>(null);
+  const [logNote, setLogNote] = useState("");
+
+  // ── Intel drawer ──────────────────────────────────────────────────────────
+  const [showIntel, setShowIntel] = useState(false);
+  const intelV2 = useIntelV2();
+
+  // ── CRM status queries ────────────────────────────────────────────────────
+  const { data: hubspotStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ["/api/hubspot/status"],
+  });
+  const { data: salesforceStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ["/api/salesforce/status"],
+  });
+
+  // ── Computed values ───────────────────────────────────────────────────────
+  const scannedDaysAgo = useMemo(() => {
+    if (!contact.createdAt) return null;
+    const days = Math.round((Date.now() - new Date(contact.createdAt).getTime()) / 86400000);
+    if (days <= 0) return "today";
+    if (days === 1) return "yesterday";
+    return `${days} days ago`;
+  }, [contact.createdAt]);
+
+  const daysSinceLastTouch = useMemo(() => {
+    if (!contactV2?.lastTouchedAt) return null;
+    return Math.round((Date.now() - new Date(contactV2.lastTouchedAt).getTime()) / 86400000);
+  }, [contactV2?.lastTouchedAt]);
+
+  const companyNameForIntel = useMemo(() => {
+    const c = (editedFields.company || contact.company || "").trim();
+    return c.length ? c : null;
+  }, [editedFields.company, contact.company]);
+
+  const domainForIntel = useMemo(() => {
+    const fromWebsite = extractDomainFromWebsite(editedFields.website || contact.website || "");
+    const fromEmail = extractDomainFromEmail(editedFields.email || contact.email || "");
+    return fromWebsite || fromEmail || null;
+  }, [editedFields.website, editedFields.email, contact.website, contact.email]);
+
+  const roleForIntel = useMemo(() => {
+    const r = (editedFields.title || contact.title || "").trim();
+    return r.length ? r : null;
+  }, [editedFields.title, contact.title]);
+
+  const addressForIntel = useMemo(() => {
+    const a = (editedFields.address || contact.address || "").trim();
+    return a.length ? a : null;
+  }, [editedFields.address, contact.address]);
+
+  const timelineItems: TimelineItem[] = useMemo(() => {
+    if (!contactV2?.timeline) return [];
+    return contactV2.timeline
+      .map((t) => ({
+        id: t.id,
+        type: t.type,
+        title: t.summary,
+        detail:
+          typeof t.meta === "object" && t.meta !== null
+            ? ((t.meta as any).bodyPreview as string | undefined)
+            : undefined,
+        meta:
+          typeof t.meta === "object" && t.meta !== null
+            ? {
+                outcome: (t.meta as any).outcome as "positive" | "neutral" | "negative" | undefined,
+                note: (t.meta as any).note as string | undefined,
+                source: (t.meta as any).source as string | undefined,
+              }
+            : undefined,
+        at: t.at,
+      }))
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  }, [contactV2]);
+
+  const filteredTimelineItems = useMemo(() => {
+    if (timelineFilter === "all") return timelineItems;
+    return timelineItems.filter((t) => t.type.includes(timelineFilter));
+  }, [timelineItems, timelineFilter]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleUpdateWarmth = async (value: RelationshipStrength) => {
+    setWarmth(value);
+    await updateContactV2(contact.id, {
+      org: {
+        department: contactV2?.org?.department ?? "UNKNOWN",
+        reportsToId: contactV2?.org?.reportsToId ?? null,
+        role: contactV2?.org?.role ?? "UNKNOWN",
+        influence: contactV2?.org?.influence ?? "UNKNOWN",
+        relationshipStrength: value,
+      },
+    });
+    onUpdate();
+  };
 
   const handleAddTask = async () => {
     const text = newTaskText.trim();
@@ -255,6 +410,7 @@ export function ContactDetailView({
     setEditingTaskId(null);
     setEditingTaskText("");
   };
+
   const handleDraftTaskSend = (task: { id: string; draftBody?: string }) => {
     if (contact.email) {
       const mailto = `mailto:${contact.email}?subject=${encodeURIComponent("Following up")}&body=${encodeURIComponent(task.draftBody ?? "")}`;
@@ -280,145 +436,15 @@ export function ContactDetailView({
     onUpdate();
   };
 
-  const [isSyncingHubspot, setIsSyncingHubspot] = useState(false);
-  const [isSyncingSalesforce, setIsSyncingSalesforce] = useState(false);
-  const [isSavingEdits, setIsSavingEdits] = useState(false);
-
-  // Follow-up drawer state
-  const [showFollowUp, setShowFollowUp] = useState(false);
-  const [followUpMode, setFollowUpMode] =
-    useState<FollowUpMode>("email_followup");
-  const [followUpTone, setFollowUpTone] = useState<FollowUpTone>("friendly");
-  const [followUpLength, setFollowUpLength] =
-    useState<FollowUpLength>("medium");
-  const [followUpGoal, setFollowUpGoal] = useState("");
-  const [followUpContext, setFollowUpContext] = useState("");
-  const [followUpResult, setFollowUpResult] =
-    useState<FollowUpResponse | null>(null);
-  const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
-
-  // Allow upstream screens (e.g., Home Scoreboard) to deep-link into the follow-up drawer.
-  useEffect(() => {
-    if (!autoOpenFollowUp) return;
-    // Open on next tick so layout is stable.
-    const t = window.setTimeout(() => {
-      setShowFollowUp(true);
-      setFollowUpResult(null);
-    }, 0);
-    return () => window.clearTimeout(t);
-  }, [autoOpenFollowUp]);
-
-  const keyboardInset = useKeyboardInset(showFollowUp);
-
-  // Meeting drawer state
-  const quickSlots = useMemo(() => getQuickTimeSlots(), []);
-  const [showMeeting, setShowMeeting] = useState(false);
-  const [meetingStart, setMeetingStart] = useState<Date>(() => {
-    const d = quickSlots[0]?.getTime();
-    return d ? d : new Date();
-  });
-  const [meetingDuration, setMeetingDuration] = useState<number>(30);
-
-  // Quick log sheet state
-  const [showLogSheet, setShowLogSheet] = useState(false);
-  const [pendingLogType, setPendingLogType] = useState<string | null>(null);
-  const [pendingLogLabel, setPendingLogLabel] = useState<string>('');
-  const [logOutcome, setLogOutcome] = useState<'positive' | 'neutral' | 'negative' | null>(null);
-  const [logNote, setLogNote] = useState('');
-
-  // Intel drawer state
-  const [showIntel, setShowIntel] = useState(false);
-  const intelV2 = useIntelV2();
-
-  const { data: hubspotStatus } = useQuery<{ connected: boolean }>({
-    queryKey: ["/api/hubspot/status"],
-  });
-
-  const { data: salesforceStatus } = useQuery<{ connected: boolean }>({
-    queryKey: ["/api/salesforce/status"],
-  });
-
-  const heroContact: Contact = useMemo(
-    () => ({
-      id: contact.id,
-      name: contact.name,
-      title: contact.title,
-      company: contact.company,
-      phone: contact.phone,
-      email: contact.email,
-      website: contact.website,
-      linkedinUrl: contact.linkedinUrl,
-      address: contact.address,
-      scannedAt: contact.createdAt,
-      lastTouchedAt: contactV2?.lastTouchedAt,
-      syncedToHubspot: contactV2?.timeline?.some(
-        (t) => t.type === "hubspot_synced"
-      ),
-    }),
-    [contact, contactV2]
-  );
-
-  const timelineItems: TimelineItem[] = useMemo(() => {
-    if (!contactV2?.timeline) return [];
-    return contactV2.timeline
-      .map((t) => ({
-        id: t.id,
-        type: t.type,
-        title: t.summary,
-        detail:
-          typeof t.meta === "object" && t.meta !== null
-            ? ((t.meta as any).bodyPreview as string | undefined)
-            : undefined,
-        meta:
-          typeof t.meta === 'object' && t.meta !== null
-            ? {
-                outcome: (t.meta as any).outcome as 'positive' | 'neutral' | 'negative' | undefined,
-                note: (t.meta as any).note as string | undefined,
-                source: (t.meta as any).source as string | undefined,
-              }
-            : undefined,
-        at: t.at,
-      }))
-      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  }, [contactV2]);
-
-  const companyNameForIntel = useMemo(() => {
-    const c = (editedFields.company || contact.company || "").trim();
-    return c.length ? c : null;
-  }, [editedFields.company, contact.company]);
-
-  const domainForIntel = useMemo(() => {
-    const fromWebsite = extractDomainFromWebsite(
-      editedFields.website || contact.website || ""
-    );
-    const fromEmail = extractDomainFromEmail(
-      editedFields.email || contact.email || ""
-    );
-    return fromWebsite || fromEmail || null;
-  }, [editedFields.website, editedFields.email, contact.website, contact.email]);
-
-  const roleForIntel = useMemo(() => {
-    const r = (editedFields.title || contact.title || "").trim();
-    return r.length ? r : null;
-  }, [editedFields.title, contact.title]);
-
-  const addressForIntel = useMemo(() => {
-    const a = (editedFields.address || contact.address || "").trim();
-    return a.length ? a : null;
-  }, [editedFields.address, contact.address]);
-
   const handleSaveEdits = async () => {
     setIsSavingEdits(true);
     try {
       const updated = updateContactV2(contact.id, editedFields);
       if (!updated) throw new Error("Failed to update contact");
-
       setIsEditing(false);
       toast({ title: "Contact updated" });
-
       onUpdate();
       onContactUpdated?.(contact.id);
-
       try {
         addTimelineEvent(contact.id, "contact_updated", "Contact details updated");
       } catch (timelineErr) {
@@ -442,15 +468,16 @@ export function ContactDetailView({
 
   const handleOpenWebsite = () => {
     if (!contact.website) return;
-    const url = contact.website.includes("://")
-      ? contact.website
-      : `https://${contact.website}`;
+    const url = contact.website.includes("://") ? contact.website : `https://${contact.website}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleOpenLinkedIn = () => {
     if (contact.linkedinUrl) {
       window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
+    } else {
+      const name = encodeURIComponent(contact.name || "");
+      window.open(`https://www.linkedin.com/search/results/people/?keywords=${name}`, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -466,158 +493,106 @@ export function ContactDetailView({
     setIsAddingNote(false);
   };
 
-  const handleQuickLog = useCallback((type: TimelineEventType, summary: string, displayLabel: string) => {
-    setPendingLogType(type);
-    setPendingLogLabel(displayLabel);
-    setLogOutcome(null);
-    setLogNote('');
-    setShowLogSheet(true);
-  }, []);
+  const handleQuickLog = useCallback(
+    (type: TimelineEventType, summary: string, displayLabel: string) => {
+      setPendingLogType(type);
+      setPendingLogLabel(displayLabel);
+      setLogOutcome(null);
+      setLogNote("");
+      setShowLogSheet(true);
+    },
+    []
+  );
 
-  const handleConfirmLog = useCallback(async (outcomeOverride?: 'positive' | 'neutral' | 'negative') => {
-    const resolvedOutcome = outcomeOverride ?? logOutcome;
-    if (!pendingLogType || !contactV2) return;
-    await addTimelineEvent(
-      contact.id,
-      pendingLogType as any,
-      pendingLogLabel,
-      { source: 'quick_log', outcome: resolvedOutcome, note: logNote }
-    );
-    if (resolvedOutcome === 'positive') {
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 3);
-      await addReminder(
-        contact.id,
-        `Follow up with ${contact.name || 'this contact'}`,
-        dueDate.toISOString()
-      );
-    }
-    onUpdate();
-    setShowLogSheet(false);
-    setPendingLogType(null);
-    setLogNote('');
-    setLogOutcome(null);
-    toast({
-      title: resolvedOutcome === 'positive'
-        ? `${pendingLogLabel} logged — reminder set for 3 days`
-        : `${pendingLogLabel} logged`,
-    });
-  }, [pendingLogType, pendingLogLabel, logOutcome, logNote, contact.id, contact.name, contactV2, onUpdate, toast]);
+  const handleConfirmLog = useCallback(
+    async (outcomeOverride?: "positive" | "neutral" | "negative") => {
+      const resolvedOutcome = outcomeOverride ?? logOutcome;
+      if (!pendingLogType || !contactV2) return;
+      await addTimelineEvent(contact.id, pendingLogType as any, pendingLogLabel, {
+        source: "quick_log",
+        outcome: resolvedOutcome,
+        note: logNote,
+      });
+      if (resolvedOutcome === "positive") {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 3);
+        await addReminder(
+          contact.id,
+          `Follow up with ${contact.name || "this contact"}`,
+          dueDate.toISOString()
+        );
+      }
+      onUpdate();
+      setShowLogSheet(false);
+      setPendingLogType(null);
+      setLogNote("");
+      setLogOutcome(null);
+      toast({
+        title:
+          resolvedOutcome === "positive"
+            ? `${pendingLogLabel} logged — reminder set for 3 days`
+            : `${pendingLogLabel} logged`,
+      });
+    },
+    [pendingLogType, pendingLogLabel, logOutcome, logNote, contact.id, contact.name, contactV2, onUpdate, toast]
+  );
 
   const handleSyncToHubspot = async () => {
     if (!contact.email) {
-      toast({
-        title: "Email required",
-        description: "Contact must have an email to sync with HubSpot",
-        variant: "destructive",
-      });
+      toast({ title: "Email required", description: "Contact must have an email to sync with HubSpot", variant: "destructive" });
       return;
     }
-
     setIsSyncingHubspot(true);
     try {
       const nameParts = (contact.name || "").split(" ");
       const firstname = nameParts[0] || "";
       const lastname = nameParts.slice(1).join(" ") || "";
-
       const response = await apiRequest("POST", "/api/hubspot/sync", {
-        email: contact.email,
-        firstname,
-        lastname,
-        phone: contact.phone,
-        company: contact.company,
-        jobtitle: contact.title,
-        website: contact.website,
+        email: contact.email, firstname, lastname,
+        phone: contact.phone, company: contact.company,
+        jobtitle: contact.title, website: contact.website,
         linkedinUrl: contact.linkedinUrl,
       });
-
       const result = await response.json();
-
       if (result.success) {
-        addTimelineEvent(
-          contact.id,
-          "hubspot_synced",
-          `Synced to HubSpot (${result.action})`,
-          { hubspotId: result.hubspotId }
-        );
+        addTimelineEvent(contact.id, "hubspot_synced", `Synced to HubSpot (${result.action})`, { hubspotId: result.hubspotId });
         onUpdate();
-        toast({
-          title:
-            result.action === "created" ? "Added to HubSpot" : "Updated in HubSpot",
-          description: `Contact ${result.action} successfully`,
-        });
+        toast({ title: result.action === "created" ? "Added to HubSpot" : "Updated in HubSpot", description: `Contact ${result.action} successfully` });
       } else {
-        toast({
-          title: "Sync failed",
-          description: result.error || "Failed to sync with HubSpot",
-          variant: "destructive",
-        });
+        toast({ title: "Sync failed", description: result.error || "Failed to sync with HubSpot", variant: "destructive" });
       }
     } catch (error: any) {
-      toast({
-        title: "Sync failed",
-        description: error.message || "Failed to sync with HubSpot",
-        variant: "destructive",
-      });
+      toast({ title: "Sync failed", description: error.message || "Failed to sync with HubSpot", variant: "destructive" });
     }
     setIsSyncingHubspot(false);
   };
 
   const handleSyncToSalesforce = async () => {
     if (!contact.email) {
-      toast({
-        title: "Email required",
-        description: "Contact must have an email to sync with Salesforce",
-        variant: "destructive",
-      });
+      toast({ title: "Email required", description: "Contact must have an email to sync with Salesforce", variant: "destructive" });
       return;
     }
-
     setIsSyncingSalesforce(true);
     try {
       const nameParts = (contact.name || "").split(" ");
       const firstname = nameParts[0] || "";
       const lastname = nameParts.slice(1).join(" ") || "";
-
       const response = await apiRequest("POST", "/api/salesforce/sync", {
-        email: contact.email,
-        firstname,
-        lastname,
-        phone: contact.phone,
-        company: contact.company,
-        jobtitle: contact.title,
-        website: contact.website,
+        email: contact.email, firstname, lastname,
+        phone: contact.phone, company: contact.company,
+        jobtitle: contact.title, website: contact.website,
         linkedinUrl: contact.linkedinUrl,
       });
-
       const result = await response.json();
-
       if (result.success) {
-        addTimelineEvent(
-          contact.id,
-          "salesforce_synced",
-          `Synced to Salesforce (${result.action})`,
-          { salesforceId: result.salesforceId }
-        );
+        addTimelineEvent(contact.id, "salesforce_synced", `Synced to Salesforce (${result.action})`, { salesforceId: result.salesforceId });
         onUpdate();
-        toast({
-          title:
-            result.action === "created" ? "Added to Salesforce" : "Updated in Salesforce",
-          description: `Contact ${result.action} successfully`,
-        });
+        toast({ title: result.action === "created" ? "Added to Salesforce" : "Updated in Salesforce", description: `Contact ${result.action} successfully` });
       } else {
-        toast({
-          title: "Sync failed",
-          description: result.error || "Failed to sync with Salesforce",
-          variant: "destructive",
-        });
+        toast({ title: "Sync failed", description: result.error || "Failed to sync with Salesforce", variant: "destructive" });
       }
     } catch (error: any) {
-      toast({
-        title: "Sync failed",
-        description: error.message || "Failed to sync with Salesforce",
-        variant: "destructive",
-      });
+      toast({ title: "Sync failed", description: error.message || "Failed to sync with Salesforce", variant: "destructive" });
     }
     setIsSyncingSalesforce(false);
   };
@@ -628,17 +603,9 @@ export function ContactDetailView({
 
     const logFollowUpAction = (channel: string, note?: string) => {
       try {
-        addTimelineEvent(
-          contact.id,
-          "followup_sent",
-          `Follow-up sent (${channel})`,
-          {
-            channel,
-            note,
-            subject: res.subject,
-            bodyPreview: res.body?.slice?.(0, 160),
-          }
-        );
+        addTimelineEvent(contact.id, "followup_sent", `Follow-up sent (${channel})`, {
+          channel, note, subject: res.subject, bodyPreview: res.body?.slice?.(0, 160),
+        });
         onUpdate();
       } catch (e) {
         console.warn("[ContactDetailView] Failed to log followup_sent:", e);
@@ -656,7 +623,6 @@ export function ContactDetailView({
       openMailto(contact.email, res.subject || undefined, res.body);
       return;
     }
-
     if (mode.includes("sms") || mode.includes("text") || mode.includes("message")) {
       const p = sanitizePhone(contact.phone);
       if (!p) {
@@ -669,7 +635,6 @@ export function ContactDetailView({
       openSms(p, body);
       return;
     }
-
     if (mode.includes("linkedin")) {
       await navigator.clipboard.writeText(body);
       toast({ title: "Copied", description: "Copied. Opening LinkedIn…" });
@@ -677,7 +642,6 @@ export function ContactDetailView({
       if (contact.linkedinUrl) window.open(contact.linkedinUrl, "_blank", "noopener,noreferrer");
       return;
     }
-
     await navigator.clipboard.writeText(body);
     toast({ title: "Copied" });
     logFollowUpAction("copied", "fallback");
@@ -685,44 +649,19 @@ export function ContactDetailView({
 
   const handleGenerateFollowUp = async () => {
     if (!followUpGoal.trim()) {
-      toast({
-        title: "Goal required",
-        description: "Tell Carda what you want to achieve.",
-        variant: "destructive",
-      });
+      toast({ title: "Goal required", description: "Tell Carda what you want to achieve.", variant: "destructive" });
       return;
     }
-
     setIsGeneratingFollowUp(true);
     setFollowUpResult(null);
-
     try {
       const res = await generateFollowUp(
-        {
-          name: contact.name || "there",
-          company: contact.company || undefined,
-          title: contact.title || undefined,
-          email: contact.email || undefined,
-        },
-        {
-          mode: followUpMode,
-          tone: followUpTone,
-          length: followUpLength,
-          goal: followUpGoal.trim(),
-          context: followUpContext.trim() || undefined,
-        }
+        { name: contact.name || "there", company: contact.company || undefined, title: contact.title || undefined, email: contact.email || undefined },
+        { mode: followUpMode, tone: followUpTone, length: followUpLength, goal: followUpGoal.trim(), context: followUpContext.trim() || undefined }
       );
-
       setFollowUpResult(res);
-
-      addTimelineEvent(
-        contact.id,
-        "followup_generated",
-        `Follow-up generated (${FOLLOWUP_MODE_LABELS[followUpMode]})`,
-        { bodyPreview: res.body.slice(0, 160) }
-      );
+      addTimelineEvent(contact.id, "followup_generated", `Follow-up generated (${FOLLOWUP_MODE_LABELS[followUpMode]})`, { bodyPreview: res.body.slice(0, 160) });
       onUpdate();
-
       await launchFollowUpComposer(res);
     } catch (e) {
       console.error("[ContactDetailView] Follow-up generation failed:", e);
@@ -736,12 +675,7 @@ export function ContactDetailView({
     if (!followUpResult) return;
     try {
       await navigator.clipboard.writeText(buildFollowUpCopyText(followUpResult));
-      addTimelineEvent(
-        contact.id,
-        "followup_sent",
-        "Follow-up copied",
-        { channel: "copied", bodyPreview: followUpResult.body.slice(0, 160) }
-      );
+      addTimelineEvent(contact.id, "followup_sent", "Follow-up copied", { channel: "copied", bodyPreview: followUpResult.body.slice(0, 160) });
       onUpdate();
       toast({ title: "Copied" });
     } catch {
@@ -754,27 +688,14 @@ export function ContactDetailView({
       toast({ title: "Pick a valid time", variant: "destructive" });
       return;
     }
-
     const ics = createMeetingWithContact(
-      contact.name || "Contact",
-      contact.company || undefined,
-      contact.email || undefined,
-      meetingStart,
-      meetingDuration
+      contact.name || "Contact", contact.company || undefined, contact.email || undefined, meetingStart, meetingDuration
     );
-
-    const safeName = (contact.name || "contact")
-      .trim()
-      .replace(/\s+/g, "-")
-      .toLowerCase();
-
+    const safeName = (contact.name || "contact").trim().replace(/\s+/g, "-").toLowerCase();
     downloadIcsFile(ics, `carda-meeting-${safeName}.ics`);
-
     addTimelineEvent(contact.id, "meeting_scheduled", "Meeting invite created", {
-      startIso: meetingStart.toISOString(),
-      durationMinutes: meetingDuration,
+      startIso: meetingStart.toISOString(), durationMinutes: meetingDuration,
     });
-
     onUpdate();
     toast({ title: "Downloaded .ics invite" });
     setShowMeeting(false);
@@ -782,147 +703,44 @@ export function ContactDetailView({
 
   const openIntel = async (forceRefresh = false) => {
     if (!companyNameForIntel && !domainForIntel) {
-      toast({
-        title: "Company required",
-        description: "Add a company name or website/email domain first.",
-        variant: "destructive",
-      });
+      toast({ title: "Company required", description: "Add a company name or website/email domain first.", variant: "destructive" });
       return;
     }
-
     setShowIntel(true);
-
-    // Don’t refetch if we already have intel (feels instant). Use refresh button for updates.
     if (!forceRefresh && intelV2.intel) return;
-
-    await intelV2.fetchIntel(
-      companyNameForIntel,
-      domainForIntel,
-      roleForIntel,
-      addressForIntel,
-      forceRefresh
-    );
+    await intelV2.fetchIntel(companyNameForIntel, domainForIntel, roleForIntel, addressForIntel, forceRefresh);
   };
 
-  const quickActions: QuickAction[] = useMemo(() => {
-    const actions: QuickAction[] = [
-      {
-        id: "followup",
-        label: "Generate Follow-up",
-        icon: <Sparkles className="w-5 h-5" />,
-        onClick: () => {
-          setShowFollowUp(true);
-          setFollowUpResult(null);
-        },
-      },
-      {
-        id: "reminder",
-        label: "Add Reminder",
-        icon: <Bell className="w-5 h-5" />,
-        onClick: () => {
-          const dueDate = new Date();
-          dueDate.setDate(dueDate.getDate() + 3);
-          addReminder(
-            contact.id,
-            `Follow up with ${contact.name || "this contact"}`,
-            dueDate.toISOString()
-          );
-          onUpdate();
-          toast({ title: "Reminder set for 3 days" });
-        },
-      },
-      {
-        id: "meeting",
-        label: "Schedule Meeting",
-        icon: <Calendar className="w-5 h-5" />,
-        onClick: () => setShowMeeting(true),
-      },
-      {
-        id: "intel",
-        label: "Company Brief",
-        icon: <Briefcase className="w-5 h-5" />,
-        onClick: () => void openIntel(false),
-      },
-      {
-        id: "note",
-        label: "Add Note",
-        icon: <StickyNote className="w-5 h-5" />,
-        onClick: () => {
-          setTimeout(() => {
-            const el = document.querySelector('[data-testid="input-add-note"]') as HTMLTextAreaElement | null;
-            el?.focus();
-          }, 60);
-        },
-      },
-      {
-        id: "add-task",
-        label: "Add Task",
-        icon: <CheckSquare className="w-5 h-5" />,
-        onClick: () => {
-          setTimeout(() => {
-            const el = document.querySelector('[data-testid="input-add-task"]') as HTMLInputElement | null;
-            el?.focus();
-          }, 60);
-        },
-      },
-    ];
+  const handleSetReminder = () => {
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 3);
+    addReminder(contact.id, `Follow up with ${contact.name || "this contact"}`, dueDate.toISOString());
+    onUpdate();
+    toast({ title: "Reminder set for 3 days" });
+  };
 
-    // CRM tiles: only show if connected. If neither connected, show one Connect CRM tile.
-    const hubspotConnected = hubspotStatus?.connected;
-    const salesforceConnected = salesforceStatus?.connected;
+  // ── Warmth config ─────────────────────────────────────────────────────────
+  const warmthConfig: { value: RelationshipStrength; label: string; active: string; inactive: string }[] = [
+    { value: "CASUAL", label: "Casual", active: "bg-muted text-foreground border-border", inactive: "bg-transparent text-muted-foreground border-border/40" },
+    { value: "NORMAL", label: "Normal", active: "bg-blue-500 text-white border-blue-500", inactive: "bg-transparent text-muted-foreground border-border/40" },
+    { value: "CLOSE",  label: "Close",  active: "bg-red-500 text-white border-red-500",  inactive: "bg-transparent text-muted-foreground border-border/40" },
+  ];
 
-    if (hubspotConnected) {
-      const isSynced = contactV2?.timeline?.some((t) => t.type === "hubspot_synced");
-      actions.push({
-        id: "hubspot",
-        label: "Sync to HubSpot",
-        icon: <SiHubspot className="w-5 h-5 text-[#FF7A59]" />,
-        status: isSynced ? "Synced" : undefined,
-        onClick: handleSyncToHubspot,
-      });
-    }
+  // ── Timeline filter config ────────────────────────────────────────────────
+  const tlFilters: { value: "all" | "note" | "meeting" | "followup"; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "note", label: "Notes" },
+    { value: "meeting", label: "Meetings" },
+    { value: "followup", label: "Follow-ups" },
+  ];
 
-    if (salesforceConnected) {
-      const isSynced = contactV2?.timeline?.some((t) => t.type === "salesforce_synced");
-      actions.push({
-        id: "salesforce",
-        label: "Sync to Salesforce",
-        icon: <SiSalesforce className="w-5 h-5 text-[#00A1E0]" />,
-        status: isSynced ? "Synced" : undefined,
-        onClick: handleSyncToSalesforce,
-      });
-    }
-
-    if (!hubspotConnected && !salesforceConnected) {
-      actions.push({
-        id: "connect-crm",
-        label: "Connect CRM",
-        icon: <CloudUpload className="w-5 h-5" />,
-        status: "Not set up",
-        onClick: async () => {
-          try {
-            const res = await apiRequest("POST", "/api/hubspot/connect");
-            const data = await res.json();
-            if (data.url) window.location.href = data.url;
-          } catch {
-            toast({ title: "Failed to open CRM settings", variant: "destructive" });
-          }
-        },
-      });
-    }
-
-    return actions;
-  }, [contact.id, contact.name, contactV2, hubspotStatus, salesforceStatus, toast, onUpdate]);
-
-  const heroBottomLabel = useMemo(() => {
-    // wording tweak
-    if (!contactV2?.lastTouchedAt) return null;
-    return "Last interaction";
-  }, [contactV2?.lastTouchedAt]);
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col min-h-full pb-24" data-testid="contact-detail-view">
-      {/* Header */}
+
+      {/* ── Nav header ────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-2 mb-4">
         <Button
           variant="ghost"
@@ -940,23 +758,46 @@ export function ContactDetailView({
             {isEditing ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
           </Button>
 
-          {onDelete && (
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
+          {/* CRM + Delete overflow menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="text-muted-foreground">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {hubspotStatus?.connected && (
+                <DropdownMenuItem onClick={handleSyncToHubspot} disabled={isSyncingHubspot}>
+                  <SiHubspot className="w-4 h-4 mr-2 text-[#FF7A59]" />
+                  {isSyncingHubspot ? "Syncing…" : "Sync to HubSpot"}
+                </DropdownMenuItem>
+              )}
+              {salesforceStatus?.connected && (
+                <DropdownMenuItem onClick={handleSyncToSalesforce} disabled={isSyncingSalesforce}>
+                  <SiSalesforce className="w-4 h-4 mr-2 text-[#00A1E0]" />
+                  {isSyncingSalesforce ? "Syncing…" : "Sync to Salesforce"}
+                </DropdownMenuItem>
+              )}
+              {(hubspotStatus?.connected || salesforceStatus?.connected) && onDelete && (
+                <DropdownMenuSeparator />
+              )}
+              {onDelete && (
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete contact
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {/* Edit Mode */}
+      {/* ── Edit mode ─────────────────────────────────────────────────────── */}
       {isEditing ? (
         <div className="space-y-3 mb-6 p-4 rounded-2xl bg-muted/30">
-          {/* fields... unchanged */}
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Full Name</Label>
             <Input value={editedFields.name} onChange={(e) => setEditedFields((f) => ({ ...f, name: e.target.value }))} />
@@ -989,224 +830,423 @@ export function ContactDetailView({
             <Label className="text-xs text-muted-foreground">Address</Label>
             <Input value={editedFields.address} onChange={(e) => setEditedFields((f) => ({ ...f, address: e.target.value }))} />
           </div>
-
           <Button onClick={handleSaveEdits} disabled={isSavingEdits} className="w-full mt-2">
             {isSavingEdits ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       ) : (
         <>
-          <ContactHeroCard
-            contact={heroContact}
-            onCall={handleCall}
-            onEmail={handleEmail}
-            onOpenWebsite={handleOpenWebsite}
-            onOpenLinkedIn={handleOpenLinkedIn}
-            // OPTIONAL: if your ContactHeroCard supports it
-            // lastTouchedLabel={heroBottomLabel}
-          />
+          {/* ── Section 1: Business Card ──────────────────────────────────── */}
+          <div className="bg-[#1C1C1E] rounded-2xl p-4 text-white relative overflow-hidden mb-0">
+            {/* Subtle decorative circles */}
+            <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/[0.03] pointer-events-none" />
+            <div className="absolute -bottom-6 left-6 w-24 h-24 rounded-full bg-white/[0.02] pointer-events-none" />
 
-          {/* Tasks section — only shown when there are tasks */}
-          {contactTasks.length > 0 && (
-          <div className="mt-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">
-              Tasks
-            </p>
-            <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
-          {contactTasks.map((task) => (
-            <div
-              key={task.id}
-              className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40"
-              data-testid={`task-row-${task.id}`}
-            >
-              {task.draftBody ? (
-                <button
-                  className="flex-1 flex items-start gap-3 text-left"
-                  onClick={() =>
-                    setExpandedDraftTaskId(
-                      expandedDraftTaskId === task.id ? null : task.id
-                    )
-                  }
-                >
-                  <Mail className="w-4 h-4 text-violet-500 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">{task.title}</p>
-                    {expandedDraftTaskId === task.id && (
-                      <div className="mt-2 space-y-2">
-                        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                          {task.draftBody}
-                        </p>
-                        {draftSentConfirmTaskId === task.id ? (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-foreground">Did you send it?</p>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDraftSentYes(task.id, task.title);
-                                }}
-                                className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                              >
-                                Yes
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDraftSentConfirmTaskId(null);
-                                }}
-                                className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent"
-                              >
-                                No
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDraftTaskSend(task);
-                              }}
-                              className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30"
-                            >
-                              Send
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDiscardDraftBody(task.id);
-                              }}
-                              className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent"
-                            >
-                              Discard Draft
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              ) : (
-                <>
-                  <Checkbox
-                    checked={false}
-                    onCheckedChange={() => handleCompleteTask(task.id)}
-                    className="mt-0.5 shrink-0"
-                    data-testid={`checkbox-task-${task.id}`}
-                  />
-                  <div className="flex-1 min-w-0">
-                    {editingTaskId === task.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={editingTaskText}
-                          onChange={(e) => setEditingTaskText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveTaskEdit();
-                            if (e.key === "Escape") { setEditingTaskId(null); setEditingTaskText(""); }
-                          }}
-                          autoFocus
-                          className="flex-1 bg-transparent text-sm outline-none border-b border-border min-w-0"
-                          data-testid={`input-edit-task-${task.id}`}
-                        />
-                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs shrink-0" onClick={handleSaveTaskEdit}>
-                          Save
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="text-sm">{task.title}</p>
-                    )}
-                    {task.dueAt && editingTaskId !== task.id && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {(() => {
-                          const d = new Date(task.dueAt);
-                          const now = new Date();
-                          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-                          const target = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                          const diff = Math.round((target - start) / 86400000);
-                          if (diff === 0) return "Today";
-                          if (diff === 1) return "Tomorrow";
-                          if (diff === -1) return "Yesterday";
-                          if (diff < 0) return `${Math.abs(diff)}d overdue`;
-                          return `In ${diff}d`;
-                        })()}
-                      </p>
-                    )}
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="opacity-50 hover:opacity-100 shrink-0"
-                        data-testid={`menu-task-${task.id}`}
-                      >
-                        <MoreHorizontal className="w-5 h-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleCompleteTask(task.id)}>
-                        Mark complete
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleStartEditTask(task.id, task.title)}>
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => handleDeleteTask(task.id)}
-                      >
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
+            {/* Company badge */}
+            {contact.company && (
+              <div className="inline-flex items-center gap-1.5 bg-white/10 rounded-full px-2.5 py-1 mb-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                <span className="text-xs text-white/70 font-medium">{contact.company}</span>
+              </div>
+            )}
+
+            {/* Name + Title */}
+            <h2 className="text-2xl font-semibold text-white leading-tight">
+              {contact.name || "Unknown"}
+            </h2>
+            {contact.title && (
+              <p className="text-sm text-white/50 mt-0.5">{contact.title}</p>
+            )}
+
+            {/* Bottom row */}
+            <div className="flex items-end justify-between mt-4">
+              <div className="space-y-0.5">
+                {contact.phone && (
+                  <p className="text-sm text-white/60">{contact.phone}</p>
+                )}
+                {contact.email && (
+                  <p className="text-sm text-white/40 truncate max-w-[200px]">{contact.email}</p>
+                )}
+              </div>
+              {scannedDaysAgo && (
+                <div className="text-right shrink-0 ml-3">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider">Scanned</p>
+                  <p className="text-xs text-white/50 font-medium">{scannedDaysAgo}</p>
+                </div>
               )}
             </div>
-          ))}
-          {/* Add task row */}
-          <div className="flex items-center gap-2 px-3 py-2.5">
-            <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
-            <input
-              type="text"
-              placeholder="Add a task..."
-              value={newTaskText}
-              onChange={(e) => setNewTaskText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleAddTask();
-              }}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 min-w-0"
-              data-testid="input-add-task"
-            />
-            {newTaskText.trim() && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleAddTask}
-                className="shrink-0 h-7 px-2 text-xs"
-                data-testid="button-save-task"
-              >
-                Add
-              </Button>
-            )}
           </div>
 
+          {/* Expand hint */}
+          <button
+            onClick={() => setCardExpanded(!cardExpanded)}
+            className="flex items-center justify-center gap-2 py-2 w-full text-muted-foreground hover:text-foreground transition-colors"
+            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+          >
+            <span className="w-8 h-1 rounded-full bg-border" />
+            <span className="text-xs">{cardExpanded ? "Tap to collapse" : "Tap to reveal contact details"}</span>
+            {cardExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
 
+          {/* Collapsible contact detail drawer */}
+          {cardExpanded && (
+            <div className="rounded-xl border border-border/60 bg-card overflow-hidden mb-4">
+              {contact.phone && (
+                <button
+                  onClick={handleCall}
+                  className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left"
+                  style={{ touchAction: "manipulation" } as React.CSSProperties}
+                  data-testid="row-phone"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
+                    <Phone className="w-4 h-4 text-green-600 dark:text-green-400" />
                   </div>
-                </div>
-                )}
-                {/* Activity section divider */}
-                <div className="mt-6 border-t border-border/40 pt-5">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-0.5">
-                    Activity
-                  </p>
-                  <TimelineFeed items={timelineItems} onAddNote={handleAddNote} isAddingNote={isAddingNote} onQuickLog={handleQuickLog} />
-                </div>
-              </>
-            )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Phone</p>
+                    <p className="text-sm font-medium truncate">{contact.phone}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                </button>
+              )}
 
+              {contact.email && (
+                <button
+                  onClick={handleEmail}
+                  className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left"
+                  style={{ touchAction: "manipulation" } as React.CSSProperties}
+                  data-testid="row-email"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+                    <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Email</p>
+                    <p className="text-sm font-medium truncate">{contact.email}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                </button>
+              )}
 
-      {/* Delete Confirmation */}
+              <button
+                onClick={handleOpenLinkedIn}
+                className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left"
+                style={{ touchAction: "manipulation" } as React.CSSProperties}
+                data-testid="row-linkedin"
+              >
+                <div className="w-8 h-8 rounded-lg bg-[#0A66C2]/10 flex items-center justify-center shrink-0">
+                  <SiLinkedin className="w-4 h-4 text-[#0A66C2]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">LinkedIn</p>
+                  <p className="text-sm font-medium">{contact.linkedinUrl ? "View profile" : "Find on LinkedIn"}</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </button>
+
+              {contact.website && (
+                <button
+                  onClick={handleOpenWebsite}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left last:border-0"
+                  style={{ touchAction: "manipulation" } as React.CSSProperties}
+                  data-testid="row-website"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
+                    <Globe className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Website</p>
+                    <p className="text-sm font-medium truncate">{contact.website.replace(/^https?:\/\//, "")}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── Section 2: Warmth Selector ───────────────────────────────── */}
+          <div className="mb-5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Relationship
+            </p>
+            <div className="flex gap-2">
+              {warmthConfig.map(({ value, label, active, inactive }) => (
+                <button
+                  key={value}
+                  onClick={() => handleUpdateWarmth(value)}
+                  className={[
+                    "flex-1 py-2 px-3 rounded-full border text-xs font-medium transition-all",
+                    warmth === value ? active : inactive,
+                  ].join(" ")}
+                  style={{ touchAction: "manipulation" } as React.CSSProperties}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Section 3: Smart CTAs ────────────────────────────────────── */}
+          <div className="mb-5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Suggested actions
+            </p>
+
+            {/* Primary 2-card row */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {/* Follow-up email */}
+              <button
+                onClick={() => { setShowFollowUp(true); setFollowUpResult(null); }}
+                className="rounded-2xl bg-primary text-primary-foreground p-4 text-left hover:opacity-90 transition-opacity"
+                style={{ touchAction: "manipulation" } as React.CSSProperties}
+              >
+                <Sparkles className="w-5 h-5 mb-2 opacity-90" />
+                <p className="text-sm font-semibold">Follow-up email</p>
+                <p className="text-xs opacity-70 mt-0.5">
+                  {daysSinceLastTouch != null ? `${daysSinceLastTouch}d since last touch` : "Draft with AI"}
+                </p>
+              </button>
+
+              {/* Set reminder */}
+              <button
+                onClick={handleSetReminder}
+                className="rounded-2xl bg-card border border-border/60 p-4 text-left hover:bg-muted/30 transition-colors"
+                style={{ touchAction: "manipulation" } as React.CSSProperties}
+              >
+                <Bell className="w-5 h-5 mb-2 text-muted-foreground" />
+                <p className="text-sm font-semibold">Set reminder</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Check in +3 days</p>
+              </button>
+            </div>
+
+            {/* Secondary 3-chip row */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => void openIntel(false)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-card border border-border/60 text-xs font-medium hover:bg-muted/30 transition-colors"
+                style={{ touchAction: "manipulation" } as React.CSSProperties}
+              >
+                <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
+                Company brief
+              </button>
+              <button
+                onClick={() => setShowMeeting(true)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-card border border-border/60 text-xs font-medium hover:bg-muted/30 transition-colors"
+                style={{ touchAction: "manipulation" } as React.CSSProperties}
+              >
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                Schedule
+              </button>
+              <button
+                onClick={() => {
+                  setPendingLogType(null);
+                  setPendingLogLabel("Interaction");
+                  setLogOutcome(null);
+                  setLogNote("");
+                  setShowLogSheet(true);
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-card border border-border/60 text-xs font-medium hover:bg-muted/30 transition-colors"
+                style={{ touchAction: "manipulation" } as React.CSSProperties}
+              >
+                <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+                Log
+              </button>
+            </div>
+          </div>
+
+          {/* ── Section 4: Tags ──────────────────────────────────────────── */}
+          <div className="mb-5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Tags
+            </p>
+            {/* TODO: wire to tag system — ContactV2 has no tags field yet */}
+            <div className="flex flex-wrap gap-2">
+              <p className="text-xs text-muted-foreground py-1">No tags yet</p>
+              <button
+                className="text-xs rounded-full px-3 py-1 border border-dashed border-border/50 text-muted-foreground hover:border-border transition-colors"
+                style={{ touchAction: "manipulation" } as React.CSSProperties}
+              >
+                + Add tag
+              </button>
+            </div>
+          </div>
+
+          {/* ── Tasks (only when tasks exist) ────────────────────────────── */}
+          {contactTasks.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">
+                Tasks
+              </p>
+              <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
+                {contactTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40 last:border-0"
+                    data-testid={`task-row-${task.id}`}
+                  >
+                    {task.draftBody ? (
+                      <button
+                        className="flex-1 flex items-start gap-3 text-left"
+                        onClick={() => setExpandedDraftTaskId(expandedDraftTaskId === task.id ? null : task.id)}
+                      >
+                        <Mail className="w-4 h-4 text-violet-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm">{task.title}</p>
+                          {expandedDraftTaskId === task.id && (
+                            <div className="mt-2 space-y-2">
+                              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                                {task.draftBody}
+                              </p>
+                              {draftSentConfirmTaskId === task.id ? (
+                                <div className="space-y-1">
+                                  <p className="text-xs font-medium text-foreground">Did you send it?</p>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleDraftSentYes(task.id, task.title); }}
+                                      className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                                    >Yes</button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setDraftSentConfirmTaskId(null); }}
+                                      className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent"
+                                    >No</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleDraftTaskSend(task); }}
+                                    className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30"
+                                  >Send</button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleDiscardDraftBody(task.id); }}
+                                    className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent"
+                                  >Discard Draft</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    ) : (
+                      <>
+                        <Checkbox
+                          checked={false}
+                          onCheckedChange={() => handleCompleteTask(task.id)}
+                          className="mt-0.5 shrink-0"
+                          data-testid={`checkbox-task-${task.id}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          {editingTaskId === task.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={editingTaskText}
+                                onChange={(e) => setEditingTaskText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleSaveTaskEdit();
+                                  if (e.key === "Escape") { setEditingTaskId(null); setEditingTaskText(""); }
+                                }}
+                                autoFocus
+                                className="flex-1 bg-transparent text-sm outline-none border-b border-border min-w-0"
+                                data-testid={`input-edit-task-${task.id}`}
+                              />
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs shrink-0" onClick={handleSaveTaskEdit}>
+                                Save
+                              </Button>
+                            </div>
+                          ) : (
+                            <p className="text-sm">{task.title}</p>
+                          )}
+                          {task.dueAt && editingTaskId !== task.id && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {(() => {
+                                const d = new Date(task.dueAt);
+                                const now = new Date();
+                                const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                                const target = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+                                const diff = Math.round((target - start) / 86400000);
+                                if (diff === 0) return "Today";
+                                if (diff === 1) return "Tomorrow";
+                                if (diff === -1) return "Yesterday";
+                                if (diff < 0) return `${Math.abs(diff)}d overdue`;
+                                return `In ${diff}d`;
+                              })()}
+                            </p>
+                          )}
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" className="opacity-50 hover:opacity-100 shrink-0" data-testid={`menu-task-${task.id}`}>
+                              <MoreHorizontal className="w-5 h-5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleCompleteTask(task.id)}>Mark complete</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStartEditTask(task.id, task.title)}>Edit</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteTask(task.id)}>Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </>
+                    )}
+                  </div>
+                ))}
+
+                {/* Add task row */}
+                <div className="flex items-center gap-2 px-3 py-2.5">
+                  <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Add a task..."
+                    value={newTaskText}
+                    onChange={(e) => setNewTaskText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAddTask(); }}
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 min-w-0"
+                    data-testid="input-add-task"
+                  />
+                  {newTaskText.trim() && (
+                    <Button size="sm" variant="ghost" onClick={handleAddTask} className="shrink-0 h-7 px-2 text-xs" data-testid="button-save-task">
+                      Add
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Section 5: Timeline ──────────────────────────────────────── */}
+          <div className="border-t border-border/40 pt-5 mt-1">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                {tlFilters.map((f) => (
+                  <button
+                    key={f.value}
+                    onClick={() => setTimelineFilter(f.value)}
+                    className={[
+                      "shrink-0 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
+                      timelineFilter === f.value
+                        ? "bg-foreground text-background border-foreground"
+                        : "bg-transparent text-muted-foreground border-border/40 hover:border-border",
+                    ].join(" ")}
+                    style={{ touchAction: "manipulation" } as React.CSSProperties}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <TimelineFeed
+              items={filteredTimelineItems}
+              onAddNote={handleAddNote}
+              isAddingNote={isAddingNote}
+              onQuickLog={handleQuickLog}
+            />
+          </div>
+        </>
+      )}
+
+      {/* ── Delete confirmation ──────────────────────────────────────────── */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1229,9 +1269,7 @@ export function ContactDetailView({
         </AlertDialogContent>
       </AlertDialog>
 
-      <QuickActionsSheet open={showQuickActions} onOpenChange={setShowQuickActions} actions={quickActions} />
-
-      {/* Follow-up Drawer */}
+      {/* ── Follow-up Drawer ─────────────────────────────────────────────── */}
       <Drawer open={showFollowUp} handleOnly onOpenChange={setShowFollowUp}>
         <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
           <DrawerHeader>
@@ -1240,12 +1278,9 @@ export function ContactDetailView({
               <Button variant="ghost" size="sm">Done</Button>
             </DrawerClose>
           </DrawerHeader>
-
           <div
             className="flex-1 overflow-y-auto px-4"
-            style={{
-              paddingBottom: Math.max(16, keyboardInset + 16),
-            }}
+            style={{ paddingBottom: Math.max(16, keyboardInset + 16) }}
           >
             <div className="space-y-4 pb-4">
               <div className="grid grid-cols-2 gap-3">
@@ -1260,7 +1295,6 @@ export function ContactDetailView({
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Tone</Label>
                   <Select value={followUpTone} onValueChange={(v) => setFollowUpTone(v as FollowUpTone)}>
@@ -1273,7 +1307,6 @@ export function ContactDetailView({
                   </Select>
                 </div>
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Length</Label>
                 <Select value={followUpLength} onValueChange={(v) => setFollowUpLength(v as FollowUpLength)}>
@@ -1285,7 +1318,6 @@ export function ContactDetailView({
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Goal</Label>
                 <Textarea
@@ -1295,7 +1327,6 @@ export function ContactDetailView({
                   className="min-h-[110px] resize-none"
                 />
               </div>
-
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Context (optional)</Label>
                 <Textarea
@@ -1305,7 +1336,6 @@ export function ContactDetailView({
                   className="min-h-[90px] resize-none"
                 />
               </div>
-
               <div className="flex gap-2 pt-1">
                 <Button className="flex-1 gap-2" onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp}>
                   <Sparkles className="w-4 h-4" />
@@ -1315,7 +1345,6 @@ export function ContactDetailView({
                   Copy
                 </Button>
               </div>
-
               {followUpResult && (
                 <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
                   {followUpResult.subject && (
@@ -1332,7 +1361,7 @@ export function ContactDetailView({
         </DrawerContent>
       </Drawer>
 
-      {/* Meeting Drawer (leave as-is) */}
+      {/* ── Meeting Drawer ───────────────────────────────────────────────── */}
       <Drawer open={showMeeting} onOpenChange={setShowMeeting}>
         <DrawerContent>
           <DrawerHeader>
@@ -1341,7 +1370,6 @@ export function ContactDetailView({
               <Button variant="ghost" size="sm">Done</Button>
             </DrawerClose>
           </DrawerHeader>
-
           <div className="px-4 pb-4 space-y-4">
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Quick slots</Label>
@@ -1359,7 +1387,6 @@ export function ContactDetailView({
                 ))}
               </div>
             </div>
-
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Custom time</Label>
               <Input
@@ -1371,7 +1398,6 @@ export function ContactDetailView({
                 }}
               />
             </div>
-
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Duration</Label>
               <Select value={String(meetingDuration)} onValueChange={(v) => setMeetingDuration(Number(v))}>
@@ -1383,14 +1409,12 @@ export function ContactDetailView({
                 </SelectContent>
               </Select>
             </div>
-
             <div className="p-3 rounded-xl bg-muted/30 border border-border/60 text-sm">
               <div className="font-medium">{contact.name || "Contact"}</div>
               <div className="text-muted-foreground">{contact.company || ""}</div>
               <div className="mt-2">{meetingStart.toLocaleString()}</div>
             </div>
           </div>
-
           <DrawerFooter>
             <Button className="w-full" onClick={handleCreateMeetingInvite}>
               Download .ics invite
@@ -1399,7 +1423,7 @@ export function ContactDetailView({
         </DrawerContent>
       </Drawer>
 
-      {/* Intel Drawer */}
+      {/* ── Intel Drawer ─────────────────────────────────────────────────── */}
       <Drawer open={showIntel} handleOnly onOpenChange={(v) => setShowIntel(v)}>
         <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
           <DrawerHeader>
@@ -1408,7 +1432,6 @@ export function ContactDetailView({
               <Button variant="ghost" size="sm">Done</Button>
             </DrawerClose>
           </DrawerHeader>
-
           <div className="flex-1 overflow-y-auto px-4 pb-6">
             <CompanyIntelV2Card
               intel={intelV2.intel}
@@ -1421,12 +1444,12 @@ export function ContactDetailView({
         </DrawerContent>
       </Drawer>
 
-      {/* Log Interaction Sheet */}
+      {/* ── Log Interaction Sheet ────────────────────────────────────────── */}
       <Drawer open={showLogSheet} onOpenChange={setShowLogSheet}>
         <DrawerContent className="rounded-t-3xl">
           <DrawerHeader>
             <DrawerTitle>
-              {pendingLogLabel ? `Log ${pendingLogLabel}` : 'Log Interaction'}
+              {pendingLogLabel ? `Log ${pendingLogLabel}` : "Log Interaction"}
             </DrawerTitle>
           </DrawerHeader>
           <div className="px-4 pb-6 space-y-4">
@@ -1434,9 +1457,9 @@ export function ContactDetailView({
               <p className="text-xs text-muted-foreground font-medium">How did it go?</p>
               <div className="flex gap-2">
                 {([
-                  { value: 'positive', label: 'Worth following up', icon: '👍' },
-                  { value: 'neutral',  label: 'Neutral', icon: '😐' },
-                  { value: 'negative', label: 'Not interested', icon: '👎' },
+                  { value: "positive", label: "Worth following up", icon: "👍" },
+                  { value: "neutral",  label: "Neutral",            icon: "😐" },
+                  { value: "negative", label: "Not interested",     icon: "👎" },
                 ] as const).map((opt) => (
                   <button
                     key={opt.value}
@@ -1446,7 +1469,7 @@ export function ContactDetailView({
                       logOutcome === opt.value
                         ? "bg-primary text-primary-foreground border-primary"
                         : "border-border/50 bg-card/60 hover:bg-muted/50",
-                    ].join(' ')}
+                    ].join(" ")}
                     data-testid={`outcome-${opt.value}`}
                   >
                     {opt.icon} {opt.label}
@@ -1473,10 +1496,10 @@ export function ContactDetailView({
               disabled={!logOutcome}
               data-testid="button-confirm-log"
             >
-              {logOutcome === 'positive' ? 'Log & Set Reminder' : 'Log Interaction'}
+              {logOutcome === "positive" ? "Log & Set Reminder" : "Log Interaction"}
             </Button>
             <button
-              onClick={() => handleConfirmLog('neutral')}
+              onClick={() => handleConfirmLog("neutral")}
               className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
               data-testid="button-skip-log"
             >
@@ -1486,10 +1509,11 @@ export function ContactDetailView({
         </DrawerContent>
       </Drawer>
 
+      {/* ── Bottom Bar ───────────────────────────────────────────────────── */}
       <ContactBottomBar
         isSaved={true}
         onSave={onDownloadVCard}
-        onQuickActions={() => setShowQuickActions(true)}
+        onQuickActions={() => {}}
         onUpdate={onDownloadVCard}
       />
     </div>
