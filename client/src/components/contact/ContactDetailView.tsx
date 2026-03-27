@@ -865,7 +865,7 @@ export function ContactDetailView({
             <div className="grid grid-cols-2 gap-3 mb-3">
               <button
                 onClick={() => { setShowFollowUp(true); setFollowUpResult(null); }}
-                className="rounded-2xl bg-primary/80 text-primary-foreground p-4 text-left hover:bg-primary/90 transition-colors"
+                className="rounded-2xl bg-gradient-to-br from-primary to-primary/75 text-primary-foreground p-4 text-left transition-colors"
                 style={{ touchAction: "manipulation" } as React.CSSProperties}
               >
                 <Sparkles className="w-5 h-5 mb-2 opacity-90" />
