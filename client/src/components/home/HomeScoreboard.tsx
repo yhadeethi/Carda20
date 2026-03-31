@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
+  Camera,
   ChevronRight,
+  Flame,
   Search,
   Sparkles,
-  Users,
   CheckCircle2,
   Check,
 } from "lucide-react";
@@ -25,7 +26,6 @@ import { useScoreboard } from "@/hooks/useScoreboard";
 import { completeReminder, completeTask } from "@/lib/contacts/storage";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getCompanies } from "@/lib/companiesStorage";
-import { RecentCompanies } from "@/components/home/RecentCompanies";
 import { CalendarTeaser } from "@/components/home/CalendarTeaser";
 
 type HomeScoreboardProps = {
@@ -53,6 +53,17 @@ function formatRelativeDay(dateStr: string): string {
   return `In ${diffDays}d`;
 }
 
+function getTaskAccentColor(dueAt?: string | null): string {
+  if (!dueAt) return "bg-blue-400";
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const due = new Date(dueAt);
+  const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
+  if (dueStart < todayStart) return "bg-red-500";
+  if (dueStart === todayStart) return "bg-amber-400";
+  return "bg-blue-400";
+}
+
 export function HomeScoreboard({
   refreshKey,
   onStartScan,
@@ -71,8 +82,6 @@ export function HomeScoreboard({
     activeReminders,
     pendingTasks,
     weeklyCapturesSeries,
-    recentCompanies,
-    suggestedCompany,
   } = useScoreboard(contacts, refreshKey);
 
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -100,6 +109,13 @@ export function HomeScoreboard({
     return { full: `${weekday} ${day} ${month}` };
   }, [refreshKey]);
 
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning.";
+    if (h < 17) return "Good afternoon.";
+    return "Good evening.";
+  }, [refreshKey]);
+
   const notificationCount = counts.remindersCount + counts.dueFollowUps;
 
   const statsLine = useMemo(() => {
@@ -107,7 +123,7 @@ export function HomeScoreboard({
     if (counts.remindersCount > 0) parts.push(`${counts.remindersCount} reminder${counts.remindersCount !== 1 ? "s" : ""}`);
     if (counts.dueFollowUps > 0) parts.push(`${counts.dueFollowUps} follow-up${counts.dueFollowUps !== 1 ? "s" : ""}`);
     if (counts.recentScans > 0) parts.push(`${counts.recentScans} scanned (7d)`);
-    return parts.length ? parts.join(" · ") : "No activity yet";
+    return parts.length ? parts.join(" · ") : "";
   }, [counts]);
 
   const companiesForSearch = useMemo(() => {
@@ -118,22 +134,29 @@ export function HomeScoreboard({
     }
   }, [refreshKey]);
 
+  const weeklyTotal = useMemo(
+    () => weeklyCapturesSeries.reduce((sum, d) => sum + d.captures, 0),
+    [weeklyCapturesSeries]
+  );
+
   return (
-    <div className="p-4 max-w-2xl mx-auto space-y-5 pb-8">
+    <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto space-y-4">
+
       {/* Header */}
       <div className="pt-2 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Today</h1>
-          <p className="text-base text-muted-foreground mt-0.5">{today.full}</p>
-          <p className="text-sm text-muted-foreground/70 mt-1">{statsLine}</p>
+          <p className="text-sm text-muted-foreground">{today.full}</p>
+          <h1 className="text-[28px] font-bold tracking-tight leading-tight mt-0.5">{greeting}</h1>
+          {statsLine && (
+            <p className="text-sm text-muted-foreground/70 mt-1">{statsLine}</p>
+          )}
         </div>
         <button
           onClick={() => {
             setInboxTab("reminders");
             setInboxOpen(true);
           }}
-          className="relative rounded-2xl border border-border/50 bg-card/70 backdrop-blur-xl p-2.5 hover:bg-card/90 transition-colors"
-          style={{ backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
+          className="relative rounded-2xl border border-black/10 bg-white p-2.5 shadow-sm hover:bg-gray-50 transition-colors mt-1"
           aria-label="Open inbox"
         >
           <Bell className="w-5 h-5" />
@@ -148,74 +171,91 @@ export function HomeScoreboard({
       {/* Search bar */}
       <button
         onClick={() => setSearchOpen(true)}
-        className="w-full rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 p-4 text-left transition-all duration-200 hover:bg-card/90"
-        style={{ backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
+        className="w-full flex items-center gap-2 bg-white border border-black/10 rounded-xl px-4 py-3 shadow-sm cursor-pointer hover:bg-gray-50/80 transition-colors"
+        style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-full bg-muted/40 flex items-center justify-center">
-              <Search className="w-5 h-5 text-muted-foreground" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold">Search</div>
-              <div className="text-xs text-muted-foreground truncate">Contacts or companies</div>
-            </div>
-          </div>
-          <div className="text-xs text-muted-foreground/70 border border-border/60 rounded-lg px-2 py-1 shrink-0">
-            ⌘K
-          </div>
+        <Search className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+        <span className="flex-1 text-sm text-muted-foreground/50 text-left">
+          Search contacts or companies…
+        </span>
+        <div className="text-xs text-muted-foreground/40 border border-black/10 rounded-md px-1.5 py-0.5 shrink-0">
+          ⌘K
         </div>
       </button>
 
-      {/* Calendar briefing teaser */}
+      {/* Stats strip */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white rounded-xl border border-black/10 p-3 shadow-sm">
+          <div className="text-[11px] text-muted-foreground/60 mb-1 font-medium">Contacts</div>
+          <div className="text-xl font-bold text-blue-600">{contacts.length}</div>
+        </div>
+        <button
+          onClick={() => { setInboxTab("followups"); setInboxOpen(true); }}
+          className="bg-white rounded-xl border border-black/10 p-3 shadow-sm text-left hover:bg-gray-50/80 transition-colors active:scale-[0.98]"
+          style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+        >
+          <div className="text-[11px] text-muted-foreground/60 mb-1 font-medium">Follow-ups</div>
+          <div className={`text-xl font-bold ${counts.dueFollowUps > 0 ? "text-amber-500" : "text-muted-foreground/30"}`}>
+            {counts.dueFollowUps}
+          </div>
+        </button>
+        <div className="bg-white rounded-xl border border-black/10 p-3 shadow-sm">
+          <div className="text-[11px] text-muted-foreground/60 mb-1 font-medium">Scanned 7d</div>
+          <div className={`text-xl font-bold ${counts.recentScans > 0 ? "text-emerald-500" : "text-muted-foreground/30"}`}>
+            {counts.recentScans}
+          </div>
+        </div>
+      </div>
+
+      {/* Calendar briefing */}
       <section>
-        <CalendarTeaser />
+        <CalendarTeaser meetings={[]} />
       </section>
 
       {/* Up next: pending tasks */}
       {pendingTasks.length > 0 && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-2 px-1">Up next</h2>
-          <div
-            className="rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 divide-y divide-border/50 overflow-hidden"
-            style={{ backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
-          >
+          <div className="space-y-2">
             {pendingTasks.map((task) => (
               <div
                 key={task.id}
-                className="flex items-start gap-3 p-4"
+                className="flex items-stretch bg-white rounded-xl border border-black/10 shadow-sm overflow-hidden"
                 data-testid={`home-task-row-${task.id}`}
               >
-                <Checkbox
-                  checked={false}
-                  onCheckedChange={async () => {
-                    await completeTask(task.contactId, task.id);
-                    onRefresh?.();
-                  }}
-                  className="mt-0.5 shrink-0"
-                  data-testid={`home-checkbox-task-${task.id}`}
-                />
-                <button
-                  className="flex-1 min-w-0 text-left"
-                  onClick={() => {
-                    const c = contacts.find((ct) => ct.id === task.contactId);
-                    if (c) onSelectContact?.(c);
-                  }}
-                  style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-                >
-                  <div className="text-sm font-medium truncate">{task.title}</div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-xs text-muted-foreground truncate">{task.contactName}</span>
-                    {task.dueAt && (
-                      <>
-                        <span className="text-xs text-muted-foreground/40">·</span>
-                        <span className="text-xs text-muted-foreground/70">
-                          {formatRelativeDay(task.dueAt)}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </button>
+                <div className={`w-[3px] shrink-0 ${getTaskAccentColor(task.dueAt)}`} />
+                <div className="flex items-start gap-3 p-3 flex-1 min-w-0">
+                  <Checkbox
+                    checked={false}
+                    onCheckedChange={async () => {
+                      await completeTask(task.contactId, task.id);
+                      onRefresh?.();
+                    }}
+                    className="mt-0.5 shrink-0"
+                    data-testid={`home-checkbox-task-${task.id}`}
+                  />
+                  <button
+                    className="flex-1 min-w-0 text-left"
+                    onClick={() => {
+                      const c = contacts.find((ct) => ct.id === task.contactId);
+                      if (c) onSelectContact?.(c);
+                    }}
+                    style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                  >
+                    <div className="text-sm font-medium truncate">{task.title}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-xs text-muted-foreground truncate">{task.contactName}</span>
+                      {task.dueAt && (
+                        <>
+                          <span className="text-xs text-muted-foreground/40">·</span>
+                          <span className="text-xs text-muted-foreground/70">
+                            {formatRelativeDay(task.dueAt)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -224,11 +264,16 @@ export function HomeScoreboard({
 
       {/* Weekly chart */}
       <section>
-        <h2 className="text-sm font-medium text-muted-foreground mb-2 px-1">Weekly captures</h2>
-        <div
-          className="rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 p-4"
-          style={{ backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
-        >
+        <div className="flex items-center justify-between mb-2 px-1">
+          <h2 className="text-sm font-medium text-muted-foreground">Weekly captures</h2>
+          {weeklyTotal > 0 && (
+            <div className="flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5">
+              <Flame className="w-3 h-3 text-emerald-500" />
+              <span className="text-[11px] font-semibold text-emerald-600">{weeklyTotal} this week</span>
+            </div>
+          )}
+        </div>
+        <div className="rounded-2xl bg-white border border-black/10 shadow-sm p-4">
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyCapturesSeries} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
@@ -246,16 +291,6 @@ export function HomeScoreboard({
         </div>
       </section>
 
-      {/* Recent companies (two-tap: suggested + recent list) */}
-      {onSelectCompany && (
-        <RecentCompanies
-          companies={recentCompanies}
-          suggestedCompany={suggestedCompany}
-          onSelectCompany={onSelectCompany}
-          onViewAllCompanies={onViewCompanies}
-        />
-      )}
-
       {/* Recent captures */}
       <section>
         <div className="flex items-center justify-between mb-2 px-1">
@@ -271,32 +306,33 @@ export function HomeScoreboard({
         </div>
 
         {newCaptures.length > 0 ? (
-          <div
-            className="rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50 divide-y divide-border/50 overflow-hidden"
-            style={{ backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
-          >
+          <div className="space-y-2">
             {newCaptures.slice(0, 3).map((contact) => (
               <button
                 key={contact.id}
                 onClick={() => onSelectContact?.(contact)}
-                className="w-full p-4 text-left transition-all duration-200 hover:bg-muted/30 active:bg-muted/50 flex items-center justify-between group"
+                className="w-full bg-white rounded-xl border border-black/10 shadow-sm p-3 text-left transition-all duration-200 hover:bg-gray-50/80 active:scale-[0.99] flex items-center justify-between gap-2"
                 style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm truncate">{contact.name || "Unknown contact"}</div>
-                  <div className="text-xs text-muted-foreground truncate">{contact.company || "No company"}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm truncate">{contact.name || "Unknown contact"}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 shrink-0">
+                      New
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate mt-0.5">
+                    {contact.company || "No company"}
+                  </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors shrink-0 ml-2" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
               </button>
             ))}
           </div>
         ) : (
-          <div
-            className="rounded-2xl bg-card/60 backdrop-blur-xl border border-border/30 p-4"
-            style={{ backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)" }}
-          >
+          <div className="rounded-2xl bg-white border border-black/10 shadow-sm p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-xl bg-muted/30 flex items-center justify-center">
                 <Sparkles className="w-5 h-5 text-muted-foreground/50" />
               </div>
               <div>
@@ -312,23 +348,23 @@ export function HomeScoreboard({
       <section className="pt-2 space-y-3">
         <Button
           onClick={onStartScan}
-          className="w-full h-12 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg shadow-blue-500/25 transition-all duration-300 active:scale-[0.98]"
+          className="w-full h-12 rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] hover:from-[#3d5ae0] hover:to-[#6b4dd6] text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 active:scale-[0.98]"
           size="lg"
         >
-          <Users className="w-5 h-5 mr-2" />
+          <Camera className="w-5 h-5 mr-2" />
           Scan a business card
         </Button>
         <Button
           onClick={onCreateContact}
-          variant="secondary"
-          className="w-full h-12 rounded-2xl"
+          variant="outline"
+          className="w-full h-12 rounded-2xl bg-white border-black/10 text-foreground hover:bg-gray-50 shadow-sm"
           size="lg"
         >
           Create contact
         </Button>
       </section>
 
-      {/* Inbox drawer */}
+      {/* Inbox drawer — internals unchanged */}
       <Sheet open={inboxOpen} onOpenChange={setInboxOpen}>
         <SheetContent side="bottom" className="p-0">
           <div className="p-4 pb-2">
@@ -422,7 +458,7 @@ export function HomeScoreboard({
                       </div>
                       <div>
                         <div className="text-sm font-medium text-muted-foreground">No follow-ups due</div>
-                        <div className="text-xs text-muted-foreground/70">You’re caught up</div>
+                        <div className="text-xs text-muted-foreground/70">You're caught up</div>
                       </div>
                     </div>
                   </div>
@@ -433,7 +469,7 @@ export function HomeScoreboard({
         </SheetContent>
       </Sheet>
 
-      {/* Search command dialog */}
+      {/* Search command dialog — internals unchanged */}
       <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
         <CommandInput placeholder="Search contacts or companies…" />
         <CommandList>
