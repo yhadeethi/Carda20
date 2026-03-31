@@ -25,9 +25,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ArrowLeft,
+  ChevronLeft,
   Briefcase,
-  Building2,
+  Globe,
+  MapPin,
   Users,
   Network,
   StickyNote,
@@ -69,50 +70,97 @@ interface CompanyDetailProps {
   companyId: string;
   onBack: () => void;
   onSelectContact: (contact: StoredContact) => void;
-  initialTab?: 'contacts' | 'orgmap' | 'notes';
+  initialTab?: "contacts" | "orgmap" | "notes";
 }
 
 // Department display names
 const DEPARTMENT_LABELS: Record<Department, string> = {
-  EXEC: 'Exec',
-  LEGAL: 'Legal',
-  PROJECT_DELIVERY: 'Project Delivery',
-  SALES: 'Sales',
-  FINANCE: 'Finance',
-  OPS: 'Ops',
-  UNKNOWN: 'Unknown',
+  EXEC: "Exec",
+  LEGAL: "Legal",
+  PROJECT_DELIVERY: "Project Delivery",
+  SALES: "Sales",
+  FINANCE: "Finance",
+  OPS: "Ops",
+  UNKNOWN: "Unknown",
 };
 
-const DEPARTMENT_ORDER: Department[] = ['EXEC', 'LEGAL', 'PROJECT_DELIVERY', 'SALES', 'FINANCE', 'OPS', 'UNKNOWN'];
+const DEPARTMENT_ORDER: Department[] = [
+  "EXEC",
+  "LEGAL",
+  "PROJECT_DELIVERY",
+  "SALES",
+  "FINANCE",
+  "OPS",
+  "UNKNOWN",
+];
 
-// Company Header with Logo using shared CompanyAvatar
-function CompanyHeader({ company, contactCount, contacts }: { company: Company; contactCount: number; contacts: ContactV2[] }) {
-  const contactEmails = contacts.map(c => c.email).filter(Boolean);
-  
+// Department stripe colours for contact rows
+const DEPARTMENT_STRIPE: Record<Department, string> = {
+  EXEC: "bg-purple-500",
+  LEGAL: "bg-indigo-500",
+  PROJECT_DELIVERY: "bg-emerald-500",
+  SALES: "bg-pink-500",
+  FINANCE: "bg-amber-500",
+  OPS: "bg-cyan-500",
+  UNKNOWN: "bg-black/10",
+};
+
+// Company Header
+function CompanyHeader({
+  company,
+  contactCount,
+  contacts,
+}: {
+  company: Company;
+  contactCount: number;
+  contacts: ContactV2[];
+}) {
+  const contactEmails = contacts.map((c) => c.email).filter(Boolean);
+
   return (
     <div className="flex items-center gap-4 py-2">
-      <CompanyAvatar 
-        name={company.name} 
-        domain={company.domain} 
+      <CompanyAvatar
+        name={company.name}
+        domain={company.domain}
         contactEmails={contactEmails}
         size="lg"
         className="rounded-xl"
       />
       <div className="min-w-0 flex-1">
-        <h1 className="text-xl font-semibold truncate" data-testid="company-name">
+        <h1
+          className="text-[22px] font-extrabold tracking-[-0.6px] truncate"
+          data-testid="company-name"
+        >
           {company.name}
         </h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          {company.domain && <span>{company.domain}</span>}
-          <span className="text-muted-foreground/50">·</span>
-          <span>{contactCount} contact{contactCount !== 1 ? 's' : ''}</span>
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground/60 flex-wrap">
+          <span>{contactCount} contact{contactCount !== 1 ? "s" : ""}</span>
+          {company.domain && (
+            <>
+              <span className="text-muted-foreground/30">·</span>
+              <span>{company.domain}</span>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab = 'orgmap' }: CompanyDetailProps) {
+// Helper to get contact initials
+function getContactInitials(name?: string | null): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.trim().slice(0, 2).toUpperCase();
+}
+
+export function CompanyDetail({
+  companyId,
+  onBack,
+  onSelectContact,
+  initialTab = "orgmap",
+}: CompanyDetailProps) {
   const [company, setCompany] = useState<Company | null>(null);
   const [contacts, setContacts] = useState<ContactV2[]>([]);
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -120,7 +168,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   const tabIndex = activeTab === "contacts" ? 0 : activeTab === "orgmap" ? 1 : 2;
   const [notes, setNotes] = useState("");
   const [notesSaved, setNotesSaved] = useState(true);
-  const [departmentFilter, setDepartmentFilter] = useState<Department | 'ALL'>('ALL');
+  const [departmentFilter, setDepartmentFilter] = useState<Department | "ALL">("ALL");
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [undoState, setUndoState] = useState<Map<string, Department> | null>(null);
   const [quickEditContact, setQuickEditContact] = useState<ContactV2 | null>(null);
@@ -133,12 +181,16 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     setCompany(loadedCompany || null);
     setNotes(loadedCompany?.notes || "");
 
-    // Load all contacts and filter by company
     const allContacts = loadContactsV2();
     if (loadedCompany) {
       const companyContacts = allContacts.filter((c) => {
         if (c.companyId === companyId) return true;
-        if (c.company && normalizeCompanyName(c.company).toLowerCase() === normalizeCompanyName(loadedCompany.name).toLowerCase()) return true;
+        if (
+          c.company &&
+          normalizeCompanyName(c.company).toLowerCase() ===
+            normalizeCompanyName(loadedCompany.name).toLowerCase()
+        )
+          return true;
         if (loadedCompany.domain) {
           const contactDomain = extractDomainFromEmail(c.email);
           if (contactDomain === loadedCompany.domain.toLowerCase()) return true;
@@ -154,7 +206,12 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     if (company) {
       const companyContacts = allContacts.filter((c) => {
         if (c.companyId === companyId) return true;
-        if (c.company && normalizeCompanyName(c.company).toLowerCase() === normalizeCompanyName(company.name).toLowerCase()) return true;
+        if (
+          c.company &&
+          normalizeCompanyName(c.company).toLowerCase() ===
+            normalizeCompanyName(company.name).toLowerCase()
+        )
+          return true;
         if (company.domain) {
           const contactDomain = extractDomainFromEmail(c.email);
           if (contactDomain === company.domain.toLowerCase()) return true;
@@ -167,8 +224,8 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
 
   // Filter contacts by department
   const filteredContacts = useMemo(() => {
-    if (departmentFilter === 'ALL') return contacts;
-    return contacts.filter(c => (c.org?.department || 'UNKNOWN') === departmentFilter);
+    if (departmentFilter === "ALL") return contacts;
+    return contacts.filter((c) => (c.org?.department || "UNKNOWN") === departmentFilter);
   }, [contacts, departmentFilter]);
 
   // Auto-group handler
@@ -179,7 +236,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       setUndoState(previousStates);
       refreshContacts();
       toast({
-        title: `Grouped ${changedCount} contact${changedCount !== 1 ? 's' : ''}`,
+        title: `Grouped ${changedCount} contact${changedCount !== 1 ? "s" : ""}`,
         description: "Departments assigned based on job titles",
         action: (
           <Button
@@ -204,25 +261,26 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
     }
   }, [contacts, refreshContacts, toast]);
 
-  // Edit Org handler - switch to org map with edit mode
+  // Edit Org handler
   const handleEditOrg = useCallback(() => {
-    setActiveTab('orgmap');
+    setActiveTab("orgmap");
   }, []);
 
   // Quick edit org field handlers
-  const handleQuickEditField = useCallback(async (field: 'department' | 'role' | 'reportsToId', value: string | null) => {
-    if (!quickEditContact) return;
-
-    const currentOrg = quickEditContact.org || { ...DEFAULT_ORG };
-    const updatedOrg = { ...currentOrg, [field]: value };
-
-    await updateContactV2(quickEditContact.id, { org: updatedOrg });
-    setQuickEditContact({ ...quickEditContact, org: updatedOrg });
-    refreshContacts();
-  }, [quickEditContact, refreshContacts]);
+  const handleQuickEditField = useCallback(
+    async (field: "department" | "role" | "reportsToId", value: string | null) => {
+      if (!quickEditContact) return;
+      const currentOrg = quickEditContact.org || { ...DEFAULT_ORG };
+      const updatedOrg = { ...currentOrg, [field]: value };
+      await updateContactV2(quickEditContact.id, { org: updatedOrg });
+      setQuickEditContact({ ...quickEditContact, org: updatedOrg });
+      refreshContacts();
+    },
+    [quickEditContact, refreshContacts]
+  );
 
   const handleClearManager = useCallback(() => {
-    handleQuickEditField('reportsToId', null);
+    handleQuickEditField("reportsToId", null);
     toast({ title: "Manager cleared" });
   }, [handleQuickEditField, toast]);
 
@@ -262,7 +320,12 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
 
       const freshContacts = loadContactsV2().filter((c) => {
         if (c.companyId === companyId) return true;
-        if (c.company && normalizeCompanyName(c.company).toLowerCase() === normalizeCompanyName(company.name).toLowerCase()) return true;
+        if (
+          c.company &&
+          normalizeCompanyName(c.company).toLowerCase() ===
+            normalizeCompanyName(company.name).toLowerCase()
+        )
+          return true;
         if (company.domain) {
           const contactDomain = extractDomainFromEmail(c.email);
           if (contactDomain === company.domain.toLowerCase()) return true;
@@ -280,7 +343,11 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
       toast({ title: "Report downloaded", description: `${company.name} report saved as PDF` });
     } catch (e: any) {
       console.error("[Report] Failed to generate report:", e);
-      toast({ title: "Report failed", description: e?.message || "Could not generate the report", variant: "destructive" });
+      toast({
+        title: "Report failed",
+        description: e?.message || "Could not generate the report",
+        variant: "destructive",
+      });
     } finally {
       setIsGeneratingReport(false);
     }
@@ -300,36 +367,68 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
 
   if (!company) {
     return (
-      <div className="p-4 max-w-2xl mx-auto">
-        <Button variant="ghost" onClick={onBack} className="mb-4">
-          <ArrowLeft className="w-4 h-4 mr-2" />
+      <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto">
+        <Button
+          variant="ghost"
+          onClick={onBack}
+          className="mb-4 flex items-center gap-1.5 text-[#4B68F5] font-bold text-[15px] px-0 hover:bg-transparent"
+        >
+          <ChevronLeft className="w-5 h-5" />
           Back
         </Button>
-        <div className="text-center py-12 text-muted-foreground">
-          Company not found
-        </div>
+        <div className="text-center py-12 text-muted-foreground">Company not found</div>
       </div>
     );
   }
 
+  // Build location string for intel chips
+  const locationParts = [company.city, company.state, company.country].filter(Boolean);
+  const locationString = locationParts.join(", ");
+
   return (
-    <div className="p-4 max-w-2xl mx-auto space-y-4">
-      <Button variant="ghost" onClick={onBack} className="mb-2" data-testid="button-back-companies">
-        <ArrowLeft className="w-4 h-4 mr-2" />
+    <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto space-y-4">
+      {/* Back button */}
+      <Button
+        variant="ghost"
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-[#4B68F5] font-bold text-[15px] px-0 hover:bg-transparent"
+        data-testid="button-back-companies"
+      >
+        <ChevronLeft className="w-5 h-5" />
         Back to Companies
       </Button>
 
-      {/* Simplified Hero Header with Logo */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Hero header */}
+      <div className="flex items-start justify-between gap-3 mt-2">
         <div className="flex-1 min-w-0">
           <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />
+
+          {/* Intel chips */}
+          {(company.domain || locationString) && (
+            <div className="flex gap-2 flex-wrap mt-2">
+              {company.domain && (
+                <span className="bg-white border border-black/10 rounded-full px-3 py-1.5 text-[12px] font-semibold text-muted-foreground shadow-sm flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                  {company.domain}
+                </span>
+              )}
+              {locationString && (
+                <span className="bg-white border border-black/10 rounded-full px-3 py-1.5 text-[12px] font-semibold text-muted-foreground shadow-sm flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  {locationString}
+                </span>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* PDF button */}
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           onClick={handleDownloadReport}
           disabled={isGeneratingReport}
-          className="shrink-0 gap-1.5"
+          className="shrink-0 w-10 h-10 rounded-xl bg-white border border-black/10 shadow-sm"
           data-testid="button-download-report"
         >
           {isGeneratingReport ? (
@@ -337,56 +436,63 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
           ) : (
             <FileDown className="w-4 h-4" />
           )}
-          <span className="hidden sm:inline">{isGeneratingReport ? "Generating..." : "Report"}</span>
         </Button>
       </div>
 
+      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
-  <motion.span
-    className="pointer-events-none absolute top-1 bottom-1 left-1 rounded-full bg-background shadow-sm"
-    style={{ width: "calc((100% - 0.5rem) / 3)" }}
-    animate={{ x: `${tabIndex * 100}%` }}
-    transition={
-      reduceMotion
-        ? { duration: 0 }
-        : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
-    }
-  />
-  <TabsTrigger
-    value="contacts"
-    className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-    data-testid="tab-people"
-  >
-    <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
-      <Users className="w-4 h-4 shrink-0" />
-      <span className="min-w-0 truncate">People</span>
-    </span>
-  </TabsTrigger>
+        <TabsList className="relative flex h-auto w-full rounded-2xl bg-[#F2F2F7] border border-black/10 shadow-sm p-1 gap-0 mt-4">
+          <motion.span
+            className="pointer-events-none absolute top-1 bottom-1 left-1 rounded-xl bg-white shadow-sm"
+            style={{ width: "calc((100% - 0.5rem) / 3)" }}
+            animate={{ x: `${tabIndex * 100}%` }}
+            transition={
+              reduceMotion
+                ? { duration: 0 }
+                : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
+            }
+          />
+          <TabsTrigger
+            value="contacts"
+            className="relative flex-1 min-w-0 rounded-xl py-2.5 text-[13px] font-bold bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
+            data-testid="tab-people"
+          >
+            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-1.5">
+              <Users
+                className={`w-4 h-4 shrink-0 ${activeTab === "contacts" ? "text-[#4B68F5]" : ""}`}
+              />
+              <span className="min-w-0 truncate">People</span>
+            </span>
+          </TabsTrigger>
 
-  <TabsTrigger
-    value="orgmap"
-    className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-    data-testid="tab-org"
-  >
-    <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
-      <Network className="w-4 h-4 shrink-0" />
-      <span className="min-w-0 truncate">Org</span>
-    </span>
-  </TabsTrigger>
+          <TabsTrigger
+            value="orgmap"
+            className="relative flex-1 min-w-0 rounded-xl py-2.5 text-[13px] font-bold bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
+            data-testid="tab-org"
+          >
+            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-1.5">
+              <Network
+                className={`w-4 h-4 shrink-0 ${activeTab === "orgmap" ? "text-[#4B68F5]" : ""}`}
+              />
+              <span className="min-w-0 truncate">Org</span>
+            </span>
+          </TabsTrigger>
 
-  <TabsTrigger
-    value="notes"
-    className="relative flex-1 min-w-0 h-12 rounded-full px-3 text-sm font-medium bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-    data-testid="tab-notes"
-  >
-    <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-2">
-      <StickyNote className="w-4 h-4 shrink-0" />
-      <span className="min-w-0 truncate">Notes</span>
-    </span>
-  </TabsTrigger>
-</TabsList>
+          <TabsTrigger
+            value="notes"
+            className="relative flex-1 min-w-0 rounded-xl py-2.5 text-[13px] font-bold bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
+            data-testid="tab-notes"
+          >
+            <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-1.5">
+              <StickyNote
+                className={`w-4 h-4 shrink-0 ${activeTab === "notes" ? "text-[#4B68F5]" : ""}`}
+              />
+              <span className="min-w-0 truncate">Notes</span>
+            </span>
+          </TabsTrigger>
+        </TabsList>
 
+        {/* People Tab */}
         <TabsContent value="contacts" className="mt-4 space-y-3">
           {contacts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -402,67 +508,82 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
                   variant="outline"
                   size="sm"
                   onClick={() => setShowFilterSheet(true)}
-                  className="gap-1.5"
+                  className="gap-1.5 bg-white border border-black/10 rounded-xl shadow-sm text-[13px] font-semibold h-auto px-3 py-2"
                   data-testid="button-open-filter"
                 >
                   <Filter className="w-4 h-4" />
-                  <span className="text-sm">{getFilterSummary({ department: departmentFilter })}</span>
+                  <span>{getFilterSummary({ department: departmentFilter })}</span>
                 </Button>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60">
                   {filteredContacts.length} of {contacts.length}
                 </span>
               </div>
 
-              {/* Contacts list */}
+              {/* Contact rows */}
               {filteredContacts.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <p>No contacts in this department.</p>
                 </div>
               ) : (
-                filteredContacts.map((contact) => (
-                  <div
-                    key={contact.id}
-                    className="p-3 rounded-lg border bg-card hover-elevate cursor-pointer relative group"
-                    onClick={() => onSelectContact(contact)}
-                    data-testid={`company-contact-${contact.id}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="font-medium truncate flex-1">{contact.name || contact.email || "Unknown"}</span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 shrink-0 opacity-60 group-hover:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setQuickEditContact(contact);
-                        }}
-                        data-testid={`button-quick-edit-${contact.id}`}
-                      >
-                        <Settings2 className="w-4 h-4" />
-                      </Button>
+                <div className="space-y-2">
+                  {filteredContacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="relative bg-white rounded-xl border border-black/10 shadow-sm p-3 flex items-start gap-3 cursor-pointer active:opacity-75 transition-opacity overflow-hidden"
+                      onClick={() => onSelectContact(contact)}
+                      data-testid={`company-contact-${contact.id}`}
+                    >
+                      {/* Department stripe */}
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl ${
+                          DEPARTMENT_STRIPE[contact.org?.department || "UNKNOWN"]
+                        }`}
+                      />
+
+                      {/* Avatar — circle for people */}
+                      <div className="w-9 h-9 rounded-full bg-black/5 text-[#3A3A3F] flex items-center justify-center font-extrabold text-sm shrink-0 ml-1">
+                        {getContactInitials(contact.name)}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[14px] font-bold text-foreground truncate flex-1">
+                            {contact.name || contact.email || "Unknown"}
+                          </span>
+                          <button
+                            className="bg-black/5 rounded-full w-8 h-8 flex items-center justify-center shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQuickEditContact(contact);
+                            }}
+                            data-testid={`button-quick-edit-${contact.id}`}
+                          >
+                            <Settings2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {contact.title && (
+                          <p className="text-[12px] font-medium text-muted-foreground mt-0.5 truncate pr-2">
+                            {contact.title}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <DepartmentBadge department={contact.org?.department || "UNKNOWN"} />
+                          {contact.org?.role && contact.org.role !== "UNKNOWN" && (
+                            <OrgRoleBadge role={contact.org.role} />
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    {contact.title && (
-                      <p className="text-sm text-muted-foreground mt-0.5 ml-6 truncate pr-8">
-                        {contact.title}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-1.5 mt-2 ml-6 flex-wrap">
-                      {/* Department badge */}
-                      <DepartmentBadge department={contact.org?.department || 'UNKNOWN'} />
-                      {/* Role badge */}
-                      {contact.org?.role && contact.org.role !== 'UNKNOWN' && (
-                        <OrgRoleBadge role={contact.org.role} />
-                      )}
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </>
           )}
         </TabsContent>
 
-        <TabsContent value="orgmap" className="mt-4">
+        {/* Org Tab */}
+        <TabsContent value="orgmap" className="mt-4 pt-2">
           <OrgMap
             companyId={companyId}
             contacts={contacts}
@@ -471,27 +592,30 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
           />
         </TabsContent>
 
-        <TabsContent value="notes" className="mt-4 space-y-3">
-          <Textarea
-            placeholder="Add notes about this company..."
-            value={notes}
-            onChange={(e) => handleNotesChange(e.target.value)}
-            rows={8}
-            className="resize-none"
-            data-testid="company-notes-input"
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              {notesSaved ? "All changes saved" : "Unsaved changes"}
-            </span>
-            <Button
-              onClick={handleSaveNotes}
-              disabled={notesSaved}
-              size="sm"
-              data-testid="button-save-notes"
-            >
-              Save Notes
-            </Button>
+        {/* Notes Tab */}
+        <TabsContent value="notes" className="mt-4">
+          <div className="bg-white rounded-2xl border border-black/10 shadow-sm overflow-hidden">
+            <Textarea
+              placeholder="Add notes about this company..."
+              value={notes}
+              onChange={(e) => handleNotesChange(e.target.value)}
+              className="w-full min-h-[140px] p-4 text-[15px] font-medium border-0 outline-none resize-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
+              data-testid="company-notes-input"
+            />
+            <div className="flex items-center justify-between px-4 py-3 border-t border-black/[0.08]">
+              <span className="text-[11px] font-semibold text-muted-foreground/60">
+                {notesSaved ? "All changes saved" : "Unsaved changes"}
+              </span>
+              <Button
+                variant="ghost"
+                onClick={handleSaveNotes}
+                disabled={notesSaved}
+                className="text-[13px] font-bold text-[#4B68F5] h-auto px-0 hover:bg-transparent disabled:opacity-40"
+                data-testid="button-save-notes"
+              >
+                Save Notes
+              </Button>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
@@ -508,7 +632,7 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
         onEditOrg={handleEditOrg}
       />
 
-      {/* Quick Edit Bottom Sheet */}
+      {/* Quick Edit Drawer */}
       <Drawer open={!!quickEditContact} onOpenChange={(open) => !open && setQuickEditContact(null)}>
         <DrawerContent>
           <DrawerHeader>
@@ -525,10 +649,13 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
             <div className="space-y-2">
               <label className="text-sm font-medium">Department</label>
               <Select
-                value={quickEditContact?.org?.department || 'UNKNOWN'}
-                onValueChange={(value) => handleQuickEditField('department', value as Department)}
+                value={quickEditContact?.org?.department || "UNKNOWN"}
+                onValueChange={(value) => handleQuickEditField("department", value as Department)}
               >
-                <SelectTrigger data-testid="select-department">
+                <SelectTrigger
+                  className="bg-[#F2F2F7] border border-black/10 rounded-xl h-12 text-[15px] font-semibold"
+                  data-testid="select-department"
+                >
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
@@ -545,10 +672,13 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
             <div className="space-y-2">
               <label className="text-sm font-medium">Org Role</label>
               <Select
-                value={quickEditContact?.org?.role || 'UNKNOWN'}
-                onValueChange={(value) => handleQuickEditField('role', value as OrgRole)}
+                value={quickEditContact?.org?.role || "UNKNOWN"}
+                onValueChange={(value) => handleQuickEditField("role", value as OrgRole)}
               >
-                <SelectTrigger data-testid="select-role">
+                <SelectTrigger
+                  className="bg-[#F2F2F7] border border-black/10 rounded-xl h-12 text-[15px] font-semibold"
+                  data-testid="select-role"
+                >
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -564,10 +694,15 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
             <div className="space-y-2">
               <label className="text-sm font-medium">Reports To</label>
               <Select
-                value={quickEditContact?.org?.reportsToId || '_none'}
-                onValueChange={(value) => handleQuickEditField('reportsToId', value === '_none' ? null : value)}
+                value={quickEditContact?.org?.reportsToId || "_none"}
+                onValueChange={(value) =>
+                  handleQuickEditField("reportsToId", value === "_none" ? null : value)
+                }
               >
-                <SelectTrigger data-testid="select-manager">
+                <SelectTrigger
+                  className="bg-[#F2F2F7] border border-black/10 rounded-xl h-12 text-[15px] font-semibold"
+                  data-testid="select-manager"
+                >
                   <SelectValue placeholder="Select manager" />
                 </SelectTrigger>
                 <SelectContent>
@@ -599,7 +734,12 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
           </div>
           <DrawerFooter>
             <DrawerClose asChild>
-              <Button variant="outline" data-testid="button-close-quick-edit">Done</Button>
+              <Button
+                className="w-full bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white rounded-2xl h-12 font-bold border-0 hover:opacity-90"
+                data-testid="button-close-quick-edit"
+              >
+                Done
+              </Button>
             </DrawerClose>
           </DrawerFooter>
         </DrawerContent>
@@ -608,40 +748,36 @@ export function CompanyDetail({ companyId, onBack, onSelectContact, initialTab =
   );
 }
 
-// Org Role Badge Component
+// Org Role Badge — Carda monochrome style
 function OrgRoleBadge({ role }: { role: OrgRole }) {
-  const config: Record<OrgRole, { icon: typeof Shield; className: string }> = {
-    CHAMPION: { icon: Shield, className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-    NEUTRAL: { icon: Minus, className: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" },
-    BLOCKER: { icon: AlertTriangle, className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-    UNKNOWN: { icon: CircleDot, className: "bg-gray-100 text-gray-500" },
+  const icons: Record<OrgRole, typeof Shield> = {
+    CHAMPION: Shield,
+    NEUTRAL: Minus,
+    BLOCKER: AlertTriangle,
+    UNKNOWN: CircleDot,
   };
-  
-  const { icon: Icon, className } = config[role];
+
+  const Icon = icons[role];
   const displayName = role.charAt(0) + role.slice(1).toLowerCase();
-  
+
   return (
-    <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-5 gap-0.5 ${className}`}>
+    <Badge
+      variant="secondary"
+      className="bg-black/5 text-muted-foreground/70 text-[11px] font-semibold rounded-md px-2 py-0.5 h-auto gap-0.5 border-0"
+    >
       <Icon className="w-2.5 h-2.5" />
       {displayName}
     </Badge>
   );
 }
 
-// Department Badge Component
+// Department Badge — Carda monochrome style
 function DepartmentBadge({ department }: { department: Department }) {
-  const config: Record<Department, string> = {
-    EXEC: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    LEGAL: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
-    PROJECT_DELIVERY: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-    SALES: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
-    FINANCE: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-    OPS: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
-    UNKNOWN: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
-  };
-  
   return (
-    <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-5 gap-0.5 ${config[department]}`}>
+    <Badge
+      variant="secondary"
+      className="bg-black/5 text-muted-foreground/70 text-[11px] font-semibold rounded-md px-2 py-0.5 h-auto gap-0.5 border-0"
+    >
       <Briefcase className="w-2.5 h-2.5" />
       {DEPARTMENT_LABELS[department]}
     </Badge>
