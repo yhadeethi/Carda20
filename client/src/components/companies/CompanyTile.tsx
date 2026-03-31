@@ -1,16 +1,9 @@
 /**
  * CompanyTile - Clean, minimal company tile with logo support
- * Single-tap opens company - secondary actions shown inline at bottom
- *
- * UI hardening:
- * - fixed layout overflow (long names/domains) with min-w-0 + truncation
- * - removed hover translate to prevent grid jitter
- * - ensured actions sit at bottom consistently
- * - Added liquid glass morphing effects (Apple-style)
- * - Added manual delete functionality
+ * Single-tap opens company — ··· button triggers delete confirmation
  */
 
-import { Users, Globe, Network, StickyNote, Trash2 } from "lucide-react";
+import { MoreHorizontal, Users, Globe, Network, StickyNote } from "lucide-react";
 import { Company } from "@/lib/companiesStorage";
 import { CompanyAvatar } from "./CompanyAvatar";
 
@@ -33,21 +26,32 @@ export function CompanyTile({
   onAddNote,
   onDelete,
 }: CompanyTileProps) {
-  const hasActions = !!onOpenOrg || !!onAddNote || !!onDelete;
+  const hasSecondaryActions = !!onOpenOrg || !!onAddNote;
 
   return (
     <div
-      className="relative h-full p-4 rounded-xl border bg-card/80 backdrop-blur-xl cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 hover:bg-card/90 active:scale-[0.98] group"
+      className="relative bg-white rounded-2xl border border-black/10 shadow-sm p-4 cursor-pointer active:opacity-75 transition-opacity"
       onClick={onClick}
-      style={{
-        touchAction: "manipulation",
-        WebkitTapHighlightColor: "transparent",
-        backdropFilter: "blur(20px) saturate(180%)",
-        WebkitBackdropFilter: "blur(20px) saturate(180%)"
-      }}
+      style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
       data-testid={`company-tile-${company.id}`}
     >
-      <div className="flex flex-col h-full min-w-0">
+      {/* ··· delete button — top right */}
+      {onDelete && (
+        <button
+          className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/5 flex items-center justify-center text-muted-foreground hover:bg-black/10 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          style={{ touchAction: "manipulation" }}
+          aria-label="Delete company"
+          data-testid={`button-delete-company-${company.id}`}
+        >
+          <MoreHorizontal className="w-4 h-4" />
+        </button>
+      )}
+
+      <div className="flex flex-col min-w-0">
         {/* Logo */}
         <CompanyAvatar
           name={company.name}
@@ -57,41 +61,37 @@ export function CompanyTile({
           className="mb-3"
         />
 
-        {/* Company name (allow 2 lines max) */}
+        {/* Company name */}
         <h3
-          className="font-medium text-sm leading-snug mb-1 min-w-0"
+          className="text-[14px] font-bold text-foreground leading-snug mb-1 min-w-0 pr-6"
           data-testid={`company-tile-name-${company.id}`}
           title={company.name}
         >
           <span className="block truncate">{company.name}</span>
         </h3>
 
-        {/* Meta */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1 rounded-full bg-muted/40 px-2 py-0.5">
-            <Users className="w-3 h-3" />
-            <span>{contactCount} contact{contactCount !== 1 ? "s" : ""}</span>
-          </span>
+        {/* Contact count */}
+        <div className="flex items-center gap-1 text-[12px] font-semibold text-muted-foreground">
+          <Users className="w-3 h-3 shrink-0" />
+          <span>{contactCount} contact{contactCount !== 1 ? "s" : ""}</span>
         </div>
 
+        {/* Domain */}
         {company.domain && (
-          <div className="mt-1 min-w-0">
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted/30 px-2 py-0.5 text-xs text-muted-foreground max-w-full">
+          <div className="mt-1.5 min-w-0">
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/5 px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground max-w-full">
               <Globe className="w-3 h-3 shrink-0" />
               <span className="truncate">{company.domain}</span>
             </span>
           </div>
         )}
 
-        {/* Spacer to push actions to bottom */}
-        {hasActions && <div className="flex-1" />}
-
-        {/* Quick actions */}
-        {hasActions && (
-          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50">
+        {/* Secondary actions (Org, Note) */}
+        {hasSecondaryActions && (
+          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-black/[0.06]">
             {onOpenOrg && (
               <button
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-all duration-200 hover:scale-105"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpenOrg();
@@ -99,13 +99,13 @@ export function CompanyTile({
                 style={{ touchAction: "manipulation" }}
                 aria-label="View organization chart"
               >
-                <Network className="w-3 h-3" />
+                <Network className="w-3.5 h-3.5" />
                 <span>Org</span>
               </button>
             )}
             {onAddNote && (
               <button
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-all duration-200 hover:scale-105"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   onAddNote();
@@ -113,22 +113,8 @@ export function CompanyTile({
                 style={{ touchAction: "manipulation" }}
                 aria-label="Add note"
               >
-                <StickyNote className="w-3 h-3" />
+                <StickyNote className="w-3.5 h-3.5" />
                 <span>Note</span>
-              </button>
-            )}
-            {onDelete && (
-              <button
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-all duration-200 hover:scale-105 ml-auto"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                style={{ touchAction: "manipulation" }}
-                aria-label="Delete company"
-              >
-                <Trash2 className="w-3 h-3" />
-                <span>Delete</span>
               </button>
             )}
           </div>

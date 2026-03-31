@@ -1,6 +1,5 @@
 /**
  * CompanyGrid - Responsive grid layout for company tiles
- * UI hardened: mobile 1-col, cleaner empty states, no redundant footer count
  */
 
 import { Building2, Plus } from "lucide-react";
@@ -31,66 +30,63 @@ export function CompanyGrid({
   onAddCompany,
   searchQuery,
 }: CompanyGridProps) {
-  // Empty state - no companies at all
+  // Empty state — no companies at all
   if (companies.length === 0 && !searchQuery) {
     return (
-      <div className="rounded-2xl border bg-muted/20 p-8">
-        <div className="flex flex-col items-center justify-center text-center">
-          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
-            <Building2 className="w-7 h-7 text-muted-foreground" />
-          </div>
-          <div className="font-medium">No companies yet</div>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-            Companies are auto-created from scanned contacts, or add one manually.
-          </p>
-
-          {onAddCompany && (
-            <Button onClick={onAddCompany} className="gap-2 mt-5 rounded-2xl" data-testid="button-add-company-empty">
-              <Plus className="w-4 h-4" />
-              Add Company
-            </Button>
-          )}
+      <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-8 text-center">
+        <div className="w-12 h-12 rounded-xl bg-[#4B68F5]/10 flex items-center justify-center mx-auto mb-3">
+          <Building2 className="w-6 h-6 text-[#4B68F5]" />
         </div>
+        <div className="text-[15px] font-bold text-foreground">No companies yet</div>
+        <p className="text-[13px] font-medium text-muted-foreground/70 mt-1 max-w-xs mx-auto">
+          Companies are auto-created from scanned contacts, or add one manually.
+        </p>
+        {onAddCompany && (
+          <Button
+            onClick={onAddCompany}
+            className="gap-2 mt-5 rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white font-bold border-0 h-12"
+            data-testid="button-add-company-empty"
+          >
+            <Plus className="w-4 h-4" />
+            Add Company
+          </Button>
+        )}
       </div>
     );
   }
 
-  // Empty state - no search results
+  // Empty state — no search results
   if (companies.length === 0 && searchQuery) {
     return (
-      <div className="rounded-2xl border bg-muted/20 p-8">
-        <div className="flex flex-col items-center justify-center text-center">
-          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
-            <Building2 className="w-7 h-7 text-muted-foreground" />
-          </div>
-          <div className="font-medium">No matching companies</div>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-            Try searching by a shorter name or the domain.
-          </p>
+      <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-8 text-center">
+        <div className="w-12 h-12 rounded-xl bg-[#4B68F5]/10 flex items-center justify-center mx-auto mb-3">
+          <Building2 className="w-6 h-6 text-[#4B68F5]" />
         </div>
+        <div className="text-[15px] font-bold text-foreground">No matching companies</div>
+        <p className="text-[13px] font-medium text-muted-foreground/70 mt-1 max-w-xs mx-auto">
+          Try searching by a shorter name or the domain.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div
-        className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3"
-        data-testid="companies-grid"
-      >
-        {companies.map((company) => (
-          <CompanyTile
-            key={company.id}
-            company={company}
-            contactCount={getContactCount(company.id)}
-            contactEmails={getContactEmails?.(company.id) || []}
-            onClick={() => onSelectCompany(company.id)}
-            onOpenOrg={onOpenOrg ? () => onOpenOrg(company.id) : undefined}
-            onAddNote={onAddNote ? () => onAddNote(company.id) : undefined}
-            onDelete={onDeleteCompany ? () => onDeleteCompany(company.id) : undefined}
-          />
-        ))}
-      </div>
+    <div
+      className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-2"
+      data-testid="companies-grid"
+    >
+      {companies.map((company) => (
+        <CompanyTile
+          key={company.id}
+          company={company}
+          contactCount={getContactCount(company.id)}
+          contactEmails={getContactEmails?.(company.id) || []}
+          onClick={() => onSelectCompany(company.id)}
+          onOpenOrg={onOpenOrg ? () => onOpenOrg(company.id) : undefined}
+          onAddNote={onAddNote ? () => onAddNote(company.id) : undefined}
+          onDelete={onDeleteCompany ? () => onDeleteCompany(company.id) : undefined}
+        />
+      ))}
     </div>
   );
 }

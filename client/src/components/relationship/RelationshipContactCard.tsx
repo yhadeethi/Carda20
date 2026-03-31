@@ -11,49 +11,65 @@ import { StoredContact } from "@/lib/contactsStorage";
 import { Building, Calendar, MoreHorizontal, Tag, User, Link2 } from "lucide-react";
 import { format } from "date-fns";
 import { CompanyLinkerDialog } from "./CompanyLinkerDialog";
+import { getContactById } from "@/lib/contacts/storage";
 
 interface RelationshipContactCardProps {
   contact: StoredContact;
   onOpen: () => void;
-
   onDelete?: () => void;
   onContactUpdated?: () => void;
-
   showActionsMenu?: boolean;
   showMeta?: boolean;
 }
 
-const AVATAR_COLORS = [
-  ["#3B82F6", "#EFF6FF"],
-  ["#8B5CF6", "#F5F3FF"],
-  ["#10B981", "#ECFDF5"],
-  ["#F59E0B", "#FFFBEB"],
-  ["#EF4444", "#FEF2F2"],
-  ["#06B6D4", "#ECFEFF"],
-  ["#F97316", "#FFF7ED"],
-  ["#84CC16", "#F7FEE7"],
-  ["#EC4899", "#FDF2F8"],
-  ["#6366F1", "#EEF2FF"],
-];
-
-function getInitialsAndColor(name: string): { initials: string; bg: string; fg: string } {
+function getInitials(name: string): string {
   const trimmed = name.trim();
   const words = trimmed.split(/\s+/).filter(Boolean);
-  let initials = "";
   if (words.length >= 2) {
-    initials = (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
   } else if (words.length === 1) {
-    initials = trimmed.slice(0, 2).toUpperCase();
-  } else {
-    initials = "?";
+    return trimmed.slice(0, 2).toUpperCase();
+  }
+  return "?";
+}
+
+function getStripeColor(contact: StoredContact): string {
+  try {
+    const v2 = getContactById(contact.id);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    if (v2) {
+      const hasOverdue =
+        v2.tasks?.some((t: any) => !t.done && t.dueAt && new Date(t.dueAt) < today) ||
+        v2.reminders?.some((r: any) => !r.done && new Date(r.remindAt) < today);
+      if (hasOverdue) return "bg-red-500";
+
+      const isDueToday =
+        v2.tasks?.some(
+          (t: any) => !t.done && t.dueAt && new Date(t.dueAt) >= today && new Date(t.dueAt) < tomorrow
+        ) ||
+        v2.reminders?.some(
+          (r: any) => !r.done && new Date(r.remindAt) >= today && new Date(r.remindAt) < tomorrow
+        );
+      if (isDueToday) return "bg-amber-400";
+    }
+  } catch {
+    // fall through to default
   }
 
-  let hash = 0;
-  for (let i = 0; i < trimmed.length; i++) {
-    hash = (hash * 31 + trimmed.charCodeAt(i)) >>> 0;
+  if (contact.createdAt) {
+    try {
+      const days = (Date.now() - new Date(contact.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (days <= 7) return "bg-[#4B68F5]";
+    } catch {
+      // fall through
+    }
   }
-  const [fg, bg] = AVATAR_COLORS[hash % AVATAR_COLORS.length];
-  return { initials, bg, fg };
+
+  return "bg-black/10";
 }
 
 export function RelationshipContactCard({
@@ -85,11 +101,12 @@ export function RelationshipContactCard({
   };
 
   const personName = contact.name?.trim() || contact.email?.trim() || "Unknown";
-  const { initials, bg, fg } = getInitialsAndColor(personName);
+  const initials = getInitials(personName);
+  const stripeColor = getStripeColor(contact);
 
   return (
     <div
-      className="rounded-2xl border bg-card hover:bg-muted/30 transition shadow-sm cursor-pointer"
+      className="relative bg-white rounded-xl border border-black/10 shadow-sm overflow-hidden active:opacity-75 transition-opacity cursor-pointer"
       onClick={onOpen}
       style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
       data-testid={`relationship-contact-card-${contact.id}`}
@@ -97,11 +114,13 @@ export function RelationshipContactCard({
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
     >
-      <div className="p-4 flex items-start gap-3">
-        {/* Initials avatar */}
+      {/* Status stripe */}
+      <div className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl ${stripeColor}`} />
+
+      <div className="p-4 pl-5 flex items-start gap-3">
+        {/* Monochrome initials avatar — circle for people */}
         <div
-          className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-semibold select-none"
-          style={{ backgroundColor: bg, color: fg }}
+          className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 text-sm font-extrabold select-none bg-black/5 text-[#3A3A3F]"
           aria-hidden="true"
         >
           {initials}
@@ -111,19 +130,19 @@ export function RelationshipContactCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              {/* Person name — primary headline */}
+              {/* Name */}
               <div
-                className="font-semibold leading-5 truncate"
+                className="text-[14px] font-bold text-foreground leading-5 truncate"
                 title={personName}
                 data-testid={`text-contact-name-${contact.id}`}
               >
                 {personName}
               </div>
 
-              {/* Title — secondary line */}
+              {/* Title */}
               {contact.title?.trim() ? (
                 <div
-                  className="text-sm text-muted-foreground mt-0.5 truncate"
+                  className="text-[12px] font-medium text-muted-foreground mt-0.5 truncate"
                   title={contact.title.trim()}
                   data-testid={`text-contact-title-${contact.id}`}
                 >
@@ -131,10 +150,10 @@ export function RelationshipContactCard({
                 </div>
               ) : null}
 
-              {/* Company — tertiary line */}
+              {/* Company */}
               {contact.company?.trim() ? (
                 <div
-                  className="text-xs text-muted-foreground/80 mt-0.5 inline-flex items-center gap-1 min-w-0 truncate"
+                  className="text-[12px] font-medium text-muted-foreground mt-0.5 inline-flex items-center gap-1 min-w-0 truncate"
                   title={contact.company}
                   data-testid={`text-contact-company-${contact.id}`}
                 >
@@ -185,15 +204,17 @@ export function RelationshipContactCard({
             ) : null}
           </div>
 
-          {/* Meta row — scan date + event tag only */}
+          {/* Meta row */}
           {showMeta ? (
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               {contact.createdAt && isNew(contact.createdAt) && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">New</span>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-[#4B68F5]/10 text-[#4B68F5]">
+                  New
+                </span>
               )}
 
               {contact.createdAt ? (
-                <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                <span className="text-[11px] font-semibold text-muted-foreground/60 inline-flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
                   Scanned {formatDate(contact.createdAt)}
                 </span>
@@ -201,7 +222,7 @@ export function RelationshipContactCard({
 
               {contact.eventName ? (
                 <span
-                  className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground inline-flex items-center gap-1 max-w-[220px]"
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-black/5 text-muted-foreground/70 inline-flex items-center gap-1 max-w-[220px]"
                   title={contact.eventName}
                 >
                   <Tag className="w-3 h-3 shrink-0" />

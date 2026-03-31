@@ -4,7 +4,6 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +39,6 @@ import { Search, Plus, Bell, Merge, Users } from "lucide-react";
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
-
 import { RelationshipContactCard } from "@/components/relationship/RelationshipContactCard";
 
 type TabMode = "people" | "companies";
@@ -148,6 +146,21 @@ export function ContactsHub({
       return a.name.localeCompare(b.name);
     });
 
+    // Deduplicate by normalised name — keep entry with most contacts (display-only, does not mutate storage)
+    const seen = new Map<string, Company>();
+    for (const c of result) {
+      const key = c.name.trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.set(key, c);
+        continue;
+      }
+      const existing = seen.get(key)!;
+      if (getContactCountForCompany(c.id, contacts) > getContactCountForCompany(existing.id, contacts)) {
+        seen.set(key, c);
+      }
+    }
+    result = Array.from(seen.values());
+
     return result;
   }, [companies, searchQuery, contacts]);
 
@@ -218,22 +231,25 @@ export function ContactsHub({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Company Delete Confirmation - Liquid Glass Design */}
+      {/* Company Delete Confirmation */}
       <AlertDialog open={!!deleteCompanyConfirmId} onOpenChange={(open) => !open && setDeleteCompanyConfirmId(null)}>
         <AlertDialogContent
           className="backdrop-blur-2xl bg-background/90 border border-border/50 shadow-2xl"
           style={{
             backdropFilter: "blur(40px) saturate(180%)",
-            WebkitBackdropFilter: "blur(40px) saturate(180%)"
+            WebkitBackdropFilter: "blur(40px) saturate(180%)",
           }}
         >
           <AlertDialogHeader>
             <AlertDialogTitle className="text-lg font-semibold">Delete company?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              Are you sure you want to delete <span className="font-medium text-foreground">{companyToDelete?.name}</span>?
+              Are you sure you want to delete{" "}
+              <span className="font-medium text-foreground">{companyToDelete?.name}</span>?
               {companyToDelete && getContactCountForCompany(companyToDelete.id, contacts) > 0 && (
                 <span className="block mt-2 text-sm text-amber-600 dark:text-amber-500">
-                  ⚠️ {getContactCountForCompany(companyToDelete.id, contacts)} contact{getContactCountForCompany(companyToDelete.id, contacts) !== 1 ? 's are' : ' is'} linked to this company. They will not be deleted.
+                  ⚠️ {getContactCountForCompany(companyToDelete.id, contacts)} contact
+                  {getContactCountForCompany(companyToDelete.id, contacts) !== 1 ? "s are" : " is"} linked to this
+                  company. They will not be deleted.
                 </span>
               )}
               <span className="block mt-2">This action cannot be undone.</span>
@@ -257,6 +273,7 @@ export function ContactsHub({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Add Company Drawer */}
       <Drawer open={showAddCompany} onOpenChange={setShowAddCompany}>
         <DrawerContent className="max-h-[90vh]">
           <DrawerHeader className="border-b pb-4">
@@ -367,20 +384,21 @@ export function ContactsHub({
         </DrawerContent>
       </Drawer>
 
-      <Card className="glass">
-        <CardHeader className="pb-2">
-          
-          <p className="text-sm text-muted-foreground">
-            All your scanned contacts in one place. Search by name or company.
-          </p>
-        </CardHeader>
+      {/* Page */}
+      <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto">
+        <h1 className="text-[30px] font-extrabold tracking-[-1.1px] text-foreground mb-0.5">Network</h1>
+        <p className="text-[13px] font-semibold text-muted-foreground/60 mb-4">
+          {contacts.length} {contacts.length === 1 ? "person" : "people"} · {companies.length}{" "}
+          {companies.length === 1 ? "company" : "companies"}
+        </p>
 
-
-        <CardContent className="space-y-4">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-            <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
+          {/* Unified header card */}
+          <div className="bg-white rounded-2xl border border-black/10 shadow-sm overflow-hidden mb-4">
+            {/* Tab switcher */}
+            <TabsList className="relative flex h-14 w-full rounded-none bg-[#F2F2F7] p-1.5 gap-0">
               <motion.span
-                className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-background shadow-sm"
+                className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-0.1875rem)] rounded-xl bg-white shadow-sm"
                 animate={{ x: activeTab === "people" ? "0%" : "100%" }}
                 transition={
                   reduceMotion
@@ -391,188 +409,210 @@ export function ContactsHub({
 
               <TabsTrigger
                 value="people"
-                className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                className="relative flex-1 min-w-0 h-full rounded-xl text-[14px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
                 data-testid="tab-people"
               >
-                <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
-                  <span className="min-w-0 truncate">People</span>
+                <span className="relative z-10 flex items-center justify-center gap-1.5">
+                  <span>People</span>
+                  <span
+                    className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                      activeTab === "people"
+                        ? "bg-[#4B68F5]/10 text-[#4B68F5]"
+                        : "bg-black/5 text-muted-foreground/60"
+                    }`}
+                  >
+                    {contacts.length}
+                  </span>
                 </span>
               </TabsTrigger>
 
               <TabsTrigger
                 value="companies"
-                className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                className="relative flex-1 min-w-0 h-full rounded-xl text-[14px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
                 data-testid="tab-companies"
               >
-                <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
-                  <span className="min-w-0 truncate">Companies</span>
+                <span className="relative z-10 flex items-center justify-center gap-1.5">
+                  <span>Companies</span>
+                  <span
+                    className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                      activeTab === "companies"
+                        ? "bg-[#4B68F5]/10 text-[#4B68F5]"
+                        : "bg-black/5 text-muted-foreground/60"
+                    }`}
+                  >
+                    {companies.length}
+                  </span>
                 </span>
               </TabsTrigger>
             </TabsList>
 
-            <div className="relative mt-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            {/* Search input */}
+            <div className="border-t border-black/[0.08] relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
               <Input
                 placeholder={activeTab === "people" ? "Search by name or company..." : "Search companies..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 rounded-2xl h-11"
+                className="border-0 shadow-none rounded-none bg-transparent pl-10 pr-4 py-3 h-auto text-[15px] font-medium placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:ring-offset-0"
                 data-testid="input-contacts-search"
               />
             </div>
 
-            {/* People Tab */}
-            <TabsContent value="people" className="mt-4 space-y-4">
-              <div className="flex gap-2 overflow-x-auto pb-1">
+            {/* Filter chips — People tab only */}
+            {activeTab === "people" && (
+              <div className="border-t border-black/[0.08] px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide">
                 <button
-                  className={`px-3 py-1.5 rounded-full text-sm border transition whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "all"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background hover:bg-muted border-border"
+                      ? "bg-[#4B68F5] border-[#4B68F5] text-white"
+                      : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
                   }`}
                   onClick={() => setPeopleSubView("all")}
                   data-testid="filter-all"
                 >
-                  <span className="inline-flex items-center">
-                    <Users className="w-4 h-4 mr-1" />
-                    All
-                  </span>
+                  <Users className="w-3.5 h-3.5" />
+                  All
                 </button>
 
                 <button
-                  className={`px-3 py-1.5 rounded-full text-sm border transition whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "upcoming"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background hover:bg-muted border-border"
+                      ? "bg-[#4B68F5] border-[#4B68F5] text-white"
+                      : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
                   }`}
                   onClick={() => setPeopleSubView("upcoming")}
                   data-testid="filter-upcoming"
                 >
-                  <span className="inline-flex items-center">
-                    <Bell className="w-4 h-4 mr-1" />
-                    Upcoming
-                  </span>
+                  <Bell className="w-3.5 h-3.5" />
+                  Upcoming
                 </button>
 
                 <button
-                  className={`px-3 py-1.5 rounded-full text-sm border transition whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "duplicates"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background hover:bg-muted border-border"
+                      ? "bg-[#4B68F5] border-[#4B68F5] text-white"
+                      : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
                   }`}
                   onClick={() => setPeopleSubView("duplicates")}
                   data-testid="filter-duplicates"
                 >
-                  <span className="inline-flex items-center">
-                    <Merge className="w-4 h-4 mr-1" />
-                    Duplicates
-                  </span>
+                  <Merge className="w-3.5 h-3.5" />
+                  Duplicates
                 </button>
               </div>
+            )}
+          </div>
 
-              {peopleSubView === "upcoming" && (
-                <div className="min-h-[300px]">
-                  <UpcomingView
-                    onSelectContact={(id) => {
-                      const contact = contacts.find((c) => c.id === id);
-                      if (contact) onSelectContact(contact);
-                    }}
-                  />
-                </div>
-              )}
-
-              {peopleSubView === "duplicates" && (
-                <div className="min-h-[300px]">
-                  <DuplicatesView onRefresh={() => setContacts(loadContacts())} />
-                </div>
-              )}
-
-              {peopleSubView === "all" && (
-                <>
-                  {eventNames.length > 0 && (
-                    <Select value={eventFilter} onValueChange={setEventFilter}>
-                      <SelectTrigger className="rounded-2xl" data-testid="select-event-filter">
-                        <SelectValue placeholder="All events" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All events</SelectItem>
-                        {eventNames.map((event) => (
-                          <SelectItem key={event} value={event}>
-                            {event}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  <div className="max-h-[65vh] overflow-y-auto space-y-3 pr-1" data-testid="contacts-list">
-                    {filteredContacts.length === 0 ? (
-                      <div className="text-center py-10 text-muted-foreground" data-testid="contacts-empty">
-                        {contacts.length === 0 ? (
-                          <p>No contacts saved yet. Scan a business card to get started!</p>
-                        ) : (
-                          <p>No contacts match your search.</p>
-                        )}
-                      </div>
-                    ) : (
-                      filteredContacts.map((contact) => (
-                        <RelationshipContactCard
-                          key={contact.id}
-                          contact={contact}
-                          onOpen={() => onSelectContact(contact)}
-                          onDelete={() => setDeleteConfirmId(contact.id)}
-                          onContactUpdated={() => {
-                            setContacts(loadContacts());
-                            const updatedCompanies = autoGenerateCompaniesFromContacts(loadContacts());
-                            setCompanies(updatedCompanies);
-                          }}
-                        />
-                      ))
-                    )}
-                  </div>
-
-                  {filteredContacts.length > 0 && (
-                    <p className="text-xs text-center text-muted-foreground">
-                      {filteredContacts.length} contact{filteredContacts.length !== 1 ? "s" : ""}
-                    </p>
-                  )}
-                </>
-              )}
-            </TabsContent>
-
-            {/* Companies Tab */}
-            <TabsContent value="companies" className="mt-4 space-y-4">
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowAddCompany(true)}
-                  className="gap-1 rounded-2xl"
-                  data-testid="button-add-company"
-                >
-                  <Plus className="w-3 h-3" />
-                  Add Company
-                </Button>
-              </div>
-
-              <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="companies-list">
-                <CompanyGrid
-                  companies={filteredCompanies}
-                  getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
-                  getContactEmails={(companyId) => {
-                    const companyContacts = contacts.filter((c) => c.companyId === companyId);
-                    return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
+          {/* People Tab Content */}
+          <TabsContent value="people" className="mt-0 space-y-0">
+            {peopleSubView === "upcoming" && (
+              <div className="min-h-[300px]">
+                <UpcomingView
+                  onSelectContact={(id) => {
+                    const contact = contacts.find((c) => c.id === id);
+                    if (contact) onSelectContact(contact);
                   }}
-                  onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
-                  onDeleteCompany={(companyId) => setDeleteCompanyConfirmId(companyId)}
-                  onAddCompany={() => setShowAddCompany(true)}
-                  searchQuery={searchQuery}
                 />
               </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            )}
+
+            {peopleSubView === "duplicates" && (
+              <div className="min-h-[300px]">
+                <DuplicatesView onRefresh={() => setContacts(loadContacts())} />
+              </div>
+            )}
+
+            {peopleSubView === "all" && (
+              <>
+                {eventNames.length > 0 && (
+                  <Select value={eventFilter} onValueChange={setEventFilter}>
+                    <SelectTrigger className="rounded-2xl mb-3" data-testid="select-event-filter">
+                      <SelectValue placeholder="All events" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All events</SelectItem>
+                      {eventNames.map((event) => (
+                        <SelectItem key={event} value={event}>
+                          {event}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filteredContacts.length > 0 && (
+                  <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 px-1 mb-2">
+                    {filteredContacts.length} {filteredContacts.length === 1 ? "person" : "people"}
+                  </p>
+                )}
+
+                <div className="space-y-2" data-testid="contacts-list">
+                  {filteredContacts.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground" data-testid="contacts-empty">
+                      {contacts.length === 0 ? (
+                        <p>No contacts saved yet. Scan a business card to get started!</p>
+                      ) : (
+                        <p>No contacts match your search.</p>
+                      )}
+                    </div>
+                  ) : (
+                    filteredContacts.map((contact) => (
+                      <RelationshipContactCard
+                        key={contact.id}
+                        contact={contact}
+                        onOpen={() => onSelectContact(contact)}
+                        onDelete={() => setDeleteConfirmId(contact.id)}
+                        onContactUpdated={() => {
+                          setContacts(loadContacts());
+                          const updatedCompanies = autoGenerateCompaniesFromContacts(loadContacts());
+                          setCompanies(updatedCompanies);
+                        }}
+                      />
+                    ))
+                  )}
+                </div>
+
+                {filteredContacts.length > 0 && (
+                  <p className="text-xs text-center text-muted-foreground mt-3">
+                    {filteredContacts.length} contact{filteredContacts.length !== 1 ? "s" : ""}
+                  </p>
+                )}
+              </>
+            )}
+          </TabsContent>
+
+          {/* Companies Tab Content */}
+          <TabsContent value="companies" className="mt-0 space-y-3">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowAddCompany(true)}
+                className="gap-1 rounded-xl px-4 py-2.5 text-[13px] font-bold text-foreground shadow-sm h-auto"
+                data-testid="button-add-company"
+              >
+                <Plus className="w-3 h-3" />
+                Add Company
+              </Button>
+            </div>
+
+            <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="companies-list">
+              <CompanyGrid
+                companies={filteredCompanies}
+                getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
+                getContactEmails={(companyId) => {
+                  const companyContacts = contacts.filter((c) => c.companyId === companyId);
+                  return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
+                }}
+                onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
+                onDeleteCompany={(companyId) => setDeleteCompanyConfirmId(companyId)}
+                onAddCompany={() => setShowAddCompany(true)}
+                searchQuery={searchQuery}
+              />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
     </>
   );
 }
