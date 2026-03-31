@@ -11,7 +11,8 @@ import { StoredContact } from "@/lib/contactsStorage";
 import { Building, Calendar, MoreHorizontal, Tag, User, Link2 } from "lucide-react";
 import { format } from "date-fns";
 import { CompanyLinkerDialog } from "./CompanyLinkerDialog";
-import { getContactById } from "@/lib/contacts/storage";
+
+export type StripeStatus = "overdue" | "due-today" | "new" | "default";
 
 interface RelationshipContactCardProps {
   contact: StoredContact;
@@ -20,6 +21,7 @@ interface RelationshipContactCardProps {
   onContactUpdated?: () => void;
   showActionsMenu?: boolean;
   showMeta?: boolean;
+  stripeStatus?: StripeStatus;
 }
 
 function getInitials(name: string): string {
@@ -33,43 +35,25 @@ function getInitials(name: string): string {
   return "?";
 }
 
-function getStripeColor(contact: StoredContact): string {
-  try {
-    const v2 = getContactById(contact.id);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    if (v2) {
-      const hasOverdue =
-        v2.tasks?.some((t: any) => !t.done && t.dueAt && new Date(t.dueAt) < today) ||
-        v2.reminders?.some((r: any) => !r.done && new Date(r.remindAt) < today);
-      if (hasOverdue) return "bg-red-500";
-
-      const isDueToday =
-        v2.tasks?.some(
-          (t: any) => !t.done && t.dueAt && new Date(t.dueAt) >= today && new Date(t.dueAt) < tomorrow
-        ) ||
-        v2.reminders?.some(
-          (r: any) => !r.done && new Date(r.remindAt) >= today && new Date(r.remindAt) < tomorrow
-        );
-      if (isDueToday) return "bg-amber-400";
-    }
-  } catch {
-    // fall through to default
+function stripeColorFromStatus(status: StripeStatus): string {
+  switch (status) {
+    case "overdue":   return "bg-red-500";
+    case "due-today": return "bg-amber-400";
+    case "new":       return "bg-[#4B68F5]";
+    default:          return "bg-black/10";
   }
+}
 
+function deriveStripeStatus(contact: StoredContact): StripeStatus {
   if (contact.createdAt) {
     try {
       const days = (Date.now() - new Date(contact.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-      if (days <= 7) return "bg-[#4B68F5]";
+      if (days <= 7) return "new";
     } catch {
       // fall through
     }
   }
-
-  return "bg-black/10";
+  return "default";
 }
 
 export function RelationshipContactCard({
@@ -79,8 +63,10 @@ export function RelationshipContactCard({
   onContactUpdated,
   showActionsMenu = true,
   showMeta = true,
+  stripeStatus,
 }: RelationshipContactCardProps) {
   const [showLinker, setShowLinker] = useState(false);
+  const resolvedStatus = stripeStatus ?? deriveStripeStatus(contact);
 
   const formatDate = (dateStr: string) => {
     try {
@@ -102,7 +88,7 @@ export function RelationshipContactCard({
 
   const personName = contact.name?.trim() || contact.email?.trim() || "Unknown";
   const initials = getInitials(personName);
-  const stripeColor = getStripeColor(contact);
+  const stripeColor = stripeColorFromStatus(resolvedStatus);
 
   return (
     <div

@@ -39,7 +39,9 @@ import { Search, Plus, Bell, Merge, Users } from "lucide-react";
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
-import { RelationshipContactCard } from "@/components/relationship/RelationshipContactCard";
+import { RelationshipContactCard, StripeStatus } from "@/components/relationship/RelationshipContactCard";
+import { loadContactsV2 } from "@/lib/contacts/storage";
+import { ContactTask, ContactReminder } from "@/lib/contacts/types";
 
 type TabMode = "people" | "companies";
 type PeopleSubView = "all" | "upcoming" | "duplicates";
@@ -78,6 +80,39 @@ export function ContactsHub({
   const [newCompanyState, setNewCompanyState] = useState("");
   const [newCompanyCountry, setNewCompanyCountry] = useState("");
   const [newCompanyNotes, setNewCompanyNotes] = useState("");
+
+  const stripeStatusMap = useMemo<Map<string, StripeStatus>>(() => {
+    const v2List = loadContactsV2();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const map = new Map<string, StripeStatus>();
+    for (const v2 of v2List) {
+      const hasOverdue =
+        v2.tasks?.some((t: ContactTask) => !t.done && t.dueAt && new Date(t.dueAt) < today) ||
+        v2.reminders?.some((r: ContactReminder) => !r.done && new Date(r.remindAt) < today);
+      if (hasOverdue) { map.set(v2.id, "overdue"); continue; }
+
+      const isDueToday =
+        v2.tasks?.some(
+          (t: ContactTask) => !t.done && t.dueAt && new Date(t.dueAt) >= today && new Date(t.dueAt) < tomorrow
+        ) ||
+        v2.reminders?.some(
+          (r: ContactReminder) => !r.done && new Date(r.remindAt) >= today && new Date(r.remindAt) < tomorrow
+        );
+      if (isDueToday) { map.set(v2.id, "due-today"); continue; }
+
+      if (v2.createdAt) {
+        const days = (Date.now() - new Date(v2.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+        if (days <= 7) { map.set(v2.id, "new"); continue; }
+      }
+
+      map.set(v2.id, "default");
+    }
+    return map;
+  }, [contacts]);
 
   useEffect(() => {
     const loadedContacts = loadContacts();
@@ -560,6 +595,7 @@ export function ContactsHub({
                       <RelationshipContactCard
                         key={contact.id}
                         contact={contact}
+                        stripeStatus={stripeStatusMap.get(contact.id)}
                         onOpen={() => onSelectContact(contact)}
                         onDelete={() => setDeleteConfirmId(contact.id)}
                         onContactUpdated={() => {
