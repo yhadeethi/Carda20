@@ -82,7 +82,8 @@ export function ContactsHub({
   const [newCompanyNotes, setNewCompanyNotes] = useState("");
 
   const stripeStatusMap = useMemo<Map<string, StripeStatus>>(() => {
-    const v2List = loadContactsV2();
+    const renderedIds = new Set(contacts.map((c) => c.id));
+    const v2List = loadContactsV2().filter((v2) => renderedIds.has(v2.id));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
