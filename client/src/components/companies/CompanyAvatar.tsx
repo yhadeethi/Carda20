@@ -3,7 +3,7 @@
  * Used in both CompanyTile and CompanyDetail
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Building2 } from "lucide-react";
 import { extractDomainFromEmail } from "@/lib/companiesStorage";
 
@@ -61,22 +61,16 @@ export function CompanyAvatar({
   size = "md",
   className = "",
 }: CompanyAvatarProps) {
-  const [faviconError, setFaviconError] = useState(false);
-  const [faviconLoading, setFaviconLoading] = useState(true);
+  const [logoError, setLogoError] = useState(false);
+  const [logoLoading, setLogoLoading] = useState(true);
 
   // Fallback order: domain -> website -> email domain
-  const resolvedDomain =
+  const effectiveDomain =
     domain || extractDomainFromWebsite(website) || getMostCommonEmailDomain(contactEmails);
 
-  // Reset error state when the resolved domain changes
-  useEffect(() => {
-    setFaviconError(false);
-    setFaviconLoading(true);
-  }, [resolvedDomain]);
-
-  const faviconUrl =
-    resolvedDomain && !faviconError
-      ? `https://www.google.com/s2/favicons?domain=${resolvedDomain}&sz=128`
+  const logoUrl =
+    effectiveDomain && !logoError
+      ? `https://www.google.com/s2/favicons?domain=${effectiveDomain}&sz=128`
       : null;
 
   const monogram = name
@@ -91,17 +85,17 @@ export function CompanyAvatar({
     <div
       className={`${container} rounded-xl bg-muted/40 border border-border/60 flex items-center justify-center shrink-0 overflow-hidden ${className}`}
     >
-      {faviconUrl ? (
+      {logoUrl ? (
         <>
-          {faviconLoading && <div className={`${image} rounded bg-muted animate-pulse`} />}
+          {logoLoading && <div className={`${image} rounded bg-muted animate-pulse`} />}
           <img
-            src={faviconUrl}
+            src={logoUrl}
             alt={`${name} logo`}
-            className={`${image} object-contain ${faviconLoading ? "hidden" : ""}`}
-            onLoad={() => setFaviconLoading(false)}
+            className={`${image} object-contain ${logoLoading ? "hidden" : ""}`}
+            onLoad={() => setLogoLoading(false)}
             onError={() => {
-              setFaviconError(true);
-              setFaviconLoading(false);
+              setLogoError(true);
+              setLogoLoading(false);
             }}
             loading="lazy"
           />
