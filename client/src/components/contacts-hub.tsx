@@ -37,6 +37,7 @@ import {
 
 import { Search, Plus, Bell, Merge, Users } from "lucide-react";
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
+import { CompanyTile } from "@/components/companies/CompanyTile";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
 import { RelationshipContactCard, StripeStatus } from "@/components/relationship/RelationshipContactCard";
@@ -72,6 +73,7 @@ export function ContactsHub({
   const [companies, setCompanies] = useState<Company[]>(() => getCompanies());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteCompanyConfirmId, setDeleteCompanyConfirmId] = useState<string | null>(null);
+  const [warmthFilter, setWarmthFilter] = useState<string | null>(null);
 
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -149,6 +151,11 @@ export function ContactsHub({
     setActiveTab(initialTab);
   }, [initialTab]);
 
+  // Reset warmth filter when leaving the "all" sub-view
+  useEffect(() => {
+    if (peopleSubView !== "all") setWarmthFilter(null);
+  }, [peopleSubView]);
+
   const eventNames = useMemo(() => getUniqueEventNames(), [contacts]);
 
   const filteredContacts = useMemo(() => {
@@ -163,9 +170,13 @@ export function ContactsHub({
       result = result.filter((c) => c.name?.toLowerCase().includes(query) || c.company?.toLowerCase().includes(query));
     }
 
+    if (warmthFilter) {
+      result = result.filter((c) => c.org?.relationshipStrength === warmthFilter);
+    }
+
     result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return result;
-  }, [contacts, searchQuery, eventFilter]);
+  }, [contacts, searchQuery, eventFilter, warmthFilter]);
 
   const filteredCompanies = useMemo(() => {
     let result = [...companies];
@@ -421,7 +432,7 @@ export function ContactsHub({
       </Drawer>
 
       {/* Page */}
-      <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto">
+      <div className="px-4 pt-2 pb-32 w-full max-w-2xl mx-auto">
         <h1 className="text-[30px] font-extrabold tracking-[-1.1px] text-foreground mb-0.5">Network</h1>
         <p className="text-[13px] font-semibold text-muted-foreground/60 mb-4">
           {contacts.length} {contacts.length === 1 ? "person" : "people"} · {companies.length}{" "}
@@ -432,7 +443,7 @@ export function ContactsHub({
           {/* Unified header card */}
           <div className="bg-white rounded-2xl border border-black/10 shadow-sm overflow-hidden mb-4">
             {/* Tab switcher */}
-            <TabsList className="relative flex h-14 w-full rounded-none bg-[#F2F2F7] p-1.5 gap-0">
+            <TabsList className="relative flex h-16 w-full rounded-none bg-[#F2F2F7] p-1.5 gap-0">
               <motion.span
                 className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-0.1875rem)] rounded-xl bg-white shadow-sm"
                 animate={{ x: activeTab === "people" ? "0%" : "100%" }}
@@ -445,13 +456,13 @@ export function ContactsHub({
 
               <TabsTrigger
                 value="people"
-                className="relative flex-1 min-w-0 h-full rounded-xl text-[14px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
+                className="relative flex-1 min-w-0 h-full rounded-xl text-[15px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
                 data-testid="tab-people"
               >
                 <span className="relative z-10 flex items-center justify-center gap-1.5">
                   <span>People</span>
                   <span
-                    className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                    className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
                       activeTab === "people"
                         ? "bg-[#4B68F5]/10 text-[#4B68F5]"
                         : "bg-black/5 text-muted-foreground/60"
@@ -464,13 +475,13 @@ export function ContactsHub({
 
               <TabsTrigger
                 value="companies"
-                className="relative flex-1 min-w-0 h-full rounded-xl text-[14px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
+                className="relative flex-1 min-w-0 h-full rounded-xl text-[15px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
                 data-testid="tab-companies"
               >
                 <span className="relative z-10 flex items-center justify-center gap-1.5">
                   <span>Companies</span>
                   <span
-                    className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                    className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
                       activeTab === "companies"
                         ? "bg-[#4B68F5]/10 text-[#4B68F5]"
                         : "bg-black/5 text-muted-foreground/60"
@@ -489,7 +500,7 @@ export function ContactsHub({
                 placeholder={activeTab === "people" ? "Search by name or company..." : "Search companies..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="border-0 shadow-none rounded-none bg-transparent pl-10 pr-4 py-3 h-auto text-[15px] font-medium placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="border-0 shadow-none rounded-none bg-transparent pl-10 pr-4 py-3.5 h-auto text-[15px] font-medium placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:ring-offset-0"
                 data-testid="input-contacts-search"
               />
             </div>
@@ -533,8 +544,48 @@ export function ContactsHub({
                   data-testid="filter-duplicates"
                 >
                   <Merge className="w-3.5 h-3.5" />
-                  Duplicates
+                  Dupes
                 </button>
+
+                {peopleSubView === "all" && (
+                  <>
+                    <button
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
+                        warmthFilter === "CLOSE"
+                          ? "bg-[#1A9E4A] border-[#1A9E4A] text-white"
+                          : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
+                      }`}
+                      onClick={() => setWarmthFilter(warmthFilter === "CLOSE" ? null : "CLOSE")}
+                      data-testid="filter-warmth-close"
+                    >
+                      Close
+                    </button>
+
+                    <button
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
+                        warmthFilter === "NORMAL"
+                          ? "bg-[#4B68F5] border-[#4B68F5] text-white"
+                          : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
+                      }`}
+                      onClick={() => setWarmthFilter(warmthFilter === "NORMAL" ? null : "NORMAL")}
+                      data-testid="filter-warmth-normal"
+                    >
+                      Normal
+                    </button>
+
+                    <button
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
+                        warmthFilter === "CASUAL"
+                          ? "bg-[#C07A00] border-[#C07A00] text-white"
+                          : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
+                      }`}
+                      onClick={() => setWarmthFilter(warmthFilter === "CASUAL" ? null : "CASUAL")}
+                      data-testid="filter-warmth-casual"
+                    >
+                      Casual
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -634,18 +685,37 @@ export function ContactsHub({
             </div>
 
             <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="companies-list">
-              <CompanyGrid
-                companies={filteredCompanies}
-                getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
-                getContactEmails={(companyId) => {
-                  const companyContacts = contacts.filter((c) => c.companyId === companyId);
-                  return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
-                }}
-                onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
-                onDeleteCompany={(companyId) => setDeleteCompanyConfirmId(companyId)}
-                onAddCompany={() => setShowAddCompany(true)}
-                searchQuery={searchQuery}
-              />
+              {filteredCompanies.length > 0 && filteredCompanies.length <= 10 ? (
+                <div className="space-y-2">
+                  {filteredCompanies.map((company) => (
+                    <CompanyTile
+                      key={company.id}
+                      variant="list"
+                      company={company}
+                      contactCount={getContactCountForCompany(company.id, contacts)}
+                      contactEmails={contacts
+                        .filter((c) => c.companyId === company.id)
+                        .map((c) => c.email)
+                        .filter((e) => e && e.trim().length > 0)}
+                      onClick={() => onSelectCompany?.(company.id)}
+                      onDelete={() => setDeleteCompanyConfirmId(company.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <CompanyGrid
+                  companies={filteredCompanies}
+                  getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
+                  getContactEmails={(companyId) => {
+                    const companyContacts = contacts.filter((c) => c.companyId === companyId);
+                    return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
+                  }}
+                  onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
+                  onDeleteCompany={(companyId) => setDeleteCompanyConfirmId(companyId)}
+                  onAddCompany={() => setShowAddCompany(true)}
+                  searchQuery={searchQuery}
+                />
+              )}
             </div>
           </TabsContent>
         </Tabs>
