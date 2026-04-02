@@ -36,7 +36,6 @@ import {
 } from "@/lib/companiesStorage";
 
 import { Search, Plus, Bell, Merge, Users } from "lucide-react";
-import { CompanyGrid } from "@/components/companies/CompanyGrid";
 import { CompanyTile } from "@/components/companies/CompanyTile";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
@@ -685,7 +684,11 @@ export function ContactsHub({
             </div>
 
             <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="companies-list">
-              {filteredCompanies.length > 0 && filteredCompanies.length <= 10 ? (
+              {filteredCompanies.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <p>{companies.length === 0 ? "No companies yet. Scan cards to auto-generate them." : "No companies match your search."}</p>
+                </div>
+              ) : (
                 <div className="space-y-2">
                   {filteredCompanies.map((company) => (
                     <CompanyTile
@@ -702,19 +705,6 @@ export function ContactsHub({
                     />
                   ))}
                 </div>
-              ) : (
-                <CompanyGrid
-                  companies={filteredCompanies}
-                  getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
-                  getContactEmails={(companyId) => {
-                    const companyContacts = contacts.filter((c) => c.companyId === companyId);
-                    return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
-                  }}
-                  onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
-                  onDeleteCompany={(companyId) => setDeleteCompanyConfirmId(companyId)}
-                  onAddCompany={() => setShowAddCompany(true)}
-                  searchQuery={searchQuery}
-                />
               )}
             </div>
           </TabsContent>
