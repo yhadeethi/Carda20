@@ -8,8 +8,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { StoredContact } from "@/lib/contactsStorage";
-import { Building, Calendar, MoreHorizontal, Tag, User, Link2 } from "lucide-react";
-import { format } from "date-fns";
+import { Building, MoreHorizontal, Tag, User, Link2 } from "lucide-react";
 import { CompanyLinkerDialog } from "./CompanyLinkerDialog";
 
 export type StripeStatus = "overdue" | "due-today" | "new" | "default";
@@ -68,14 +67,6 @@ export function RelationshipContactCard({
   const [showLinker, setShowLinker] = useState(false);
   const resolvedStatus = stripeStatus ?? deriveStripeStatus(contact);
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return format(new Date(dateStr), "d MMM yyyy");
-    } catch {
-      return "";
-    }
-  };
-
   const isNew = (dateStr: string) => {
     try {
       const d = new Date(dateStr).getTime();
@@ -103,7 +94,7 @@ export function RelationshipContactCard({
       {/* Status stripe */}
       <div className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl ${stripeColor}`} />
 
-      <div className="p-4 pl-5 flex items-start gap-3">
+      <div className="p-3 pl-4 flex items-start gap-3">
         {/* Monochrome initials avatar — circle for people */}
         <div
           className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 text-sm font-extrabold select-none bg-black/5 text-[#3A3A3F]"
@@ -190,21 +181,14 @@ export function RelationshipContactCard({
             ) : null}
           </div>
 
-          {/* Meta row */}
-          {showMeta ? (
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
+          {/* Meta row — New pill and event tag only, no scanned date */}
+          {showMeta && (contact.createdAt && isNew(contact.createdAt) || contact.eventName) ? (
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
               {contact.createdAt && isNew(contact.createdAt) && (
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-[#4B68F5]/10 text-[#4B68F5]">
                   New
                 </span>
               )}
-
-              {contact.createdAt ? (
-                <span className="text-[11px] font-semibold text-muted-foreground/60 inline-flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  Scanned {formatDate(contact.createdAt)}
-                </span>
-              ) : null}
 
               {contact.eventName ? (
                 <span

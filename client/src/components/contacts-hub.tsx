@@ -37,6 +37,7 @@ import {
 
 import { Search, Plus, Bell, Merge, Users } from "lucide-react";
 import { CompanyGrid } from "@/components/companies/CompanyGrid";
+import { CompanyTile } from "@/components/companies/CompanyTile";
 import { UpcomingView } from "@/components/upcoming-view";
 import { DuplicatesView } from "@/components/duplicates-view";
 import { RelationshipContactCard, StripeStatus } from "@/components/relationship/RelationshipContactCard";
@@ -421,18 +422,19 @@ export function ContactsHub({
       </Drawer>
 
       {/* Page */}
-      <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto">
+      <div className="px-4 pt-2 pb-32 w-full max-w-2xl mx-auto">
         <h1 className="text-[30px] font-extrabold tracking-[-1.1px] text-foreground mb-0.5">Network</h1>
         <p className="text-[13px] font-semibold text-muted-foreground/60 mb-4">
-          {contacts.length} {contacts.length === 1 ? "person" : "people"} · {companies.length}{" "}
-          {companies.length === 1 ? "company" : "companies"}
+          {contacts.length} {contacts.length === 1 ? "person" : "people"} · {filteredCompanies.length}{" "}
+          {filteredCompanies.length === 1 ? "company" : "companies"}
         </p>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-          {/* Unified header card */}
+          {/* Unified header card — full width, no extra margin */}
           <div className="bg-white rounded-2xl border border-black/10 shadow-sm overflow-hidden mb-4">
-            {/* Tab switcher */}
-            <TabsList className="relative flex h-14 w-full rounded-none bg-[#F2F2F7] p-1.5 gap-0">
+
+            {/* Tab switcher — taller, bigger text, no count badges */}
+            <TabsList className="relative flex h-16 w-full rounded-none bg-[#F2F2F7] p-1.5 gap-0">
               <motion.span
                 className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-0.1875rem)] rounded-xl bg-white shadow-sm"
                 animate={{ x: activeTab === "people" ? "0%" : "100%" }}
@@ -442,43 +444,20 @@ export function ContactsHub({
                     : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
                 }
               />
-
               <TabsTrigger
                 value="people"
-                className="relative flex-1 min-w-0 h-full rounded-xl text-[14px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
+                className="relative flex-1 min-w-0 h-full rounded-xl text-[15px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
                 data-testid="tab-people"
               >
-                <span className="relative z-10 flex items-center justify-center gap-1.5">
-                  <span>People</span>
-                  <span
-                    className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
-                      activeTab === "people"
-                        ? "bg-[#4B68F5]/10 text-[#4B68F5]"
-                        : "bg-black/5 text-muted-foreground/60"
-                    }`}
-                  >
-                    {contacts.length}
-                  </span>
-                </span>
+                <span className="relative z-10">People</span>
               </TabsTrigger>
 
               <TabsTrigger
                 value="companies"
-                className="relative flex-1 min-w-0 h-full rounded-xl text-[14px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
+                className="relative flex-1 min-w-0 h-full rounded-xl text-[15px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
                 data-testid="tab-companies"
               >
-                <span className="relative z-10 flex items-center justify-center gap-1.5">
-                  <span>Companies</span>
-                  <span
-                    className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
-                      activeTab === "companies"
-                        ? "bg-[#4B68F5]/10 text-[#4B68F5]"
-                        : "bg-black/5 text-muted-foreground/60"
-                    }`}
-                  >
-                    {companies.length}
-                  </span>
-                </span>
+                <span className="relative z-10">Companies</span>
               </TabsTrigger>
             </TabsList>
 
@@ -489,16 +468,16 @@ export function ContactsHub({
                 placeholder={activeTab === "people" ? "Search by name or company..." : "Search companies..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="border-0 shadow-none rounded-none bg-transparent pl-10 pr-4 py-3 h-auto text-[15px] font-medium placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="border-0 shadow-none rounded-none bg-transparent pl-10 pr-4 py-3.5 h-auto text-[15px] font-medium placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:ring-offset-0"
                 data-testid="input-contacts-search"
               />
             </div>
 
-            {/* Filter chips — People tab only */}
+            {/* Filter chips — People tab only, bigger and properly spaced */}
             {activeTab === "people" && (
               <div className="border-t border-black/[0.08] px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide">
                 <button
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "all"
                       ? "bg-[#4B68F5] border-[#4B68F5] text-white"
                       : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
@@ -511,7 +490,7 @@ export function ContactsHub({
                 </button>
 
                 <button
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "upcoming"
                       ? "bg-[#4B68F5] border-[#4B68F5] text-white"
                       : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
@@ -524,7 +503,7 @@ export function ContactsHub({
                 </button>
 
                 <button
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold border whitespace-nowrap transition-colors ${
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "duplicates"
                       ? "bg-[#4B68F5] border-[#4B68F5] text-white"
                       : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
@@ -533,7 +512,7 @@ export function ContactsHub({
                   data-testid="filter-duplicates"
                 >
                   <Merge className="w-3.5 h-3.5" />
-                  Duplicates
+                  Dupes
                 </button>
               </div>
             )}
@@ -618,35 +597,67 @@ export function ContactsHub({
             )}
           </TabsContent>
 
-          {/* Companies Tab Content */}
-          <TabsContent value="companies" className="mt-0 space-y-3">
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowAddCompany(true)}
-                className="gap-1 rounded-xl px-4 py-2.5 text-[13px] font-bold text-foreground shadow-sm h-auto"
-                data-testid="button-add-company"
-              >
-                <Plus className="w-3 h-3" />
-                Add Company
-              </Button>
-            </div>
+          {/* Companies Tab Content — always vertical list, no grid */}
+          <TabsContent value="companies" className="mt-0" data-testid="companies-list">
+            {filteredCompanies.length === 0 && !searchQuery.trim() ? (
+              /* Empty state — no companies */
+              <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-8 text-center">
+                <div className="w-12 h-12 rounded-xl bg-[#4B68F5]/10 flex items-center justify-center mx-auto mb-3">
+                  <Plus className="w-6 h-6 text-[#4B68F5]" />
+                </div>
+                <div className="text-[15px] font-bold text-foreground">No companies yet</div>
+                <p className="text-[13px] font-medium text-muted-foreground/70 mt-1 mb-5 max-w-xs mx-auto">
+                  Companies are auto-created from scanned contacts, or add one manually.
+                </p>
+                <Button
+                  onClick={() => setShowAddCompany(true)}
+                  className="rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white font-bold border-0 h-12 px-6"
+                  data-testid="button-add-company-empty"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Company
+                </Button>
+              </div>
+            ) : filteredCompanies.length === 0 && searchQuery.trim() ? (
+              /* Empty state — no search results */
+              <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-8 text-center">
+                <div className="text-[15px] font-bold text-foreground">No matching companies</div>
+                <p className="text-[13px] font-medium text-muted-foreground/70 mt-1 max-w-xs mx-auto">
+                  Try a shorter name or the domain.
+                </p>
+              </div>
+            ) : (
+              /* Company list — always vertical rows */
+              <div className="space-y-2">
+                {filteredCompanies.map((company) => (
+                  <CompanyTile
+                    key={company.id}
+                    variant="list"
+                    company={company}
+                    contactCount={getContactCountForCompany(company.id, contacts)}
+                    contactEmails={contacts
+                      .filter((c) => c.companyId === company.id)
+                      .map((c) => c.email)
+                      .filter((e): e is string => !!e && e.trim().length > 0)}
+                    onClick={() => onSelectCompany?.(company.id)}
+                    onDelete={() => setDeleteCompanyConfirmId(company.id)}
+                  />
+                ))}
 
-            <div className="max-h-[65vh] overflow-y-auto pr-1" data-testid="companies-list">
-              <CompanyGrid
-                companies={filteredCompanies}
-                getContactCount={(companyId) => getContactCountForCompany(companyId, contacts)}
-                getContactEmails={(companyId) => {
-                  const companyContacts = contacts.filter((c) => c.companyId === companyId);
-                  return companyContacts.map((c) => c.email).filter((e) => e && e.trim().length > 0);
-                }}
-                onSelectCompany={(companyId) => onSelectCompany?.(companyId)}
-                onDeleteCompany={(companyId) => setDeleteCompanyConfirmId(companyId)}
-                onAddCompany={() => setShowAddCompany(true)}
-                searchQuery={searchQuery}
-              />
-            </div>
+                {/* Inline Add Company row */}
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-black/15 bg-transparent text-[14px] font-semibold text-muted-foreground hover:bg-white hover:border-[#4B68F5]/30 hover:text-[#4B68F5] transition-all active:opacity-70"
+                  onClick={() => setShowAddCompany(true)}
+                  data-testid="button-add-company"
+                  style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#4B68F5]/08 border border-dashed border-[#4B68F5]/25 flex items-center justify-center shrink-0">
+                    <Plus className="w-4 h-4 text-[#4B68F5]" />
+                  </div>
+                  Add company
+                </button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

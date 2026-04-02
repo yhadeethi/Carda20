@@ -1,9 +1,11 @@
 /**
  * CompanyTile - Clean, minimal company tile with logo support
- * Single-tap opens company — ··· button triggers delete confirmation
+ * Supports two variants:
+ *   "grid" (default) — vertical card layout for grid displays
+ *   "list"           — horizontal row layout matching the People tab
  */
 
-import { MoreHorizontal, Users, Globe, Network, StickyNote } from "lucide-react";
+import { ChevronRight, MoreHorizontal, Users, Globe, Network, StickyNote } from "lucide-react";
 import { Company } from "@/lib/companiesStorage";
 import { CompanyAvatar } from "./CompanyAvatar";
 
@@ -15,6 +17,7 @@ interface CompanyTileProps {
   onOpenOrg?: () => void;
   onAddNote?: () => void;
   onDelete?: () => void;
+  variant?: "grid" | "list";
 }
 
 export function CompanyTile({
@@ -25,7 +28,65 @@ export function CompanyTile({
   onOpenOrg,
   onAddNote,
   onDelete,
+  variant = "grid",
 }: CompanyTileProps) {
+
+  // ── LIST VARIANT — horizontal row matching People tab ──
+  if (variant === "list") {
+    return (
+      <div
+        className="relative bg-white rounded-xl border border-black/10 shadow-sm flex items-center gap-3 px-4 py-3 cursor-pointer active:opacity-75 transition-opacity w-full"
+        onClick={onClick}
+        style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+        data-testid={`company-tile-${company.id}`}
+      >
+        {/* Logo — square, favicon or monogram */}
+        <CompanyAvatar
+          name={company.name}
+          domain={company.domain ?? undefined}
+          contactEmails={contactEmails}
+          size="md"
+          className="rounded-xl shrink-0"
+        />
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div
+            className="text-[14px] font-bold text-foreground truncate"
+            data-testid={`company-tile-name-${company.id}`}
+            title={company.name}
+          >
+            {company.name}
+          </div>
+          <div className="text-[12px] font-medium text-muted-foreground mt-0.5">
+            {contactCount} {contactCount !== 1 ? "contacts" : "contact"}
+            {company.domain ? ` · ${company.domain}` : ""}
+          </div>
+        </div>
+
+        {/* ··· delete button */}
+        {onDelete && (
+          <button
+            className="w-8 h-8 rounded-full bg-black/5 flex items-center justify-center shrink-0 transition-colors hover:bg-black/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            style={{ touchAction: "manipulation" }}
+            aria-label="Company options"
+            data-testid={`button-delete-company-${company.id}`}
+          >
+            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+          </button>
+        )}
+
+        {/* Chevron */}
+        <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+      </div>
+    );
+  }
+
+  // ── GRID VARIANT (default) — vertical card, unchanged ──
   const hasSecondaryActions = !!onOpenOrg || !!onAddNote;
 
   return (
@@ -55,7 +116,7 @@ export function CompanyTile({
         {/* Logo */}
         <CompanyAvatar
           name={company.name}
-          domain={company.domain}
+          domain={company.domain ?? undefined}
           contactEmails={contactEmails}
           size="md"
           className="mb-3"
