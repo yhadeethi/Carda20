@@ -3,7 +3,7 @@
  * Single-tap opens company — ··· button triggers delete confirmation
  */
 
-import { MoreHorizontal, Users, Globe, Network, StickyNote } from "lucide-react";
+import { MoreHorizontal, Users, Globe, Network, StickyNote, ChevronRight } from "lucide-react";
 import { Company } from "@/lib/companiesStorage";
 import { CompanyAvatar } from "./CompanyAvatar";
 
@@ -15,6 +15,7 @@ interface CompanyTileProps {
   onOpenOrg?: () => void;
   onAddNote?: () => void;
   onDelete?: () => void;
+  variant?: "grid" | "list";
 }
 
 export function CompanyTile({
@@ -25,7 +26,60 @@ export function CompanyTile({
   onOpenOrg,
   onAddNote,
   onDelete,
+  variant = "grid",
 }: CompanyTileProps) {
+  if (variant === "list") {
+    return (
+      <div
+        className="relative bg-white rounded-xl border border-black/10 shadow-sm flex items-center gap-3 px-4 py-3 cursor-pointer active:opacity-75 transition-opacity w-full"
+        onClick={onClick}
+        style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+        data-testid={`company-tile-${company.id}`}
+      >
+        <CompanyAvatar
+          name={company.name}
+          domain={company.domain}
+          contactEmails={contactEmails}
+          size="md"
+          className="rounded-xl shrink-0"
+        />
+
+        <div className="flex-1 min-w-0">
+          <div
+            className="text-[14px] font-bold text-foreground truncate"
+            data-testid={`company-tile-name-${company.id}`}
+          >
+            {company.name}
+          </div>
+          {company.domain && (
+            <div className="text-[12px] font-medium text-muted-foreground truncate">{company.domain}</div>
+          )}
+        </div>
+
+        <span className="text-[12px] font-semibold text-muted-foreground shrink-0">
+          {contactCount} {contactCount !== 1 ? "contacts" : "contact"}
+        </span>
+
+        {onDelete && (
+          <button
+            className="w-8 h-8 rounded-full bg-black/5 flex items-center justify-center shrink-0 text-muted-foreground hover:bg-black/10 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            style={{ touchAction: "manipulation" }}
+            aria-label="Delete company"
+            data-testid={`button-delete-company-${company.id}`}
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        )}
+
+        <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+      </div>
+    );
+  }
+
   const hasSecondaryActions = !!onOpenOrg || !!onAddNote;
 
   return (
