@@ -35,11 +35,11 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import {
-  ArrowLeft,
   Bell,
   Briefcase,
   Calendar,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Edit,
@@ -162,7 +162,6 @@ function useKeyboardInset(active: boolean) {
   return inset;
 }
 
-// FIX #1: Company logo via favicon, falls back to initials
 function CompanyLogo({ company, domain }: { company?: string | null; domain?: string | null }) {
   const [imgError, setImgError] = useState(false);
   const src = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : null;
@@ -279,8 +278,6 @@ export function ContactDetailView({
   const { data: salesforceStatus } = useQuery<{ connected: boolean }>({ queryKey: ["/api/salesforce/status"] });
 
   // ── Computed ──────────────────────────────────────────────────────────────
-
-  // FIX #2: Derive warmth directly from prop — never stale on remount
   const currentWarmth: RelationshipStrength = contactV2?.org?.relationshipStrength ?? "UNKNOWN";
 
   const scannedDaysAgo = useMemo(() => {
@@ -347,8 +344,6 @@ export function ContactDetailView({
   }, [timelineItems, timelineFilter]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-
-  // FIX #2: Write to storage directly, no local warmth state
   const handleUpdateWarmth = async (value: RelationshipStrength) => {
     await updateContactV2(contact.id, {
       org: {
@@ -520,7 +515,7 @@ export function ContactDetailView({
       if (result.success) {
         addTimelineEvent(contact.id, "hubspot_synced", `Synced to HubSpot (${result.action})`, { hubspotId: result.hubspotId });
         onUpdate();
-        toast({ title: result.action === "created" ? "Added to HubSpot" : "Updated in HubSpot", description: `Contact ${result.action} successfully` });
+        toast({ title: result.action === "created" ? "Added to HubSpot" : "Updated in HubSpot" });
       } else {
         toast({ title: "Sync failed", description: result.error || "Failed to sync with HubSpot", variant: "destructive" });
       }
@@ -547,7 +542,7 @@ export function ContactDetailView({
       if (result.success) {
         addTimelineEvent(contact.id, "salesforce_synced", `Synced to Salesforce (${result.action})`, { salesforceId: result.salesforceId });
         onUpdate();
-        toast({ title: result.action === "created" ? "Added to Salesforce" : "Updated in Salesforce", description: `Contact ${result.action} successfully` });
+        toast({ title: result.action === "created" ? "Added to Salesforce" : "Updated in Salesforce" });
       } else {
         toast({ title: "Sync failed", description: result.error || "Failed to sync with Salesforce", variant: "destructive" });
       }
@@ -650,7 +645,6 @@ export function ContactDetailView({
     toast({ title: "Reminder set for 3 days" });
   };
 
-  // FIX #4: Log interaction quick chips
   const LOG_INTERACTION_CHIPS = [
     { type: "meeting_scheduled" as TimelineEventType, label: "Met",      icon: <Users className="w-3.5 h-3.5" /> },
     { type: "note_added" as TimelineEventType,        label: "Called",   icon: <Phone className="w-3.5 h-3.5" /> },
@@ -660,9 +654,9 @@ export function ContactDetailView({
 
   // ── Warmth config ─────────────────────────────────────────────────────────
   const warmthConfig: { value: RelationshipStrength; label: string; active: string; inactive: string }[] = [
-    { value: "CASUAL", label: "Casual", active: "bg-muted text-foreground border-border",        inactive: "bg-transparent text-muted-foreground border-border/40" },
-    { value: "NORMAL", label: "Normal", active: "bg-blue-500 text-white border-blue-500",         inactive: "bg-transparent text-muted-foreground border-border/40" },
-    { value: "CLOSE",  label: "Close",  active: "bg-red-500 text-white border-red-500",           inactive: "bg-transparent text-muted-foreground border-border/40" },
+    { value: "CASUAL", label: "Casual", active: "bg-white text-foreground border-black/10 shadow-sm", inactive: "bg-transparent text-muted-foreground border-black/10" },
+    { value: "NORMAL", label: "Normal", active: "bg-[#4B68F5] text-white border-[#4B68F5]",           inactive: "bg-transparent text-muted-foreground border-black/10" },
+    { value: "CLOSE",  label: "Close",  active: "bg-red-500 text-white border-red-500",               inactive: "bg-transparent text-muted-foreground border-black/10" },
   ];
 
   // ── Timeline filter config ────────────────────────────────────────────────
@@ -677,14 +671,19 @@ export function ContactDetailView({
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col min-h-full pb-24" data-testid="contact-detail-view">
+    <div className="flex flex-col min-h-full pb-24 px-4" data-testid="contact-detail-view">
 
-      {/* ── Nav header ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 -ml-2" data-testid="button-back-to-contacts">
-          <ArrowLeft className="w-4 h-4" />
+      {/* ── Nav header ── */}
+      <div className="flex items-center justify-between gap-2 pt-2 mb-4">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-[#4B68F5] font-bold text-[15px] -ml-1"
+          style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+          data-testid="button-back-to-contacts"
+        >
+          <ChevronLeft className="w-5 h-5" />
           Back
-        </Button>
+        </button>
         <div className="flex items-center gap-1">
           <Button size="sm" variant="ghost" onClick={() => setIsEditing(!isEditing)}>
             {isEditing ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
@@ -720,9 +719,9 @@ export function ContactDetailView({
         </div>
       </div>
 
-      {/* ── Edit mode ─────────────────────────────────────────────────────── */}
+      {/* ── Edit mode ── */}
       {isEditing ? (
-        <div className="space-y-3 mb-6 p-4 rounded-2xl bg-muted/30">
+        <div className="space-y-3 mb-6 p-4 rounded-2xl bg-white border border-black/10 shadow-sm">
           {[
             { label: "Full Name",  key: "name",        type: "text" },
             { label: "Job Title",  key: "title",       type: "text" },
@@ -735,21 +734,25 @@ export function ContactDetailView({
           ].map(({ label, key, type }) => (
             <div key={key} className="space-y-1">
               <Label className="text-xs text-muted-foreground">{label}</Label>
-              <Input type={type} value={(editedFields as any)[key]} onChange={(e) => setEditedFields((f) => ({ ...f, [key]: e.target.value }))} />
+              <Input
+                type={type}
+                value={(editedFields as any)[key]}
+                onChange={(e) => setEditedFields((f) => ({ ...f, [key]: e.target.value }))}
+                className="rounded-xl"
+              />
             </div>
           ))}
-          <Button onClick={handleSaveEdits} disabled={isSavingEdits} className="w-full mt-2">
+          <Button onClick={handleSaveEdits} disabled={isSavingEdits} className="w-full mt-2 rounded-xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] border-0">
             {isSavingEdits ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       ) : (
         <>
-          {/* ── Section 1: Business Card ───────────────────────────────── */}
+          {/* ── Section 1: Hero Card (dark, unchanged) ── */}
           <div className="bg-[#1C1C1E] rounded-2xl p-4 text-white relative overflow-hidden">
             <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/[0.03] pointer-events-none" />
             <div className="absolute -bottom-6 left-6 w-24 h-24 rounded-full bg-white/[0.02] pointer-events-none" />
 
-            {/* FIX #1: Company favicon logo */}
             {contact.company && (
               <div className="inline-flex items-center gap-1.5 bg-white/10 rounded-full px-2.5 py-1 mb-3">
                 <CompanyLogo company={contact.company} domain={domainForIntel} />
@@ -777,202 +780,184 @@ export function ContactDetailView({
           {/* Expand hint */}
           <button
             onClick={() => setCardExpanded(!cardExpanded)}
-            className="flex items-center justify-center gap-2 py-2 w-full text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center justify-center gap-2 py-2.5 w-full text-muted-foreground transition-colors"
             style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
           >
-            <span className="w-8 h-1 rounded-full bg-border" />
-            <span className="text-xs">{cardExpanded ? "Tap to collapse" : "Tap to reveal contact details"}</span>
-            {cardExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            <span className="w-8 h-1 rounded-full bg-black/10" />
+            <span className="text-xs font-medium text-muted-foreground/70">
+              {cardExpanded ? "Collapse contact details" : "Tap to reveal contact details"}
+            </span>
+            {cardExpanded
+              ? <ChevronUp className="w-3 h-3 text-muted-foreground/50" />
+              : <ChevronDown className="w-3 h-3 text-muted-foreground/50" />
+            }
           </button>
 
           {/* Collapsible contact rows */}
           {cardExpanded && (
-            <div className="rounded-xl border border-border/60 bg-card overflow-hidden mb-4">
+            <div className="rounded-xl border border-black/10 bg-white shadow-sm overflow-hidden mb-4">
               {contact.phone && (
-                <button onClick={handleCall} className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left" data-testid="row-phone">
-                  <div className="w-8 h-8 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0">
-                    <Phone className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <button onClick={handleCall} className="w-full flex items-center gap-3 px-4 py-3 border-b border-black/[0.06] hover:bg-black/[0.02] transition-colors text-left" data-testid="row-phone">
+                  <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                    <Phone className="w-4 h-4 text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Phone</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Phone</p>
                     <p className="text-sm font-medium truncate">{contact.phone}</p>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
                 </button>
               )}
               {contact.email && (
-                <button onClick={handleEmail} className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left" data-testid="row-email">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
-                    <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <button onClick={handleEmail} className="w-full flex items-center gap-3 px-4 py-3 border-b border-black/[0.06] hover:bg-black/[0.02] transition-colors text-left" data-testid="row-email">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                    <Mail className="w-4 h-4 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Email</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Email</p>
                     <p className="text-sm font-medium truncate">{contact.email}</p>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
                 </button>
               )}
-              <button onClick={handleOpenLinkedIn} className="w-full flex items-center gap-3 px-4 py-3 border-b border-border/40 hover:bg-muted/30 transition-colors text-left" data-testid="row-linkedin">
+              <button onClick={handleOpenLinkedIn} className="w-full flex items-center gap-3 px-4 py-3 border-b border-black/[0.06] hover:bg-black/[0.02] transition-colors text-left" data-testid="row-linkedin">
                 <div className="w-8 h-8 rounded-lg bg-[#0A66C2]/10 flex items-center justify-center shrink-0">
                   <SiLinkedin className="w-4 h-4 text-[#0A66C2]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">LinkedIn</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">LinkedIn</p>
                   <p className="text-sm font-medium">{contact.linkedinUrl ? "View profile" : "Find on LinkedIn"}</p>
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
               </button>
               {contact.website && (
-                <button onClick={handleOpenWebsite} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left" data-testid="row-website">
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
-                    <Globe className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                <button onClick={handleOpenWebsite} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] transition-colors text-left" data-testid="row-website">
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                    <Globe className="w-4 h-4 text-purple-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Website</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Website</p>
                     <p className="text-sm font-medium truncate">{contact.website.replace(/^https?:\/\//, "")}</p>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
                 </button>
               )}
             </div>
           )}
 
-          {/* ── Section 2: Warmth Selector ────────────────────────────── */}
-          <div className="mb-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Relationship</p>
-            <div className="flex gap-2">
-              {warmthConfig.map(({ value, label, active, inactive }) => (
-                <button
-                  key={value}
-                  onClick={() => handleUpdateWarmth(value)}
-                  className={[
-                    "flex-1 py-2 px-3 rounded-full border text-xs font-medium transition-all",
-                    // FIX #2: derived from prop, always correct on remount
-                    currentWarmth === value ? active : inactive,
-                  ].join(" ")}
-                  style={{ touchAction: "manipulation" } as React.CSSProperties}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Section 3: Smart CTAs ─────────────────────────────────── */}
-          <div className="mb-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Suggested actions</p>
-
-            <div className="grid grid-cols-2 gap-3 mb-3">
+          {/* ── Section 2: Relationship ── */}
+          <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-2">Relationship</p>
+          <div className="flex gap-2 mb-5">
+            {warmthConfig.map(({ value, label, active, inactive }) => (
               <button
-                onClick={() => { setShowFollowUp(true); setFollowUpResult(null); }}
-                className="rounded-2xl bg-gradient-to-br from-primary to-primary/75 text-primary-foreground p-4 text-left transition-colors"
-                style={{ touchAction: "manipulation" } as React.CSSProperties}
-              >
-                <Sparkles className="w-5 h-5 mb-2 opacity-90" />
-                <p className="text-sm font-semibold">Follow-up email</p>
-                <p className="text-xs opacity-70 mt-0.5">
-                  {daysSinceLastTouch != null ? `${daysSinceLastTouch}d since last touch` : "Draft with AI"}
-                </p>
-              </button>
-              <button
-                onClick={handleSetReminder}
-                className="rounded-2xl bg-card border border-border/60 p-4 text-left hover:bg-muted/30 transition-colors"
-                style={{ touchAction: "manipulation" } as React.CSSProperties}
-              >
-                <Bell className="w-5 h-5 mb-2 text-muted-foreground" />
-                <p className="text-sm font-semibold">Set reminder</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Check in +3 days</p>
-              </button>
-            </div>
-
-            {/* FIX #4: Secondary row with Log submenu */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => void openIntel(false)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-card border border-border/60 text-xs font-medium hover:bg-muted/30 transition-colors"
-                style={{ touchAction: "manipulation" } as React.CSSProperties}
-              >
-                <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
-                Company brief
-              </button>
-              <button
-                onClick={() => setShowMeeting(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-card border border-border/60 text-xs font-medium hover:bg-muted/30 transition-colors"
-                style={{ touchAction: "manipulation" } as React.CSSProperties}
-              >
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                Schedule
-              </button>
-              <button
-                onClick={() => setShowLogStrip(!showLogStrip)}
+                key={value}
+                onClick={() => handleUpdateWarmth(value)}
                 className={[
-                  "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-medium transition-colors",
-                  showLogStrip
-                    ? "bg-foreground text-background border-foreground"
-                    : "bg-card border-border/60 hover:bg-muted/30",
+                  "flex-1 py-2.5 px-3 rounded-full border text-[13px] font-bold transition-all",
+                  currentWarmth === value ? active : inactive,
                 ].join(" ")}
                 style={{ touchAction: "manipulation" } as React.CSSProperties}
               >
-                <Plus className="w-3.5 h-3.5" />
-                Log
+                {label}
               </button>
-            </div>
+            ))}
+          </div>
 
-            {/* Log chip strip */}
-            {showLogStrip && (
-              <div className="flex gap-2 mt-2 overflow-x-auto pb-0.5 -mx-1 px-1">
-                {LOG_INTERACTION_CHIPS.map((chip) => (
-                  <button
-                    key={chip.label}
-                    onClick={() => { setShowLogStrip(false); handleQuickLog(chip.type, chip.label, chip.label); }}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card text-xs font-medium hover:bg-muted/50 transition-colors"
-                    style={{ touchAction: "manipulation" } as React.CSSProperties}
-                  >
-                    {chip.icon}
-                    {chip.label}
-                  </button>
-                ))}
+          {/* ── Section 3: Suggested actions ── */}
+          <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-2">Suggested actions</p>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <button
+              onClick={() => { setShowFollowUp(true); setFollowUpResult(null); }}
+              className="rounded-2xl bg-gradient-to-br from-[#4B68F5] to-[#7B5CF0] text-white p-4 text-left transition-opacity active:opacity-85"
+              style={{ touchAction: "manipulation" } as React.CSSProperties}
+            >
+              <Sparkles className="w-5 h-5 mb-2 opacity-90" />
+              <p className="text-[13px] font-bold">Follow-up email</p>
+              <p className="text-[11px] opacity-65 mt-0.5">
+                {daysSinceLastTouch != null ? `${daysSinceLastTouch}d since last touch` : "Draft with AI"}
+              </p>
+            </button>
+            <button
+              onClick={handleSetReminder}
+              className="rounded-2xl bg-white border border-black/10 shadow-sm p-4 text-left active:opacity-75 transition-opacity"
+              style={{ touchAction: "manipulation" } as React.CSSProperties}
+            >
+              <Bell className="w-5 h-5 mb-2 text-muted-foreground" />
+              <p className="text-[13px] font-bold text-foreground">Set reminder</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Check in +3 days</p>
+            </button>
+          </div>
+
+          <div className="flex gap-2 mb-5">
+            <button
+              onClick={() => void openIntel(false)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-black/10 shadow-sm text-[13px] font-semibold text-foreground active:opacity-75 transition-opacity"
+              style={{ touchAction: "manipulation" } as React.CSSProperties}
+            >
+              <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
+              Company brief
+            </button>
+            <button
+              onClick={() => setShowMeeting(true)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-black/10 shadow-sm text-[13px] font-semibold text-foreground active:opacity-75 transition-opacity"
+              style={{ touchAction: "manipulation" } as React.CSSProperties}
+            >
+              <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+              Schedule
+            </button>
+            <button
+              onClick={() => setShowLogStrip(!showLogStrip)}
+              className={[
+                "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[13px] font-semibold transition-all active:opacity-75",
+                showLogStrip
+                  ? "bg-[#4B68F5] text-white border-[#4B68F5]"
+                  : "bg-white border-black/10 shadow-sm text-foreground",
+              ].join(" ")}
+              style={{ touchAction: "manipulation" } as React.CSSProperties}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Log
+            </button>
+          </div>
+
+          {/* Log chip strip */}
+          {showLogStrip && (
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-0.5 -mx-1 px-1 scrollbar-hide">
+              {LOG_INTERACTION_CHIPS.map((chip) => (
                 <button
-                  onClick={() => { setShowLogStrip(false); handleOpenLogSheet(); }}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card text-xs font-medium hover:bg-muted/50 transition-colors text-muted-foreground"
+                  key={chip.label}
+                  onClick={() => { setShowLogStrip(false); handleQuickLog(chip.type, chip.label, chip.label); }}
+                  className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full border border-black/10 bg-white text-[13px] font-bold text-foreground shadow-sm active:opacity-75 transition-opacity"
                   style={{ touchAction: "manipulation" } as React.CSSProperties}
                 >
-                  <StickyNote className="w-3.5 h-3.5" />
-                  Other
+                  {chip.icon}
+                  {chip.label}
                 </button>
-              </div>
-            )}
-          </div>
-
-          {/* ── Section 4: Tags ───────────────────────────────────────── */}
-          <div className="mb-5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Tags</p>
-            {/* TODO: wire to tag system — ContactV2 has no tags field yet */}
-            <div className="flex flex-wrap gap-2 items-center">
-              <p className="text-xs text-muted-foreground">No tags yet</p>
-              {/* FIX #5: Toast instead of silent no-op */}
+              ))}
               <button
-                onClick={() => toast({ title: "Tags coming soon", description: "Tag support is being added in the next update." })}
-                className="text-xs rounded-full px-3 py-1 border border-dashed border-border/50 text-muted-foreground hover:border-border transition-colors"
+                onClick={() => { setShowLogStrip(false); handleOpenLogSheet(); }}
+                className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full border border-black/10 bg-white text-[13px] font-bold text-muted-foreground shadow-sm active:opacity-75 transition-opacity"
                 style={{ touchAction: "manipulation" } as React.CSSProperties}
               >
-                + Add tag
+                <StickyNote className="w-3.5 h-3.5" />
+                Other
               </button>
             </div>
-          </div>
+          )}
 
-          {/* ── Tasks ─────────────────────────────────────────────────── */}
+          {/* ── Tasks ── */}
           {contactTasks.length > 0 && (
             <div className="mb-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-0.5">Tasks</p>
-              <div className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
+              <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-2">Tasks</p>
+              <div className="rounded-xl border border-black/10 bg-white shadow-sm overflow-hidden">
                 {contactTasks.map((task) => (
-                  <div key={task.id} className="flex items-start gap-3 px-3 py-2.5 border-b border-border/40 last:border-0" data-testid={`task-row-${task.id}`}>
+                  <div key={task.id} className="flex items-start gap-3 px-3 py-2.5 border-b border-black/[0.06] last:border-0" data-testid={`task-row-${task.id}`}>
                     {task.draftBody ? (
                       <button className="flex-1 flex items-start gap-3 text-left" onClick={() => setExpandedDraftTaskId(expandedDraftTaskId === task.id ? null : task.id)}>
                         <Mail className="w-4 h-4 text-violet-500 mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm">{task.title}</p>
+                          <p className="text-sm font-medium">{task.title}</p>
                           {expandedDraftTaskId === task.id && (
                             <div className="mt-2 space-y-2">
                               <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{task.draftBody}</p>
@@ -980,14 +965,14 @@ export function ContactDetailView({
                                 <div className="space-y-1">
                                   <p className="text-xs font-medium text-foreground">Did you send it?</p>
                                   <div className="flex gap-2">
-                                    <button onClick={(e) => { e.stopPropagation(); handleDraftSentYes(task.id, task.title); }} className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Yes</button>
-                                    <button onClick={(e) => { e.stopPropagation(); setDraftSentConfirmTaskId(null); }} className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent">No</button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDraftSentYes(task.id, task.title); }} className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">Yes</button>
+                                    <button onClick={(e) => { e.stopPropagation(); setDraftSentConfirmTaskId(null); }} className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-black/5 text-muted-foreground">No</button>
                                   </div>
                                 </div>
                               ) : (
                                 <div className="flex gap-2">
-                                  <button onClick={(e) => { e.stopPropagation(); handleDraftTaskSend(task); }} className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30">Send</button>
-                                  <button onClick={(e) => { e.stopPropagation(); handleDiscardDraftBody(task.id); }} className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-muted/40 text-muted-foreground border border-transparent">Discard Draft</button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDraftTaskSend(task); }} className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-violet-500/10 text-violet-600 border border-violet-500/20">Send</button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDiscardDraftBody(task.id); }} className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-black/5 text-muted-foreground">Discard</button>
                                 </div>
                               )}
                             </div>
@@ -1009,13 +994,13 @@ export function ContactDetailView({
                                   if (e.key === "Escape") { setEditingTaskId(null); setEditingTaskText(""); }
                                 }}
                                 autoFocus
-                                className="flex-1 bg-transparent text-sm outline-none border-b border-border min-w-0"
+                                className="flex-1 bg-transparent text-sm outline-none border-b border-black/10 min-w-0"
                                 data-testid={`input-edit-task-${task.id}`}
                               />
                               <Button size="sm" variant="ghost" className="h-6 px-2 text-xs shrink-0" onClick={handleSaveTaskEdit}>Save</Button>
                             </div>
                           ) : (
-                            <p className="text-sm">{task.title}</p>
+                            <p className="text-sm font-medium">{task.title}</p>
                           )}
                           {task.dueAt && editingTaskId !== task.id && (
                             <p className="text-xs text-muted-foreground mt-0.5">
@@ -1036,8 +1021,8 @@ export function ContactDetailView({
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button size="icon" variant="ghost" className="opacity-50 hover:opacity-100 shrink-0" data-testid={`menu-task-${task.id}`}>
-                              <MoreHorizontal className="w-5 h-5" />
+                            <Button size="icon" variant="ghost" className="opacity-50 hover:opacity-100 shrink-0 w-8 h-8" data-testid={`menu-task-${task.id}`}>
+                              <MoreHorizontal className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
@@ -1059,33 +1044,32 @@ export function ContactDetailView({
                     value={newTaskText}
                     onChange={(e) => setNewTaskText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") handleAddTask(); }}
-                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 min-w-0"
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 min-w-0"
                     data-testid="input-add-task"
                   />
                   {newTaskText.trim() && (
-                    <Button size="sm" variant="ghost" onClick={handleAddTask} className="shrink-0 h-7 px-2 text-xs" data-testid="button-save-task">Add</Button>
+                    <Button size="sm" variant="ghost" onClick={handleAddTask} className="shrink-0 h-7 px-2 text-xs text-[#4B68F5]" data-testid="button-save-task">Add</Button>
                   )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── Section 5: Timeline ───────────────────────────────────── */}
-          {/* FIX #6: Visually distinct section with own background */}
-          <div className="mt-6 pt-5 border-t border-border/40">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Activity</p>
-            </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 -mx-1 px-1">
+          {/* ── Activity ── */}
+          <div className="mt-2">
+            <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-3">Activity</p>
+
+            {/* Filter chips */}
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-hide">
               {tlFilters.map((f) => (
                 <button
                   key={f.value}
                   onClick={() => setTimelineFilter(f.value)}
                   className={[
-                    "shrink-0 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
+                    "shrink-0 px-4 py-2 rounded-full border text-[13px] font-bold transition-colors whitespace-nowrap",
                     timelineFilter === f.value
-                      ? "bg-foreground text-background border-foreground"
-                      : "bg-background text-muted-foreground border-border/40 hover:border-border",
+                      ? "bg-[#4B68F5] text-white border-[#4B68F5]"
+                      : "bg-[#F2F2F7] text-muted-foreground border-black/10",
                   ].join(" ")}
                   style={{ touchAction: "manipulation" } as React.CSSProperties}
                 >
@@ -1093,6 +1077,7 @@ export function ContactDetailView({
                 </button>
               ))}
             </div>
+
             <TimelineFeed
               items={filteredTimelineItems}
               onAddNote={handleAddNote}
@@ -1103,7 +1088,7 @@ export function ContactDetailView({
         </>
       )}
 
-      {/* ── Delete confirmation ──────────────────────────────────────────── */}
+      {/* ── Delete confirmation ── */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1119,7 +1104,7 @@ export function ContactDetailView({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Follow-up Drawer ─────────────────────────────────────────────── */}
+      {/* ── Follow-up Drawer ── */}
       <Drawer open={showFollowUp} handleOnly onOpenChange={setShowFollowUp}>
         <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
           <DrawerHeader>
@@ -1153,25 +1138,25 @@ export function ContactDetailView({
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Goal</Label>
-                <Textarea value={followUpGoal} onChange={(e) => setFollowUpGoal(e.target.value)} placeholder="e.g., book a 20-min call next week" className="min-h-[110px] resize-none" />
+                <Textarea value={followUpGoal} onChange={(e) => setFollowUpGoal(e.target.value)} placeholder="e.g., book a 20-min call next week" className="min-h-[110px] resize-none rounded-xl" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Context (optional)</Label>
-                <Textarea value={followUpContext} onChange={(e) => setFollowUpContext(e.target.value)} placeholder="e.g., met at All-Energy Melbourne" className="min-h-[90px] resize-none" />
+                <Textarea value={followUpContext} onChange={(e) => setFollowUpContext(e.target.value)} placeholder="e.g., met at All-Energy Melbourne" className="min-h-[90px] resize-none rounded-xl" />
               </div>
               <div className="flex gap-2 pt-1">
-                <Button className="flex-1 gap-2" onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp}>
+                <Button className="flex-1 gap-2 rounded-xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] border-0" onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp}>
                   <Sparkles className="w-4 h-4" />
                   {isGeneratingFollowUp ? "Generating..." : "Generate"}
                 </Button>
-                <Button variant="outline" className="flex-1" onClick={handleCopyFollowUp} disabled={!followUpResult}>Copy</Button>
+                <Button variant="outline" className="flex-1 rounded-xl" onClick={handleCopyFollowUp} disabled={!followUpResult}>Copy</Button>
               </div>
               {followUpResult && (
-                <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
+                <div className="p-3 rounded-xl bg-white border border-black/10 shadow-sm space-y-2">
                   {followUpResult.subject && (
                     <div className="text-sm">
-                      <span className="text-xs text-muted-foreground">Subject</span>
-                      <div className="font-medium">{followUpResult.subject}</div>
+                      <span className="text-xs text-muted-foreground font-semibold">Subject</span>
+                      <div className="font-medium mt-0.5">{followUpResult.subject}</div>
                     </div>
                   )}
                   <div className="text-sm whitespace-pre-wrap">{followUpResult.body}</div>
@@ -1182,7 +1167,7 @@ export function ContactDetailView({
         </DrawerContent>
       </Drawer>
 
-      {/* ── Meeting Drawer ───────────────────────────────────────────────── */}
+      {/* ── Meeting Drawer ── */}
       <Drawer open={showMeeting} onOpenChange={setShowMeeting}>
         <DrawerContent>
           <DrawerHeader>
@@ -1191,39 +1176,39 @@ export function ContactDetailView({
           </DrawerHeader>
           <div className="px-4 pb-4 space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Quick slots</Label>
+              <Label className="text-xs text-muted-foreground font-semibold">Quick slots</Label>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {quickSlots.map((s) => (
-                  <Button key={s.label} variant={toDatetimeLocalValue(meetingStart) === toDatetimeLocalValue(s.getTime()) ? "default" : "outline"} size="sm" onClick={() => setMeetingStart(s.getTime())} className="shrink-0">
+                  <Button key={s.label} variant={toDatetimeLocalValue(meetingStart) === toDatetimeLocalValue(s.getTime()) ? "default" : "outline"} size="sm" onClick={() => setMeetingStart(s.getTime())} className="shrink-0 rounded-xl">
                     {s.label}
                   </Button>
                 ))}
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Custom time</Label>
-              <Input type="datetime-local" value={toDatetimeLocalValue(meetingStart)} onChange={(e) => { const d = new Date(e.target.value); if (!Number.isNaN(d.getTime())) setMeetingStart(d); }} />
+              <Label className="text-xs text-muted-foreground font-semibold">Custom time</Label>
+              <Input type="datetime-local" value={toDatetimeLocalValue(meetingStart)} onChange={(e) => { const d = new Date(e.target.value); if (!Number.isNaN(d.getTime())) setMeetingStart(d); }} className="rounded-xl" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Duration</Label>
+              <Label className="text-xs text-muted-foreground font-semibold">Duration</Label>
               <Select value={String(meetingDuration)} onValueChange={(v) => setMeetingDuration(Number(v))}>
-                <SelectTrigger><SelectValue placeholder="Duration" /></SelectTrigger>
+                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Duration" /></SelectTrigger>
                 <SelectContent>{[15, 30, 45, 60].map((m) => <SelectItem key={m} value={String(m)}>{m} minutes</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="p-3 rounded-xl bg-muted/30 border border-border/60 text-sm">
-              <div className="font-medium">{contact.name || "Contact"}</div>
-              <div className="text-muted-foreground">{contact.company || ""}</div>
-              <div className="mt-2">{meetingStart.toLocaleString()}</div>
+            <div className="p-3 rounded-xl bg-white border border-black/10 shadow-sm text-sm">
+              <div className="font-bold">{contact.name || "Contact"}</div>
+              <div className="text-muted-foreground text-xs mt-0.5">{contact.company || ""}</div>
+              <div className="mt-2 text-sm">{meetingStart.toLocaleString()}</div>
             </div>
           </div>
           <DrawerFooter>
-            <Button className="w-full" onClick={handleCreateMeetingInvite}>Download .ics invite</Button>
+            <Button className="w-full rounded-xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] border-0" onClick={handleCreateMeetingInvite}>Download .ics invite</Button>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
 
-      {/* ── Intel Drawer ─────────────────────────────────────────────────── */}
+      {/* ── Intel Drawer ── */}
       <Drawer open={showIntel} handleOnly onOpenChange={(v) => setShowIntel(v)}>
         <DrawerContent className="h-[92dvh] overflow-hidden flex flex-col">
           <DrawerHeader>
@@ -1242,7 +1227,7 @@ export function ContactDetailView({
         </DrawerContent>
       </Drawer>
 
-      {/* ── Log Interaction Sheet ────────────────────────────────────────── */}
+      {/* ── Log Interaction Sheet ── */}
       <Drawer open={showLogSheet} onOpenChange={setShowLogSheet}>
         <DrawerContent className="rounded-t-3xl">
           <DrawerHeader>
@@ -1250,7 +1235,7 @@ export function ContactDetailView({
           </DrawerHeader>
           <div className="px-4 pb-6 space-y-4">
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">How did it go?</p>
+              <p className="text-xs text-muted-foreground font-semibold">How did it go?</p>
               <div className="flex gap-2">
                 {([
                   { value: "positive", label: "Worth following up", icon: "👍" },
@@ -1260,7 +1245,12 @@ export function ContactDetailView({
                   <button
                     key={opt.value}
                     onClick={() => setLogOutcome(opt.value)}
-                    className={["flex-1 py-2 px-2 rounded-xl border text-xs font-medium transition-colors", logOutcome === opt.value ? "bg-primary text-primary-foreground border-primary" : "border-border/50 bg-card/60 hover:bg-muted/50"].join(" ")}
+                    className={[
+                      "flex-1 py-2.5 px-2 rounded-xl border text-xs font-bold transition-colors",
+                      logOutcome === opt.value
+                        ? "bg-[#4B68F5] text-white border-[#4B68F5]"
+                        : "border-black/10 bg-white shadow-sm text-foreground",
+                    ].join(" ")}
                     data-testid={`outcome-${opt.value}`}
                   >
                     {opt.icon} {opt.label}
@@ -1269,27 +1259,29 @@ export function ContactDetailView({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">Quick note <span className="font-normal">(optional)</span></p>
+              <p className="text-xs text-muted-foreground font-semibold">Quick note <span className="font-normal">(optional)</span></p>
               <Textarea placeholder="What was discussed, what you promised..." value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={2} className="resize-none rounded-xl" data-testid="input-log-note" />
             </div>
-            <Button onClick={() => handleConfirmLog()} className="w-full rounded-xl" disabled={!logOutcome} data-testid="button-confirm-log">
+            <Button onClick={() => handleConfirmLog()} className="w-full rounded-xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] border-0" disabled={!logOutcome} data-testid="button-confirm-log">
               {logOutcome === "positive" ? "Log & Set Reminder" : "Log Interaction"}
             </Button>
-            <button onClick={() => handleConfirmLog("neutral")} className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1" data-testid="button-skip-log">
+            <button onClick={() => handleConfirmLog("neutral")} className="w-full text-xs text-muted-foreground py-1 active:opacity-60" data-testid="button-skip-log">
               Skip — just log it
             </button>
           </div>
         </DrawerContent>
       </Drawer>
 
-      {/* ── Bottom Bar ───────────────────────────────────────────────────── */}
-      {/* FIX #7: Single-tap vCard save — direct call, no intermediate drawer */}
+      {/* ── Bottom Bar ── */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 bg-background/70 backdrop-blur-xl border-t border-border"
+        className="fixed bottom-0 left-0 right-0 z-50 bg-[#F2F2F7]/85 backdrop-blur-xl border-t border-black/[0.08]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="max-w-2xl mx-auto px-4 py-3">
-          <Button onClick={onDownloadVCard} className="w-full gap-2" variant="default">
+          <Button
+            onClick={onDownloadVCard}
+            className="w-full gap-2 rounded-xl h-12 bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] border-0 font-bold text-[15px]"
+          >
             Save to Phone
           </Button>
         </div>

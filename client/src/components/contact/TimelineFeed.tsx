@@ -1,19 +1,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  StickyNote,
-  Sparkles,
-  Bell,
-  CheckSquare,
-  Calendar,
-  Users,
-  Scan,
-  Edit,
-  CloudUpload,
-  Loader2,
-  Mic,
-} from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 export type TimelineEventType =
@@ -59,107 +47,214 @@ interface TimelineFeedProps {
   onQuickLog?: (type: TimelineEventType, summary: string, displayLabel: string) => void;
 }
 
-
-
-const EVENT_COLORS: Record<string, string> = {
-  note: "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300",
-  note_added: "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300",
-  note_updated: "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300",
-  followup: "bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300",
-  followup_generated: "bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300",
-  reminder: "bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300",
-  reminder_set: "bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300",
-  reminder_done: "bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-300",
-  crm: "bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300",
-  hubspot_synced: "bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300",
-  salesforce_synced: "bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-300",
-  created: "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300",
-  scan_created: "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300",
-  task_added: "bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300",
-  task_done: "bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-300",
-  meeting_scheduled: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300",
-  event_attended: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300",
-  contact_merged: "bg-pink-100 text-pink-600 dark:bg-pink-900/40 dark:text-pink-300",
-  contact_updated: "bg-gray-100 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400",
-  followup_sent: "bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300",
-  voice_debrief: "bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300",
+// ── Dot colour per event type ─────────────────────────────────────────────
+const EVENT_DOT: Record<string, string> = {
+  note:              "bg-amber-400",
+  note_added:        "bg-amber-400",
+  note_updated:      "bg-amber-400",
+  followup:          "bg-violet-500",
+  followup_generated:"bg-violet-500",
+  followup_sent:     "bg-violet-500",
+  reminder:          "bg-orange-400",
+  reminder_set:      "bg-orange-400",
+  reminder_done:     "bg-emerald-500",
+  task_added:        "bg-slate-400",
+  task_done:         "bg-emerald-500",
+  meeting_scheduled: "bg-indigo-500",
+  event_attended:    "bg-indigo-500",
+  hubspot_synced:    "bg-orange-400",
+  salesforce_synced: "bg-sky-500",
+  created:           "bg-[#4B68F5]",
+  scan_created:      "bg-[#4B68F5]",
+  contact_updated:   "bg-black/20",
+  contact_merged:    "bg-pink-500",
+  voice_debrief:     "bg-violet-500",
 };
 
-// FIX #3: Group same-type events on the same calendar day
-type GroupedEntry =
-  | TimelineItem
-  | { type: "__group__"; label: string; id: string; at: string | Date; eventType: string };
-
-
-
-// Types that are meaningful to show individually — never collapse these
-  const NEVER_COLLAPSE = new Set<TimelineEventType>([
-  "note",
-  "note_added",
-  "note_updated",
-  "voice_debrief",
-  "followup_sent",
-  "followup_generated",
-  "meeting_scheduled",
-]);
-
-function groupTimelineItems(items: TimelineItem[]): GroupedEntry[] {
-  const seen = new Map<string, number>();
-  const seenIds = new Map<string, string>();
-
-  for (const item of items) {
-    if (NEVER_COLLAPSE.has(item.type)) continue;
-    const date = typeof item.at === "string" ? new Date(item.at) : item.at;
-    const key = `${item.type}__${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    seen.set(key, (seen.get(key) ?? 0) + 1);
-    if (!seenIds.has(key)) seenIds.set(key, item.id);
-  }
-
-  const emitted = new Set<string>();
-  const result: GroupedEntry[] = [];
-
-  for (const item of items) {
-    if (NEVER_COLLAPSE.has(item.type)) {
-      result.push(item);
-      continue;
-    }
-    const date = typeof item.at === "string" ? new Date(item.at) : item.at;
-    const key = `${item.type}__${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    const count = seen.get(key) ?? 1;
-
-    if (count >= 2) {
-      if (!emitted.has(key)) {
-        emitted.add(key);
-        const typeLabel: Partial<Record<TimelineEventType, string>> = {
-          reminder_set: "reminders set",
-          contact_updated: "profile edits",
-          task_added: "tasks added",
-          task_done: "tasks completed",
-          hubspot_synced: "HubSpot syncs",
-          salesforce_synced: "Salesforce syncs",
-        };
-        result.push({
-          type: "__group__",
-          label: `${count} ${typeLabel[item.type] ?? "events"}`,
-          id: `group-${seenIds.get(key)}`,
-          at: item.at,
-          eventType: item.type,
-        });
-      }
-    } else {
-      result.push(item);
-    }
-  }
-
-  return result;
+// ── Month key helper ──────────────────────────────────────────────────────
+function getMonthKey(at: string | Date): string {
+  const d = typeof at === "string" ? new Date(at) : at;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-  export function TimelineFeed({ items, onAddNote, isAddingNote }: TimelineFeedProps) {
+function getMonthLabel(key: string): string {
+  const [year, month] = key.split("-").map(Number);
+  const d = new Date(year, month - 1, 1);
+  return format(d, "MMMM yyyy");
+}
+
+// ── Group items by month ──────────────────────────────────────────────────
+interface MonthGroup {
+  key: string;
+  label: string;
+  items: TimelineItem[];
+}
+
+function groupByMonth(items: TimelineItem[]): MonthGroup[] {
+  const map = new Map<string, TimelineItem[]>();
+  for (const item of items) {
+    const key = getMonthKey(item.at);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(item);
+  }
+  // Sort month keys descending (newest first)
+  const sortedKeys = Array.from(map.keys()).sort((a, b) => b.localeCompare(a));
+  return sortedKeys.map((key) => ({
+    key,
+    label: getMonthLabel(key),
+    items: map.get(key)!,
+  }));
+}
+
+// ── Relative time ─────────────────────────────────────────────────────────
+function formatRelativeTime(at: string | Date): string {
+  const date = typeof at === "string" ? new Date(at) : at;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return format(date, "MMM d");
+}
+
+// ── Individual event row ──────────────────────────────────────────────────
+function EventRow({ item }: { item: TimelineItem }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const dotColor = EVENT_DOT[item.type] || "bg-black/20";
+
+  const hasExpandableContent =
+    (item.title && item.title.length > 60) ||
+    !!item.meta?.note ||
+    !!item.detail;
+
+  const outcomeConfig = item.meta?.outcome
+    ? ({
+        positive: { label: "Worth following up", className: "bg-emerald-500/10 text-emerald-700" },
+        neutral:  { label: "Neutral",            className: "bg-black/5 text-muted-foreground" },
+        negative: { label: "Not interested",     className: "bg-red-500/10 text-red-700" },
+      } as const)[item.meta.outcome]
+    : null;
+
+  return (
+    <div
+      className={[
+        "flex gap-3 px-3 py-3 border-b border-black/[0.05] last:border-0",
+        hasExpandableContent ? "cursor-pointer active:bg-black/[0.02] transition-colors" : "",
+      ].join(" ")}
+      onClick={hasExpandableContent ? () => setExpanded((v) => !v) : undefined}
+      style={hasExpandableContent ? { touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties : undefined}
+      data-testid={`timeline-item-${item.id}`}
+    >
+      {/* Dot */}
+      <div className={`w-2 h-2 rounded-full shrink-0 mt-[5px] ${dotColor}`} />
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          {/* Title — clamp to 1 line when collapsed, full when expanded */}
+          <p
+            className={[
+              "text-[13px] font-semibold text-foreground leading-snug",
+              !expanded && item.title.length > 60 ? "line-clamp-1" : "",
+            ].join(" ")}
+          >
+            {item.title}
+          </p>
+          <span className="text-[11px] font-semibold text-muted-foreground/60 shrink-0 mt-0.5">
+            {formatRelativeTime(item.at)}
+          </span>
+        </div>
+
+        {/* Outcome badge */}
+        {outcomeConfig && (
+          <span className={`inline-flex items-center mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${outcomeConfig.className}`}>
+            {outcomeConfig.label}
+          </span>
+        )}
+
+        {/* Note — shown when expanded or short enough */}
+        {item.meta?.note && (
+          <p
+            className={[
+              "text-[12px] text-muted-foreground mt-1 italic leading-relaxed",
+              !expanded ? "line-clamp-1" : "",
+            ].join(" ")}
+          >
+            "{item.meta.note}"
+          </p>
+        )}
+
+        {/* Detail — shown when expanded */}
+        {!item.meta?.note && item.detail && expanded && (
+          <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed">
+            {item.detail}
+          </p>
+        )}
+
+        {/* Expand hint */}
+        {hasExpandableContent && (
+          <p className="text-[11px] text-muted-foreground/40 mt-1 font-medium">
+            {expanded ? "Tap to collapse" : "Tap to expand"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Month group ───────────────────────────────────────────────────────────
+function MonthGroup({ group }: { group: MonthGroup }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mb-2">
+      {/* Header */}
+      <button
+        className={[
+          "w-full flex items-center justify-between px-3 py-2.5 bg-white border border-black/10 shadow-sm transition-colors active:bg-black/[0.02]",
+          open ? "rounded-t-xl border-b-transparent" : "rounded-xl",
+        ].join(" ")}
+        onClick={() => setOpen((v) => !v)}
+        style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+      >
+        <span className="text-[13px] font-bold text-foreground">{group.label}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] font-semibold text-muted-foreground/60">
+            {group.items.length} {group.items.length === 1 ? "event" : "events"}
+          </span>
+          <ChevronDown
+            className={[
+              "w-4 h-4 text-muted-foreground/50 transition-transform duration-200",
+              open ? "rotate-180" : "",
+            ].join(" ")}
+          />
+        </div>
+      </button>
+
+      {/* Events list */}
+      {open && (
+        <div className="bg-white border border-black/10 border-t-0 rounded-b-xl overflow-hidden shadow-sm">
+          {group.items.map((item) => (
+            <EventRow key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main feed ─────────────────────────────────────────────────────────────
+export function TimelineFeed({ items, onAddNote, isAddingNote }: TimelineFeedProps) {
   const [noteText, setNoteText] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
 
-  // FIX #3: Use new smart grouping instead of old contact_updated-only grouping
-  const groupedItems = useMemo(() => groupTimelineItems(items), [items]);
+  const monthGroups = useMemo(() => groupByMonth(items), [items]);
 
   const handleAddNote = () => {
     if (!noteText.trim()) return;
@@ -168,43 +263,27 @@ function groupTimelineItems(items: TimelineItem[]): GroupedEntry[] {
     setNoteOpen(false);
   };
 
-  const formatEventTime = (at: string | Date): string => {
-    const date = typeof at === "string" ? new Date(at) : at;
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return format(date, "MMM d");
-  };
-
   return (
-    // FIX #2: Removed space-y-3, tighter top spacing
     <div data-testid="timeline-feed">
 
-      {/* FIX #5: Add a note — solid background so it doesn't float */}
+      {/* Add a note */}
       <div className="mb-3">
         {!noteOpen ? (
           <button
             onClick={() => setNoteOpen(true)}
-            className="w-full text-left px-3 py-2.5 rounded-xl border border-dashed border-border/50 bg-background text-sm text-muted-foreground/60 hover:border-border/80 hover:text-muted-foreground transition-colors"
+            className="w-full text-left px-3 py-2.5 rounded-xl border border-dashed border-black/15 bg-transparent text-[14px] font-medium text-muted-foreground/60 hover:border-[#4B68F5]/30 hover:text-muted-foreground transition-colors"
             style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
             data-testid="button-open-note"
           >
             Add a note…
           </button>
         ) : (
-          <div className="rounded-xl bg-background border border-border/60 p-3 space-y-2">
+          <div className="rounded-xl bg-white border border-black/10 shadow-sm p-3 space-y-2">
             <Textarea
               placeholder="What happened?"
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
-              className="resize-none min-h-[80px] bg-transparent border-0 shadow-none focus-visible:ring-0 p-0"
+              className="resize-none min-h-[80px] bg-transparent border-0 shadow-none focus-visible:ring-0 p-0 text-[14px]"
               autoFocus
               data-testid="input-add-note"
             />
@@ -221,6 +300,7 @@ function groupTimelineItems(items: TimelineItem[]): GroupedEntry[] {
                 size="sm"
                 onClick={handleAddNote}
                 disabled={!noteText.trim() || isAddingNote}
+                className="rounded-lg bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] border-0 text-white"
                 data-testid="button-add-note"
               >
                 {isAddingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
@@ -230,82 +310,16 @@ function groupTimelineItems(items: TimelineItem[]): GroupedEntry[] {
         )}
       </div>
 
-      {/* Timeline list */}
-      {/* FIX #2: divide-y removed, using py spacing only for cleaner look */}
-      <div>
-        {groupedItems.length === 0 ? (
-          <div className="py-6 text-center text-muted-foreground text-sm">
-            No activity yet
-          </div>
-        ) : (
-          groupedItems.map((item) => {
-
-            // Collapsed group row
-            if ("label" in item && item.type === "__group__") {
-              const groupItem = item as { type: "__group__"; label: string; id: string; at: string | Date; eventType: string };
-             
-              const colorClass = EVENT_COLORS[groupItem.eventType] || EVENT_COLORS.contact_updated;
-              return (
-                <div key={groupItem.id} className="flex items-center gap-3 py-2">
-                  {/* FIX #4: Smaller icon — w-6 h-6 instead of w-8 h-8 */}
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${colorClass.split(" ")[0]}`} />
-                  <p className="flex-1 text-xs text-muted-foreground">{groupItem.label}</p>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {formatEventTime(groupItem.at)}
-                  </span>
-                </div>
-              );
-            }
-
-            // Individual event row
-            const timelineItem = item as TimelineItem;
-          
-            const colorClass = EVENT_COLORS[timelineItem.type] || EVENT_COLORS.note;
-
-            const outcomeConfig = timelineItem.meta?.outcome
-              ? ({
-                  positive: { label: "Worth following up", className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" },
-                  neutral:  { label: "Neutral",            className: "bg-muted text-muted-foreground" },
-                  negative: { label: "Not interested",     className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
-                } as const)[timelineItem.meta.outcome]
-              : null;
-
-            return (
-              <div
-                key={timelineItem.id}
-                className="flex gap-3 py-2.5 border-b border-border/30 last:border-0"
-                data-testid={`timeline-item-${timelineItem.id}`}
-              >
-                {/* FIX #4: Smaller icon — w-6 h-6, icon w-3.5 h-3.5 */}
-                <div className={`w-2 h-2 rounded-full shrink-0 mt-2 ${colorClass.split(" ")[0]}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium leading-snug">{timelineItem.title}</p>
-                    <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
-                      {formatEventTime(timelineItem.at)}
-                    </span>
-                  </div>
-                  {outcomeConfig && (
-                    <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${outcomeConfig.className}`}>
-                      {outcomeConfig.label}
-                    </span>
-                  )}
-                  {timelineItem.meta?.note && (
-                    <p className="text-xs text-muted-foreground mt-1 italic leading-relaxed">
-                      "{timelineItem.meta.note}"
-                    </p>
-                  )}
-                  {!timelineItem.meta?.note && timelineItem.detail && (
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                      {timelineItem.detail}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+      {/* Month groups */}
+      {monthGroups.length === 0 ? (
+        <div className="py-8 text-center text-[13px] font-medium text-muted-foreground/60">
+          No activity yet
+        </div>
+      ) : (
+        monthGroups.map((group) => (
+          <MonthGroup key={group.key} group={group} />
+        ))
+      )}
     </div>
   );
 }
