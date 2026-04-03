@@ -422,7 +422,7 @@ export function ContactsHub({
       </Drawer>
 
       {/* Page */}
-      <div className="px-4 pt-2 pb-32 w-full max-w-2xl mx-auto">
+      <div className="pt-2 pb-32 w-full max-w-2xl mx-auto">
         <h1 className="text-[30px] font-extrabold tracking-[-1.1px] text-foreground mb-0.5">Network</h1>
         <p className="text-[13px] font-semibold text-muted-foreground/60 mb-4">
           {contacts.length} {contacts.length === 1 ? "person" : "people"} · {filteredCompanies.length}{" "}
