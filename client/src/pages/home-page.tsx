@@ -356,7 +356,7 @@ export default function HomePage() {
     setSelectedCompanyId(null);
     setViewMode("contacts");
     setActiveTab("contacts");
-    setCaptureSheetMode("scan");
+    setShowCreateContactDrawer(true);
   }, []);
 
   const tabs = [
