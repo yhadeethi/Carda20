@@ -353,9 +353,6 @@ export default function HomePage() {
 
   // Called from CompanyDetail's sparse state CTA — opens scan sheet directly
   const handleScanForCompany = useCallback((_companyName: string) => {
-    setSelectedCompanyId(null);
-    setViewMode("contacts");
-    setActiveTab("contacts");
     setShowCreateContactDrawer(true);
   }, []);
 
