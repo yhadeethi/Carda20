@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
-// Add to imports at top:
 import type { Contact } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { logDebriefEvent } from "@/lib/debriefEvents";
@@ -150,8 +149,6 @@ export default function HomePage() {
   }, [toast]);
 
   const handleSwitchAccount = (email: string) => {
-    // Replit auth does not support true multi-session switching in-app.
-    // We store the target email so the UI can show intent post-login.
     try {
       localStorage.setItem("carda_switch_to_email", email);
     } catch {}
@@ -159,7 +156,6 @@ export default function HomePage() {
   };
 
   const handleAddAccount = () => {
-    // Triggers sign-out so the user can sign in with another account.
     try {
       localStorage.setItem("carda_add_account", "1");
     } catch {}
@@ -304,14 +300,13 @@ export default function HomePage() {
       phone: contact.phone || "",
       website: contact.website || "",
       linkedinUrl: contact.linkedinUrl || "",
-      address:  "",
+      address: "",
       eventName: null,
     };
     setSelectedContact(stored);
     setContactInitialAction(null);
     setViewMode("contact-detail");
   };
-
 
   const handleCaptureToggle = () => setCaptureMenuOpen(prev => !prev);
 
@@ -356,6 +351,14 @@ export default function HomePage() {
 
   const handleCaptureSheetClose = () => setCaptureSheetMode(null);
 
+  // Called from CompanyDetail's sparse state CTA — opens scan sheet directly
+  const handleScanForCompany = useCallback((_companyName: string) => {
+    setSelectedCompanyId(null);
+    setViewMode("contacts");
+    setActiveTab("contacts");
+    setCaptureSheetMode("scan");
+  }, []);
+
   const tabs = [
     { id: "contacts" as TabMode, label: "Network", icon: Users },
     { id: "events" as TabMode, label: "Events", icon: Calendar },
@@ -364,7 +367,7 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="h-14 border-b flex items-center justify-between px-4 bg-card shrink-0">
-        <button 
+        <button
           className="flex items-center gap-2 hover-elevate rounded-lg px-2 py-1 -ml-2"
           onClick={handleLogoClick}
           data-testid="button-logo"
@@ -494,7 +497,8 @@ export default function HomePage() {
               />
             </motion.div>
           )}
-{viewMode === "contacts" && (
+
+          {viewMode === "contacts" && (
             <motion.div
               key="contacts"
               initial={{ x: 40, opacity: 0 }}
@@ -514,6 +518,7 @@ export default function HomePage() {
               </div>
             </motion.div>
           )}
+
           {viewMode === "contact-detail" && selectedContact && (
             <motion.div
               key="contact-detail"
@@ -532,6 +537,7 @@ export default function HomePage() {
               />
             </motion.div>
           )}
+
           {viewMode === "company-detail" && selectedCompanyId && (
             <motion.div
               key="company-detail"
@@ -545,9 +551,11 @@ export default function HomePage() {
                 onBack={handleBackToCompanies}
                 onSelectContact={handleContactSelectedFromCompany}
                 initialTab={companyDetailTab}
+                onScanForCompany={handleScanForCompany}
               />
             </motion.div>
           )}
+
           {viewMode === "events" && (
             <motion.div
               key="events"
@@ -562,6 +570,7 @@ export default function HomePage() {
               />
             </motion.div>
           )}
+
           {viewMode === "event-detail" && currentEventId && (
             <motion.div
               key="event-detail"
@@ -581,7 +590,7 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar - Liquid Glass: Home circle + pill + Capture button */}
+      {/* Bottom Navigation Bar */}
       {showBottomNav && (
         <nav
           className={`fixed inset-x-0 bottom-0 z-30 flex items-center justify-between px-4 transition-all duration-300 ease-out ${
@@ -591,7 +600,7 @@ export default function HomePage() {
           data-testid="nav-bottom"
         >
           <div className="flex items-center gap-3">
-            {/* Home (standalone circle) */}
+            {/* Home */}
             <button
               onClick={() => handleTabChange("home")}
               className={`h-12 w-12 rounded-full backdrop-blur-sm shadow-xl border transition-all duration-200 flex items-center justify-center ${
@@ -604,7 +613,7 @@ export default function HomePage() {
               <Home className="w-5 h-5" />
             </button>
 
-            {/* Pill group — Network + Events */}
+            {/* Pill — Network + Events */}
             <div
               className={`inline-flex items-center h-12 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-xl border transition-all duration-300 ease-out ${
                 isCompact ? "gap-4 px-4" : "gap-6 px-5"
@@ -643,7 +652,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Capture button (floating right) */}
+          {/* Capture button */}
           <button
             onClick={handleCaptureToggle}
             className={`h-12 w-12 rounded-full backdrop-blur-sm shadow-xl border transition-all duration-300 flex items-center justify-center ${
@@ -680,7 +689,6 @@ export default function HomePage() {
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
             >
               <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 dark:border-slate-700/50 overflow-hidden">
-                {/* Scan Card */}
                 <button
                   onClick={() => handleCaptureOption("scan")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -697,7 +705,6 @@ export default function HomePage() {
 
                 <div className="border-t border-border/50" />
 
-                {/* Paste Signature */}
                 <button
                   onClick={() => handleCaptureOption("paste")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -714,7 +721,6 @@ export default function HomePage() {
 
                 <div className="border-t border-border/50" />
 
-                {/* Voice Debrief (coming soon) */}
                 <button
                   onClick={() => handleCaptureOption("debrief")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -752,7 +758,6 @@ export default function HomePage() {
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
-              {/* Drag handle */}
               <div className="flex justify-center pt-3 pb-2">
                 <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
               </div>

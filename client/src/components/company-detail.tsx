@@ -71,6 +71,7 @@ interface CompanyDetailProps {
   onBack: () => void;
   onSelectContact: (contact: StoredContact) => void;
   initialTab?: "contacts" | "orgmap" | "notes";
+  onScanForCompany?: (companyName: string) => void;
 }
 
 // Department display names
@@ -160,6 +161,7 @@ export function CompanyDetail({
   onBack,
   onSelectContact,
   initialTab = "orgmap",
+  onScanForCompany,
 }: CompanyDetailProps) {
   const [company, setCompany] = useState<Company | null>(null);
   const [contacts, setContacts] = useState<ContactV2[]>([]);
@@ -540,7 +542,7 @@ export function CompanyDetail({
                         }`}
                       />
 
-                      {/* Avatar — circle for people */}
+                      {/* Avatar */}
                       <div className="w-9 h-9 rounded-full bg-black/5 text-[#3A3A3F] flex items-center justify-center font-extrabold text-sm shrink-0 ml-1">
                         {getContactInitials(contact.name)}
                       </div>
@@ -590,9 +592,8 @@ export function CompanyDetail({
             onContactUpdate={refreshContacts}
             onSelectContact={onSelectContact}
             companyName={company.name}
-            onAddContact={() => {
-              setActiveTab("contacts");
-              onBack();
+            onAddContact={(name) => {
+              onScanForCompany?.(name);
             }}
           />
         </TabsContent>
@@ -753,7 +754,7 @@ export function CompanyDetail({
   );
 }
 
-// Org Role Badge — Carda monochrome style
+// Org Role Badge
 function OrgRoleBadge({ role }: { role: OrgRole }) {
   const icons: Record<OrgRole, typeof Shield> = {
     CHAMPION: Shield,
@@ -776,7 +777,7 @@ function OrgRoleBadge({ role }: { role: OrgRole }) {
   );
 }
 
-// Department Badge — Carda monochrome style
+// Department Badge
 function DepartmentBadge({ department }: { department: Department }) {
   return (
     <Badge
