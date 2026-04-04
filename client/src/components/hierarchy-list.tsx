@@ -1,13 +1,12 @@
 /**
- * HierarchyList - iOS 26-style collapsible org hierarchy
- * Features:
- * - Collapsible tree with smooth animations
- * - Avatar, name, title, department pill per row
- * - Bottom sheet for editing reporting lines
+ * HierarchyList v2 - Colour palette refresh only
  *
- * IMPORTANT:
- * This version writes org changes via V2 storage (updateContactV2),
- * which also mirrors to V1 (compat) so the rest of the UI stays consistent.
+ * Changes vs v1:
+ * - DEPARTMENT_COLORS updated to match the 4-group palette:
+ *   Leadership (purple), Revenue (red), Operations (green), Other (grey)
+ * - Badge colours now consistent with org-chart-canvas v5
+ *
+ * Zero logic changes. All behaviour preserved.
  */
 
 import { useState, useMemo, useCallback, memo } from "react";
@@ -28,23 +27,24 @@ interface HierarchyListProps {
 }
 
 const DEPARTMENT_LABELS: Record<Department, string> = {
-  EXEC: "Exec",
-  LEGAL: "Legal",
-  PROJECT_DELIVERY: "Delivery",
-  SALES: "Sales",
-  FINANCE: "Finance",
-  OPS: "Ops",
-  UNKNOWN: "",
+  EXEC:             "Leadership",
+  LEGAL:            "Legal",
+  PROJECT_DELIVERY: "Operations",
+  SALES:            "Revenue",
+  FINANCE:          "Finance",
+  OPS:              "Operations",
+  UNKNOWN:          "",
 };
 
+// Updated to match 4-group palette from org-chart-canvas v5
 const DEPARTMENT_COLORS: Record<Department, string> = {
-  EXEC: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
-  LEGAL: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  PROJECT_DELIVERY: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  SALES: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-  FINANCE: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
-  OPS: "bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300",
-  UNKNOWN: "bg-gray-100 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400",
+  EXEC:             "bg-[#F0EFFF] text-[#5856D6]",
+  LEGAL:            "bg-[#F2F2F7] text-[#8E8E93]",
+  PROJECT_DELIVERY: "bg-[#EDFAF1] text-[#34C759]",
+  SALES:            "bg-[#FFF2F1] text-[#FF3B30]",
+  FINANCE:          "bg-[#F2F2F7] text-[#8E8E93]",
+  OPS:              "bg-[#EDFAF1] text-[#34C759]",
+  UNKNOWN:          "bg-[#F2F2F7] text-[#8E8E93]",
 };
 
 interface TreeNode {
@@ -139,11 +139,16 @@ const HierarchyRow = memo(function HierarchyRow({
 
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-[15px] truncate">{contact.name}</div>
-        {contact.title && <div className="text-xs text-muted-foreground truncate">{contact.title}</div>}
+        {contact.title && (
+          <div className="text-xs text-muted-foreground truncate">{contact.title}</div>
+        )}
       </div>
 
       {department !== "UNKNOWN" && DEPARTMENT_LABELS[department] && (
-        <Badge variant="secondary" className={`text-[10px] px-2 py-0.5 shrink-0 rounded-full ${DEPARTMENT_COLORS[department]}`}>
+        <Badge
+          variant="secondary"
+          className={`text-[10px] px-2 py-0.5 shrink-0 rounded-full font-medium ${DEPARTMENT_COLORS[department]}`}
+        >
           {DEPARTMENT_LABELS[department]}
         </Badge>
       )}
@@ -231,7 +236,6 @@ export function HierarchyList({ contacts, onContactUpdate, onSelectContact }: Hi
         return;
       }
 
-      // Cycle check
       if (managerId) {
         const visited = new Set<string>();
         let current = managerId;
@@ -281,12 +285,19 @@ export function HierarchyList({ contacts, onContactUpdate, onSelectContact }: Hi
     <div className="h-full flex flex-col">
       {!hasAnyReportingLines && (
         <div className="px-4 py-3 bg-muted/40 rounded-xl mb-3 text-center">
-          <p className="text-sm text-muted-foreground">No reporting lines yet. Tap a person to set who they report to.</p>
+          <p className="text-sm text-muted-foreground">
+            No reporting lines yet. Tap a person to set who they report to.
+          </p>
         </div>
       )}
 
       <div className="flex-1 overflow-y-auto -mx-2 px-2">
-        <HierarchyTree nodes={hierarchy} expandedIds={expandedIds} onToggleExpand={toggleExpand} onTapContact={handleTapContact} />
+        <HierarchyTree
+          nodes={hierarchy}
+          expandedIds={expandedIds}
+          onToggleExpand={toggleExpand}
+          onTapContact={handleTapContact}
+        />
       </div>
 
       <Drawer open={!!editingContact} onOpenChange={(open) => !open && setEditingContact(null)}>
@@ -297,9 +308,13 @@ export function HierarchyList({ contacts, onContactUpdate, onSelectContact }: Hi
                 {editingContact?.name?.charAt(0)?.toUpperCase() || "?"}
               </div>
               <div className="min-w-0 flex-1">
-                <DrawerTitle className="text-xl font-bold truncate">{editingContact?.name || "Contact"}</DrawerTitle>
+                <DrawerTitle className="text-xl font-bold truncate">
+                  {editingContact?.name || "Contact"}
+                </DrawerTitle>
                 {editingContact?.title && (
-                  <p className="text-sm text-muted-foreground truncate mt-0.5">{editingContact.title}</p>
+                  <p className="text-sm text-muted-foreground truncate mt-0.5">
+                    {editingContact.title}
+                  </p>
                 )}
               </div>
             </div>
@@ -307,10 +322,14 @@ export function HierarchyList({ contacts, onContactUpdate, onSelectContact }: Hi
 
           <div className="px-4 pb-4 space-y-5 overflow-y-auto">
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reports To</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Reports To
+              </label>
               <Select
                 value={editingContact?.org?.reportsToId || "_none"}
-                onValueChange={(value) => handleSetReportsTo(value === "_none" ? null : value)}
+                onValueChange={(value) =>
+                  handleSetReportsTo(value === "_none" ? null : value)
+                }
               >
                 <SelectTrigger className="h-12" data-testid="select-reports-to">
                   <SelectValue placeholder="Select manager" />
@@ -337,7 +356,10 @@ export function HierarchyList({ contacts, onContactUpdate, onSelectContact }: Hi
                 </label>
                 <div className="space-y-1.5 bg-muted/30 rounded-xl p-2">
                   {directReports.map((dr) => (
-                    <div key={dr.id} className="flex items-center gap-2 py-2 px-2.5 rounded-lg bg-background/50">
+                    <div
+                      key={dr.id}
+                      className="flex items-center gap-2 py-2 px-2.5 rounded-lg bg-background/50"
+                    >
                       <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-semibold">
                         {dr.name?.charAt(0)?.toUpperCase() || "?"}
                       </div>

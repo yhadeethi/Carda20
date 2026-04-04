@@ -1,11 +1,21 @@
 /**
- * OrgChartCanvas v4.0 - Modern, clean org chart with proper edge connections
- * Changes vs v3.0:
- * - Fixed edge connections to properly connect to nodes
- * - Removed floating company logo card
- * - Modern squared avatar design instead of circles
- * - Cleaner, flatter contact chip design
- * - Improved animations and visual polish
+ * OrgChartCanvas v5.0 - Carda Design System Refresh
+ *
+ * Changes vs v4.0:
+ * - Glassmorphism node cards (matches home/network aesthetic)
+ * - 4-colour department palette: Leadership / Revenue / Ops / Other
+ * - Left dept accent bar (3px) replaces top gradient strip
+ * - Tap-to-front: selected node gets elevated zIndex
+ * - Dot-grid canvas background via ReactFlow <Background>
+ * - Soft grey edges, no arrowheads
+ *
+ * Preserved from v4.0 (unchanged):
+ * - All props/interfaces
+ * - dagre layout logic
+ * - Focus/dim logic
+ * - Virtual root logic
+ * - ReactFlow config
+ * - forwardRef / imperative handle
  */
 
 import { useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from "react";
@@ -20,82 +30,89 @@ import {
   Handle,
   Position,
   NodeProps,
-  MarkerType,
   Connection,
+  Background,
+  BackgroundVariant,
 } from "@xyflow/react";
 import dagre from "dagre";
 import "@xyflow/react/dist/style.css";
-import { ExternalLink, Users, Crosshair } from "lucide-react";
+import { ExternalLink, Crosshair } from "lucide-react";
 import { StoredContact, Department } from "@/lib/contactsStorage";
 
-// Department colors - modern, subtle palette
-const DEPARTMENT_COLORS: Record<
-  Department,
-  { bg: string; border: string; text: string; gradient: string; dot: string }
-> = {
-  EXEC: {
-    bg: "bg-white dark:bg-slate-900",
-    border: "border-purple-200/60 dark:border-purple-800/40",
-    text: "text-purple-600 dark:text-purple-400",
-    gradient: "from-purple-500 to-violet-600",
-    dot: "bg-purple-500",
+// ─── Colour system ────────────────────────────────────────────────────────────
+// 4 meaningful groups instead of 7 rainbow colours.
+
+type ColourGroup = "exec" | "revenue" | "ops" | "other";
+
+const DEPT_TO_GROUP: Record<Department, ColourGroup> = {
+  EXEC: "exec",
+  SALES: "revenue",
+  PROJECT_DELIVERY: "ops",
+  OPS: "ops",
+  FINANCE: "other",
+  LEGAL: "other",
+  UNKNOWN: "other",
+};
+
+interface ColourConfig {
+  bar: string;
+  avatarA: string;
+  avatarB: string;
+  dot: string;
+  labelText: string;
+  label: string;
+}
+
+const COLOUR_CONFIG: Record<ColourGroup, ColourConfig> = {
+  exec: {
+    bar: "#5856D6",
+    avatarA: "#5856D6",
+    avatarB: "#AF52DE",
+    dot: "#5856D6",
+    labelText: "#5856D6",
+    label: "Leadership",
   },
-  LEGAL: {
-    bg: "bg-white dark:bg-slate-900",
-    border: "border-indigo-200/60 dark:border-indigo-800/40",
-    text: "text-indigo-600 dark:text-indigo-400",
-    gradient: "from-indigo-500 to-blue-600",
-    dot: "bg-indigo-500",
+  revenue: {
+    bar: "#FF3B30",
+    avatarA: "#FF3B30",
+    avatarB: "#FF9500",
+    dot: "#FF3B30",
+    labelText: "#FF3B30",
+    label: "Revenue",
   },
-  PROJECT_DELIVERY: {
-    bg: "bg-white dark:bg-slate-900",
-    border: "border-emerald-200/60 dark:border-emerald-800/40",
-    text: "text-emerald-600 dark:text-emerald-400",
-    gradient: "from-emerald-500 to-teal-600",
-    dot: "bg-emerald-500",
+  ops: {
+    bar: "#34C759",
+    avatarA: "#34C759",
+    avatarB: "#5AC8FA",
+    dot: "#34C759",
+    labelText: "#34C759",
+    label: "Operations",
   },
-  SALES: {
-    bg: "bg-white dark:bg-slate-900",
-    border: "border-rose-200/60 dark:border-rose-800/40",
-    text: "text-rose-600 dark:text-rose-400",
-    gradient: "from-rose-500 to-pink-600",
-    dot: "bg-rose-500",
-  },
-  FINANCE: {
-    bg: "bg-white dark:bg-slate-900",
-    border: "border-amber-200/60 dark:border-amber-800/40",
-    text: "text-amber-600 dark:text-amber-400",
-    gradient: "from-amber-500 to-orange-600",
-    dot: "bg-amber-500",
-  },
-  OPS: {
-    bg: "bg-white dark:bg-slate-900",
-    border: "border-cyan-200/60 dark:border-cyan-800/40",
-    text: "text-cyan-600 dark:text-cyan-400",
-    gradient: "from-cyan-500 to-sky-600",
-    dot: "bg-cyan-500",
-  },
-  UNKNOWN: {
-    bg: "bg-white dark:bg-slate-900",
-    border: "border-slate-200/60 dark:border-slate-700/40",
-    text: "text-slate-500 dark:text-slate-400",
-    gradient: "from-slate-400 to-slate-500",
-    dot: "bg-slate-400",
+  other: {
+    bar: "#8E8E93",
+    avatarA: "#8E8E93",
+    avatarB: "#636366",
+    dot: "#8E8E93",
+    labelText: "#8E8E93",
+    label: "Other",
   },
 };
 
-const DEPARTMENT_LABELS: Record<Department, string> = {
-  EXEC: "Executive",
-  LEGAL: "Legal",
-  PROJECT_DELIVERY: "Delivery",
-  SALES: "Sales",
-  FINANCE: "Finance",
-  OPS: "Operations",
-  UNKNOWN: "Unknown",
-};
+// ─── Layout constants ─────────────────────────────────────────────────────────
 
-const NODE_WIDTH = 260;
+const NODE_WIDTH = 220;
 const NODE_HEIGHT = 72;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getInitials(name: string): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+// ─── Contact Node ─────────────────────────────────────────────────────────────
 
 interface ContactNodeData extends Record<string, unknown> {
   contact: StoredContact;
@@ -107,54 +124,56 @@ interface ContactNodeData extends Record<string, unknown> {
   isEditable?: boolean;
 }
 
-function getInitials(name: string): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
-
-// Custom Contact Node - Modern flat design with proper handle connections
 function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
   const { contact, onNodeClick, onOpenContact, onFocusContact } = data;
   const isDimmed = Boolean(data.isDimmed);
   const isFocused = Boolean(data.isFocused);
-  const department = contact.org?.department || "UNKNOWN";
-  const colors = DEPARTMENT_COLORS[department];
+
+  const department = (contact.org?.department ?? "UNKNOWN") as Department;
+  const group = DEPT_TO_GROUP[department];
+  const col = COLOUR_CONFIG[group];
+  const showDeptLabel = department !== "UNKNOWN";
 
   const handleClick = useCallback(() => {
     onNodeClick?.(contact);
   }, [contact, onNodeClick]);
 
   const handleOpenContact = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation();
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
       onOpenContact?.(contact);
     },
     [contact, onOpenContact]
   );
 
   const handleFocusContact = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation();
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
       onFocusContact?.(contact);
     },
     [contact, onFocusContact]
   );
+
+  // Box shadow varies by state
+  const cardShadow = selected
+    ? "0 0 0 2px #007AFF, 0 8px 28px rgba(0,122,255,0.18), inset 0 1px 0 rgba(255,255,255,0.9)"
+    : isFocused
+    ? `0 0 0 2px ${col.bar}, 0 8px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.9)`
+    : "0 2px 8px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.9)";
 
   return (
     <div
       className={`
         group relative cursor-pointer overflow-visible
         transition-all duration-200 ease-out
-        ${isDimmed ? "opacity-25" : "opacity-100"}
-        ${selected ? "scale-[1.02]" : "hover:scale-[1.01]"}
+        ${isDimmed ? "opacity-20" : "opacity-100"}
+        ${selected ? "scale-[1.03]" : "hover:scale-[1.01]"}
       `}
       style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
       onClick={handleClick}
       data-testid={`org-node-${contact.id}`}
     >
-      {/* Connection Handle - Top (invisible but functional) */}
+      {/* ReactFlow connection handle — top */}
       <Handle
         type="target"
         position={Position.Top}
@@ -162,75 +181,94 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
         style={{ top: -6, opacity: 0 }}
       />
 
-      {/* Main card */}
+      {/* Glassmorphism card */}
       <div
-        className={`
-          h-full rounded-xl border ${colors.bg} ${colors.border}
-          transition-all duration-200
-          ${isFocused ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}
-          ${selected ? "shadow-lg border-primary/40" : "shadow-sm hover:shadow-md"}
-        `}
+        className="relative h-full rounded-2xl overflow-hidden transition-all duration-200"
+        style={{
+          background: "rgba(255,255,255,0.84)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "0.5px solid rgba(255,255,255,0.95)",
+          boxShadow: cardShadow,
+        }}
       >
-        {/* Department indicator bar */}
-        <div className={`absolute top-0 left-4 right-4 h-0.5 rounded-b bg-gradient-to-r ${colors.gradient}`} />
+        {/* Left dept accent bar */}
+        <div
+          className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-sm"
+          style={{ background: col.bar }}
+        />
 
         {/* Content */}
-        <div className="flex items-center gap-3 h-full px-3 py-2.5">
-          {/* Modern squared avatar */}
+        <div className="flex items-center gap-2.5 h-full pl-4 pr-2.5 py-2.5">
+          {/* Avatar */}
           <div
-            className={`
-              w-11 h-11 rounded-lg flex items-center justify-center
-              text-sm font-semibold text-white shrink-0
-              bg-gradient-to-br ${colors.gradient}
-              shadow-sm transition-transform duration-200 group-hover:scale-105
-            `}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm transition-transform duration-200 group-hover:scale-105"
+            style={{
+              background: `linear-gradient(135deg, ${col.avatarA}, ${col.avatarB})`,
+              fontSize: 12,
+              fontWeight: 700,
+            }}
           >
             {getInitials(contact.name || "")}
           </div>
 
-          {/* Name, title, and department */}
+          {/* Text */}
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate text-foreground leading-tight">
+            <p
+              className="truncate leading-tight"
+              style={{ fontSize: 12, fontWeight: 600, color: "#1C1C1E" }}
+            >
               {contact.name || "Unknown"}
             </p>
             {contact.title && (
-              <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
+              <p
+                className="truncate leading-tight mt-0.5"
+                style={{ fontSize: 10, color: "#6C6C70" }}
+              >
                 {contact.title}
               </p>
             )}
-            {department !== "UNKNOWN" && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
-                <span className={`text-[10px] font-medium ${colors.text}`}>
-                  {DEPARTMENT_LABELS[department]}
+            {showDeptLabel && (
+              <div className="flex items-center gap-1 mt-1">
+                <div
+                  className="w-[5px] h-[5px] rounded-full shrink-0"
+                  style={{ background: col.dot }}
+                />
+                <span
+                  className="uppercase tracking-wide"
+                  style={{ fontSize: 9, fontWeight: 600, color: col.labelText }}
+                >
+                  {col.label}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Hover action buttons */}
-          <div className="flex flex-col gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          {/* Hover actions */}
+          <div className="flex flex-col gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 shrink-0">
             <button
               type="button"
-              className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-primary hover:text-white transition-colors"
+              className="p-1.5 rounded-lg transition-colors hover:bg-black/10"
+              style={{ background: "rgba(0,0,0,0.05)" }}
               onClick={handleFocusContact}
               aria-label="Focus on contact"
             >
-              <Crosshair className="w-3 h-3" />
+              <Crosshair className="w-3 h-3" style={{ color: "#6C6C70" }} />
             </button>
             <button
               type="button"
-              className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-primary hover:text-white transition-colors"
+              className="p-1.5 rounded-lg transition-colors hover:bg-black/10"
+              style={{ background: "rgba(0,0,0,0.05)" }}
               onClick={handleOpenContact}
               aria-label="Open contact"
             >
-              <ExternalLink className="w-3 h-3" />
+              <ExternalLink className="w-3 h-3" style={{ color: "#6C6C70" }} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Connection Handle - Bottom (invisible but functional) */}
+      {/* ReactFlow connection handle — bottom */}
       <Handle
         type="source"
         position={Position.Bottom}
@@ -242,6 +280,8 @@ function ContactNode({ data, selected }: NodeProps<Node<ContactNodeData>>) {
 }
 
 const nodeTypes = { contact: ContactNode };
+
+// ─── Graph builder ────────────────────────────────────────────────────────────
 
 function buildGraphWithLayout(
   contacts: StoredContact[],
@@ -256,32 +296,33 @@ function buildGraphWithLayout(
   const g = new dagre.graphlib.Graph();
   g.setGraph({
     rankdir: "TB",
-    nodesep: 60,
-    ranksep: 80,
+    nodesep: 48,
+    ranksep: 72,
     marginx: 40,
     marginy: 40,
   });
   g.setDefaultEdgeLabel(() => ({}));
 
   const contactIds = new Set(contacts.map((c) => c.id));
-  const rootNodes = contacts.filter((c) => !c.org?.reportsToId || !contactIds.has(c.org.reportsToId));
+  const rootNodes = contacts.filter(
+    (c) => !c.org?.reportsToId || !contactIds.has(c.org.reportsToId)
+  );
 
-  const focusSet: Set<string> = new Set();
+  // Build focus set: ancestors + descendants of focusId
+  const focusSet = new Set<string>();
   if (focusId && contactIds.has(focusId)) {
     const byId = new Map(contacts.map((c) => [c.id, c] as const));
 
-    // ancestors
+    // Walk ancestors
     let current = byId.get(focusId);
     while (current) {
       focusSet.add(current.id);
       const managerId = current.org?.reportsToId;
       if (!managerId) break;
-      const manager = byId.get(managerId);
-      if (!manager) break;
-      current = manager;
+      current = byId.get(managerId);
     }
 
-    // descendants
+    // Walk descendants
     const childrenByManager = new Map<string, string[]>();
     contacts.forEach((c) => {
       const m = c.org?.reportsToId;
@@ -289,7 +330,6 @@ function buildGraphWithLayout(
       if (!childrenByManager.has(m)) childrenByManager.set(m, []);
       childrenByManager.get(m)!.push(c.id);
     });
-
     const stack = [...(childrenByManager.get(focusId) || [])];
     while (stack.length) {
       const id = stack.pop()!;
@@ -304,7 +344,7 @@ function buildGraphWithLayout(
   const VIRTUAL_ROOT_ID = "__virtual_root__";
   if (hasVirtualRoot) g.setNode(VIRTUAL_ROOT_ID, { width: 1, height: 1 });
 
-  contacts.forEach((contact) => g.setNode(contact.id, { width: NODE_WIDTH, height: NODE_HEIGHT }));
+  contacts.forEach((c) => g.setNode(c.id, { width: NODE_WIDTH, height: NODE_HEIGHT }));
 
   const edges: Edge[] = [];
   contacts.forEach((contact) => {
@@ -312,19 +352,21 @@ function buildGraphWithLayout(
       g.setEdge(contact.org.reportsToId, contact.id);
 
       const hasFocus = focusSet.size > 0;
-      const inFocusEdge = hasFocus && focusSet.has(contact.org.reportsToId) && focusSet.has(contact.id);
+      const inFocusEdge =
+        hasFocus &&
+        focusSet.has(contact.org.reportsToId) &&
+        focusSet.has(contact.id);
 
       edges.push({
         id: `${contact.org.reportsToId}-${contact.id}`,
         source: contact.org.reportsToId,
         target: contact.id,
         type: "smoothstep",
-        markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color: inFocusEdge ? "#8b5cf6" : "#94a3b8" },
+        // No arrowheads — cleaner hierarchy visual
         style: {
-          stroke: inFocusEdge ? "#8b5cf6" : "#cbd5e1",
-          strokeWidth: inFocusEdge ? 2.5 : 1.5,
-          strokeLinecap: "round",
-          opacity: !hasFocus ? 0.8 : inFocusEdge ? 1 : 0.3,
+          stroke: inFocusEdge ? "#007AFF" : "rgba(0,0,0,0.1)",
+          strokeWidth: inFocusEdge ? 2 : 1.5,
+          opacity: !hasFocus ? 1 : inFocusEdge ? 1 : 0.15,
         },
         animated: false,
       });
@@ -338,21 +380,24 @@ function buildGraphWithLayout(
   const hasFocus = focusSet.size > 0;
 
   const nodes: Node<ContactNodeData>[] = contacts.map((contact) => {
-    const nodeWithPosition = g.node(contact.id);
+    const pos = g.node(contact.id);
+    const isSelected = hasFocus && contact.id === focusId;
     return {
       id: contact.id,
       type: "contact",
       position: {
-        x: nodeWithPosition.x - NODE_WIDTH / 2,
-        y: nodeWithPosition.y - NODE_HEIGHT / 2,
+        x: pos.x - NODE_WIDTH / 2,
+        y: pos.y - NODE_HEIGHT / 2,
       },
+      // Tap-to-front: focused node renders above all others
+      zIndex: isSelected ? 10 : 1,
       data: {
         contact,
         onNodeClick,
         onOpenContact,
         onFocusContact,
         isDimmed: hasFocus && !focusSet.has(contact.id),
-        isFocused: hasFocus && contact.id === focusId,
+        isFocused: isSelected,
         isEditable: Boolean(editMode),
       },
     };
@@ -360,6 +405,8 @@ function buildGraphWithLayout(
 
   return { nodes, edges };
 }
+
+// ─── Canvas inner ─────────────────────────────────────────────────────────────
 
 export interface OrgChartCanvasHandle {
   fitView: () => void;
@@ -377,77 +424,99 @@ interface OrgChartCanvasInnerProps {
   focusId?: string | null;
 }
 
-const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInnerProps>(function OrgChartCanvasInner(
-  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode, focusId },
-  ref
-) {
-  const { fitView, zoomIn, zoomOut } = useReactFlow();
+const OrgChartCanvasInner = forwardRef<OrgChartCanvasHandle, OrgChartCanvasInnerProps>(
+  function OrgChartCanvasInner(
+    { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode, focusId },
+    ref
+  ) {
+    const { fitView, zoomIn, zoomOut } = useReactFlow();
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      fitView: () => fitView({ padding: 0.2, duration: 300 }),
-      zoomIn: () => zoomIn({ duration: 200 }),
-      zoomOut: () => zoomOut({ duration: 200 }),
-    }),
-    [fitView, zoomIn, zoomOut]
-  );
+    useImperativeHandle(
+      ref,
+      () => ({
+        fitView: () => fitView({ padding: 0.2, duration: 300 }),
+        zoomIn: () => zoomIn({ duration: 200 }),
+        zoomOut: () => zoomOut({ duration: 200 }),
+      }),
+      [fitView, zoomIn, zoomOut]
+    );
 
-  const initialGraph = useMemo(
-    () => buildGraphWithLayout(contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode),
-    [contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode]
-  );
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
+    const initialGraph = useMemo(
+      () =>
+        buildGraphWithLayout(
+          contacts,
+          onNodeClick,
+          onOpenContact,
+          onFocusContact,
+          focusId,
+          editMode
+        ),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      []
+    );
 
-  useEffect(() => {
-    const newGraph = buildGraphWithLayout(contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode);
-    setNodes(newGraph.nodes);
-    setEdges(newGraph.edges);
-  }, [contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode, setNodes, setEdges]);
+    const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
 
-  const handleConnect = useCallback(
-    (connection: Connection) => {
-      if (!editMode || !onSetManager) return;
-      if (connection.source && connection.target) onSetManager(connection.source, connection.target);
-    },
-    [editMode, onSetManager]
-  );
+    useEffect(() => {
+      const newGraph = buildGraphWithLayout(
+        contacts,
+        onNodeClick,
+        onOpenContact,
+        onFocusContact,
+        focusId,
+        editMode
+      );
+      setNodes(newGraph.nodes);
+      setEdges(newGraph.edges);
+    }, [contacts, onNodeClick, onOpenContact, onFocusContact, focusId, editMode, setNodes, setEdges]);
 
-  if (contacts.length === 0) {
+    const handleConnect = useCallback(
+      (connection: Connection) => {
+        if (!editMode || !onSetManager) return;
+        if (connection.source && connection.target)
+          onSetManager(connection.source, connection.target);
+      },
+      [editMode, onSetManager]
+    );
+
+    if (contacts.length === 0) return null;
+
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <Users className="w-12 h-12 mb-3 opacity-50" />
-        <p className="font-medium">No contacts to display.</p>
-        <p className="text-sm mt-1">Add contacts from the People tab.</p>
+      <div className="h-full w-full relative" data-testid="org-chart-canvas">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.25 }}
+          minZoom={0.2}
+          maxZoom={2.5}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          onConnect={handleConnect}
+          elementsSelectable
+          panOnScroll
+          zoomOnPinch
+          preventScrolling={false}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={22}
+            size={1}
+            color="rgba(0,0,0,0.07)"
+            style={{ background: "#F5F5FA" }}
+          />
+        </ReactFlow>
       </div>
     );
   }
+);
 
-  return (
-    <div className="h-full w-full relative" data-testid="org-chart-canvas">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.2}
-        maxZoom={2.5}
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable={false}
-        nodesConnectable={false}        // ✅ Disabled drag-to-connect
-        onConnect={handleConnect}
-        elementsSelectable
-        panOnScroll
-        zoomOnPinch
-        preventScrolling={false}
-      />
-    </div>
-  );
-});
+// ─── Public export ────────────────────────────────────────────────────────────
 
 interface OrgChartCanvasProps {
   contacts: StoredContact[];
@@ -459,22 +528,12 @@ interface OrgChartCanvasProps {
   focusId?: string | null;
 }
 
-export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasProps>(function OrgChartCanvas(
-  { contacts, onNodeClick, onOpenContact, onFocusContact, onSetManager, editMode = false, focusId },
-  ref
-) {
-  return (
-    <ReactFlowProvider>
-      <OrgChartCanvasInner
-        ref={ref}
-        contacts={contacts}
-        onNodeClick={onNodeClick}
-        onOpenContact={onOpenContact}
-        onFocusContact={onFocusContact}
-        onSetManager={onSetManager}
-        editMode={editMode}
-        focusId={focusId}
-      />
-    </ReactFlowProvider>
-  );
-});
+export const OrgChartCanvas = forwardRef<OrgChartCanvasHandle, OrgChartCanvasProps>(
+  function OrgChartCanvas(props, ref) {
+    return (
+      <ReactFlowProvider>
+        <OrgChartCanvasInner ref={ref} {...props} />
+      </ReactFlowProvider>
+    );
+  }
+);

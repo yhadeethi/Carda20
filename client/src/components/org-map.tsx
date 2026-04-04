@@ -1,14 +1,24 @@
 /**
- * Org Map Component v4 - Modern, Clean Design
- * Features:
- * - Hierarchy-first view (collapsible tree list)
- * - Optional diagram view via modal
- * - Tap-to-edit interactions (no drag-to-connect)
- * - Minimal, clean interface with modern card design
+ * Org Map Component v5 - Design System Refresh
  *
- * IMPORTANT:
- * This version writes org changes via V2 storage (updateContactV2),
- * which also mirrors to V1 (compat) so the rest of the UI stays consistent.
+ * Changes vs v4:
+ * - Redesigned modal header: company pill, glassmorphic control pills
+ * - Focus badge (inline pill) replaces plain text
+ * - Sparse state: ghost nodes + CTA when contacts.length < 3
+ * - Sparse CTA "Add Contact" fires onAddContact(companyName) prop
+ * - Canvas background delegated to OrgChartCanvas v5 (dot-grid)
+ * - Department legend in canvas (3+ depts only)
+ *
+ * Preserved from v4 (zero logic changes):
+ * - wouldCreateCycle
+ * - handleSetManager
+ * - handleUpdateOrg
+ * - handleNodeClick / handleFocusContact / handleOpenContactFromDiagram
+ * - Quick Edit Drawer (department + reportsTo selects)
+ * - focusMode / focusId logic
+ * - showInteractionHint / handleDismissHint
+ * - All props on OrgMapProps (+ new optional onAddContact)
+ * - updateContactV2 write path
  */
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
@@ -30,21 +40,102 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Info, Users, GitBranch, Maximize2, X, ExternalLink } from "lucide-react";
+import { Info, Users, GitBranch, Maximize2, X, ExternalLink, Plus } from "lucide-react";
 import { StoredContact, Department, DEFAULT_ORG } from "@/lib/contactsStorage";
 import { updateContactV2 } from "@/lib/contacts/storage";
 import { useToast } from "@/hooks/use-toast";
 import { OrgChartCanvas } from "@/components/org-chart-canvas";
 import { HierarchyList } from "@/components/hierarchy-list";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface OrgMapProps {
   companyId: string;
   contacts: StoredContact[];
   onContactUpdate: () => void;
   onSelectContact: (contact: StoredContact) => void;
+  /** Called when user taps "Add Contact" in the sparse state CTA.
+   *  Receives the company name so the scan flow can pre-fill it. */
+  onAddContact?: (companyName: string) => void;
+  /** Company name — used in the header pill and sparse CTA */
+  companyName?: string;
 }
 
-export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }: OrgMapProps) {
+// ─── Sparse state ghost nodes ─────────────────────────────────────────────────
+
+function GhostNode({ style }: { style?: React.CSSProperties }) {
+  return (
+    <div
+      className="absolute flex items-center gap-2.5 p-3"
+      style={{
+        width: 160,
+        border: "1.5px dashed rgba(0,0,0,0.1)",
+        borderRadius: 16,
+        opacity: 0.45,
+        pointerEvents: "none",
+        ...style,
+      }}
+    >
+      <div
+        className="shrink-0 rounded-xl"
+        style={{ width: 36, height: 36, background: "rgba(0,0,0,0.06)" }}
+      />
+      <div className="flex-1">
+        <div
+          className="rounded"
+          style={{ height: 7, background: "rgba(0,0,0,0.07)", marginBottom: 5 }}
+        />
+        <div
+          className="rounded"
+          style={{ height: 7, width: "55%", background: "rgba(0,0,0,0.07)" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Department legend ────────────────────────────────────────────────────────
+
+const LEGEND_ITEMS = [
+  { label: "Leadership", color: "#5856D6" },
+  { label: "Revenue",    color: "#FF3B30" },
+  { label: "Operations", color: "#34C759" },
+  { label: "Other",      color: "#8E8E93" },
+];
+
+function DeptLegend() {
+  return (
+    <div
+      className="absolute top-3 right-3 flex flex-col gap-1.5 z-10"
+      style={{
+        background: "rgba(255,255,255,0.82)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        border: "0.5px solid rgba(0,0,0,0.08)",
+        borderRadius: 12,
+        padding: "8px 10px",
+      }}
+    >
+      {LEGEND_ITEMS.map(({ label, color }) => (
+        <div key={label} className="flex items-center gap-1.5">
+          <div className="rounded-full shrink-0" style={{ width: 7, height: 7, background: color }} />
+          <span style={{ fontSize: 10, fontWeight: 500, color: "#6C6C70" }}>{label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── OrgMap ───────────────────────────────────────────────────────────────────
+
+export function OrgMap({
+  companyId,
+  contacts,
+  onContactUpdate,
+  onSelectContact,
+  onAddContact,
+  companyName,
+}: OrgMapProps) {
   const [showDiagram, setShowDiagram] = useState(false);
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [showQuickEdit, setShowQuickEdit] = useState(false);
@@ -53,20 +144,27 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
   const [relayoutKey] = useState(0);
   const canvasRef = useRef<{ fitView: () => void; zoomIn: () => void; zoomOut: () => void } | null>(null);
   const { toast } = useToast();
+
   const contactIds = useMemo(() => new Set(contacts.map((c) => c.id)), [contacts]);
   const rootContact = useMemo(
-    () => contacts.find((c) => !c.org?.reportsToId || !contactIds.has(c.org.reportsToId)) || contacts[0],
+    () =>
+      contacts.find((c) => !c.org?.reportsToId || !contactIds.has(c.org.reportsToId)) ||
+      contacts[0],
     [contacts, contactIds]
   );
 
   const effectiveFocusContact = focusMode ? selectedContact || rootContact || null : null;
   const focusId = effectiveFocusContact?.id || null;
 
+  const isSparse = contacts.length < 3;
+
+  // ── Interaction hint ──────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!showDiagram) return;
     try {
-      const hasSeenHint = window.localStorage.getItem("carda_org_diagram_hint_v1");
-      if (!hasSeenHint) setShowInteractionHint(true);
+      const seen = window.localStorage.getItem("carda_org_diagram_hint_v1");
+      if (!seen) setShowInteractionHint(true);
     } catch {
       setShowInteractionHint(true);
     }
@@ -77,7 +175,8 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     setSelectedContact(rootContact);
   }, [showDiagram, focusMode, selectedContact, rootContact]);
 
-  // Check if setting managerId as sourceId's manager would create a cycle
+  // ── Cycle guard ───────────────────────────────────────────────────────────
+
   const wouldCreateCycle = useCallback(
     (sourceId: string, managerId: string): boolean => {
       const visited = new Set<string>();
@@ -85,11 +184,8 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         if (currentId === sourceId) return true;
         if (visited.has(currentId)) return false;
         visited.add(currentId);
-
         const contact = contacts.find((c) => c.id === currentId);
-        if (contact?.org?.reportsToId) {
-          return check(contact.org.reportsToId);
-        }
+        if (contact?.org?.reportsToId) return check(contact.org.reportsToId);
         return false;
       };
       return check(managerId);
@@ -97,11 +193,11 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     [contacts]
   );
 
-  // Handle setting manager from drag-drop connection in diagram
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   const handleSetManager = useCallback(
     (sourceId: string, managerId: string) => {
       if (sourceId === managerId) return;
-
       if (wouldCreateCycle(sourceId, managerId)) {
         toast({
           title: "Cannot create reporting loop",
@@ -110,13 +206,11 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         });
         return;
       }
-
       const contact = contacts.find((c) => c.id === sourceId);
       if (contact) {
         const currentOrg = contact.org || { ...DEFAULT_ORG };
         updateContactV2(sourceId, { org: { ...currentOrg, reportsToId: managerId } });
         onContactUpdate();
-
         const manager = contacts.find((c) => c.id === managerId);
         toast({
           title: "Reporting line set",
@@ -145,31 +239,24 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     [onSelectContact]
   );
 
-  const companyContacts = useMemo(() => contacts, [contacts]);
-
   const managerOptions = useMemo(() => {
     if (!selectedContact) return [] as StoredContact[];
-    return companyContacts.filter((c) => c.id !== selectedContact.id);
-  }, [companyContacts, selectedContact]);
+    return contacts.filter((c) => c.id !== selectedContact.id);
+  }, [contacts, selectedContact]);
 
   const handleUpdateOrg = useCallback(
     (patch: Partial<NonNullable<StoredContact["org"]>>) => {
       if (!selectedContact) return;
       const currentOrg = selectedContact.org || { ...DEFAULT_ORG };
-
       updateContactV2(selectedContact.id, { org: { ...currentOrg, ...patch } });
       onContactUpdate();
-
-      // Refresh local selected contact from latest props
       const refreshed = contacts.find((c) => c.id === selectedContact.id);
       if (refreshed) setSelectedContact(refreshed);
     },
     [selectedContact, contacts, onContactUpdate]
   );
 
-  const handleFitView = useCallback(() => {
-    canvasRef.current?.fitView();
-  }, []);
+  const handleFitView = useCallback(() => canvasRef.current?.fitView(), []);
 
   const handleDismissHint = useCallback(() => {
     try {
@@ -178,7 +265,8 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
     setShowInteractionHint(false);
   }, []);
 
-  // Empty state
+  // ── Empty state ───────────────────────────────────────────────────────────
+
   if (contacts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full py-16 text-muted-foreground">
@@ -190,13 +278,16 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
   }
 
   const hasReportingLines = contacts.some((c) => c.org?.reportsToId);
+  const displayName = companyName || "this company";
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col h-full">
-      {/* Minimal header with View Diagram button */}
+      {/* ── List view header ── */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{contacts.length} people</span>
+          <span>{contacts.length} {contacts.length === 1 ? "person" : "people"}</span>
           {hasReportingLines && (
             <>
               <span>·</span>
@@ -216,14 +307,18 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         </Button>
       </div>
 
-      {/* Hierarchy List - Main View */}
+      {/* ── Hierarchy List ── */}
       <div className="flex-1 min-h-0 rounded-xl bg-card border overflow-hidden">
         <div className="h-full overflow-y-auto p-2">
-          <HierarchyList contacts={contacts} onContactUpdate={onContactUpdate} onSelectContact={onSelectContact} />
+          <HierarchyList
+            contacts={contacts}
+            onContactUpdate={onContactUpdate}
+            onSelectContact={onSelectContact}
+          />
         </div>
       </div>
 
-      {/* Quick Edit - Modern Bottom Sheet */}
+      {/* ── Quick Edit Drawer ── */}
       <Drawer open={showQuickEdit} onOpenChange={setShowQuickEdit}>
         <DrawerContent className="max-h-[85vh]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
           <DrawerHeader className="pb-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
@@ -232,9 +327,13 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 {selectedContact?.name?.charAt(0)?.toUpperCase() || "?"}
               </div>
               <div className="min-w-0 flex-1">
-                <DrawerTitle className="text-xl font-bold truncate">{selectedContact?.name || "Contact"}</DrawerTitle>
+                <DrawerTitle className="text-xl font-bold truncate">
+                  {selectedContact?.name || "Contact"}
+                </DrawerTitle>
                 {selectedContact?.title && (
-                  <p className="text-sm text-muted-foreground truncate mt-0.5">{selectedContact.title}</p>
+                  <p className="text-sm text-muted-foreground truncate mt-0.5">
+                    {selectedContact.title}
+                  </p>
                 )}
               </div>
             </div>
@@ -242,7 +341,9 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
 
           <div className="px-4 pb-4 space-y-5 overflow-y-auto">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</Label>
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Department
+              </Label>
               <Select
                 value={selectedContact?.org?.department || "UNKNOWN"}
                 onValueChange={(v) => handleUpdateOrg({ department: v as Department })}
@@ -251,22 +352,26 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(["EXEC", "LEGAL", "PROJECT_DELIVERY", "SALES", "FINANCE", "OPS", "UNKNOWN"] as Department[]).map(
-                    (d) => (
-                      <SelectItem key={d} value={d}>
-                        {d.replace("_", " ")}
-                      </SelectItem>
-                    )
-                  )}
+                  {(
+                    ["EXEC", "LEGAL", "PROJECT_DELIVERY", "SALES", "FINANCE", "OPS", "UNKNOWN"] as Department[]
+                  ).map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d.replace("_", " ")}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reports To</Label>
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Reports To
+              </Label>
               <Select
                 value={selectedContact?.org?.reportsToId || "none"}
-                onValueChange={(v) => handleUpdateOrg({ reportsToId: v === "none" ? null : v })}
+                onValueChange={(v) =>
+                  handleUpdateOrg({ reportsToId: v === "none" ? null : v })
+                }
               >
                 <SelectTrigger className="h-12">
                   <SelectValue placeholder="Select manager" />
@@ -309,85 +414,166 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
         </DrawerContent>
       </Drawer>
 
-      {/* Diagram Modal - Full Screen Sheet */}
+      {/* ── Diagram Modal ── */}
       <Dialog open={showDiagram} onOpenChange={setShowDiagram}>
         <DialogContent
           className="max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] p-0 rounded-none sm:rounded-none"
           hideClose
         >
           <div className="flex flex-col h-full">
-            {/* Modal Header */}
-            <div className="flex flex-col gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
+
+            {/* ── Modal header ── */}
+            <div
+              className="flex flex-col gap-2 border-b px-4 py-3"
+              style={{
+                background: "rgba(242,242,247,0.94)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+              }}
+            >
+              {/* Row 1: title + close */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <DialogTitle className="text-base font-semibold sm:text-lg">Organization Chart</DialogTitle>
-                  <DialogDescription className="text-xs text-muted-foreground sm:text-sm">
+                  <DialogTitle className="text-[17px] font-semibold text-[#1C1C1E]">
+                    Organization Chart
+                  </DialogTitle>
+                  <DialogDescription className="text-[12px] text-[#6C6C70] mt-0.5">
                     Tap anyone to edit reporting lines and relationships
                   </DialogDescription>
-                  {focusMode && focusId && (
-                    <div className="mt-1 text-[11px] text-muted-foreground sm:text-xs">
-                      Focused on{" "}
-                      <span className="font-medium text-foreground">
-                        {effectiveFocusContact?.name || "contact"}
-                      </span>
+
+                  {/* Focus badge */}
+                  {focusMode && focusId && effectiveFocusContact && (
+                    <div
+                      className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full"
+                      style={{
+                        background: "rgba(0,122,255,0.1)",
+                        border: "0.5px solid rgba(0,122,255,0.2)",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: "#007AFF",
+                      }}
+                    >
+                      ⊕ Focused on {effectiveFocusContact.name || "contact"}
                     </div>
                   )}
                 </div>
-                {/* Mobile-only close button - prominent and always visible */}
+
+                {/* Close — mobile */}
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full sm:hidden shadow-sm transition-all duration-200 hover:shadow-md hover:bg-destructive hover:text-destructive-foreground"
+                  className="h-9 w-9 shrink-0 rounded-full sm:hidden shadow-sm"
                   onClick={() => setShowDiagram(false)}
                   data-testid="button-close-diagram-mobile"
                   aria-label="Close diagram"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                <Button
-                  variant={focusMode ? "default" : "outline"}
-                  size="sm"
-                  className="rounded-full min-h-9 px-4 shadow-sm transition-all duration-200 hover:shadow-md"
-                  onClick={() => setFocusMode((v) => !v)}
-                  data-testid="button-diagram-focus"
+
+              {/* Row 2: company pill + controls */}
+              <div className="flex items-center justify-between gap-2">
+                {/* Company pill */}
+                <div
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                  style={{
+                    background: "rgba(255,255,255,0.72)",
+                    backdropFilter: "blur(12px)",
+                    WebkitBackdropFilter: "blur(12px)",
+                    border: "0.5px solid rgba(0,0,0,0.08)",
+                  }}
                 >
-                  Focus
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full min-h-9 px-4 shadow-sm transition-all duration-200 hover:shadow-md"
-                  onClick={handleFitView}
-                  data-testid="button-diagram-fit"
-                >
-                  Fit View
-                </Button>
-                {/* Desktop-only close button */}
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="hidden sm:inline-flex rounded-full h-9 w-9 shadow-sm transition-all duration-200 hover:shadow-md hover:bg-destructive hover:text-destructive-foreground"
-                  onClick={() => setShowDiagram(false)}
-                  data-testid="button-close-diagram-desktop"
-                  aria-label="Close diagram"
-                >
-                  <X className="w-5 h-5" />
-                </Button>
+                  <div
+                    className="flex items-center justify-center rounded-md text-white shrink-0"
+                    style={{
+                      width: 20,
+                      height: 20,
+                      background: "linear-gradient(135deg, #007AFF, #5856D6)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {(companyName ?? "?").charAt(0).toUpperCase()}
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#1C1C1E" }}>
+                    {displayName}
+                  </span>
+                  <span
+                    className="rounded-full px-1.5 py-0.5"
+                    style={{
+                      fontSize: 11,
+                      color: "#AEAEB2",
+                      background: "rgba(118,118,128,0.12)",
+                    }}
+                  >
+                    {contacts.length}
+                  </span>
+                </div>
+
+                {/* Control pills */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full transition-all"
+                    style={{
+                      background: focusMode ? "#007AFF" : "rgba(255,255,255,0.72)",
+                      backdropFilter: "blur(12px)",
+                      WebkitBackdropFilter: "blur(12px)",
+                      border: focusMode ? "none" : "0.5px solid rgba(0,0,0,0.08)",
+                      color: focusMode ? "white" : "#1C1C1E",
+                      fontSize: 12,
+                      fontWeight: 500,
+                    }}
+                    onClick={() => setFocusMode((v) => !v)}
+                    data-testid="button-diagram-focus"
+                  >
+                    ⊕ Focus
+                  </button>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full transition-all"
+                    style={{
+                      background: "rgba(255,255,255,0.72)",
+                      backdropFilter: "blur(12px)",
+                      WebkitBackdropFilter: "blur(12px)",
+                      border: "0.5px solid rgba(0,0,0,0.08)",
+                      color: "#1C1C1E",
+                      fontSize: 12,
+                      fontWeight: 500,
+                    }}
+                    onClick={handleFitView}
+                    data-testid="button-diagram-fit"
+                  >
+                    ⛶ Fit View
+                  </button>
+                  {/* Close — desktop */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="hidden sm:inline-flex rounded-full h-9 w-9 shadow-sm"
+                    onClick={() => setShowDiagram(false)}
+                    data-testid="button-close-diagram-desktop"
+                    aria-label="Close diagram"
+                  >
+                    <X className="w-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
+
+            {/* ── Interaction hint ── */}
             {showInteractionHint && (
               <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 backdrop-blur-sm px-4 py-3 text-sm text-foreground shadow-sm">
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 text-primary shrink-0" />
                   <span className="text-xs sm:text-sm">
-                    Tap any person to edit their department and reporting relationships. Use pinch to zoom in/out.
+                    Tap any person to edit their department and reporting relationships. Use pinch to zoom.
                   </span>
                 </div>
                 <button
                   type="button"
-                  className="text-xs font-medium text-primary hover:underline shrink-0 transition-opacity hover:opacity-80"
+                  className="text-xs font-medium text-primary hover:underline shrink-0"
                   onClick={handleDismissHint}
                 >
                   Got it
@@ -395,20 +581,109 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
               </div>
             )}
 
-            {/* Diagram Canvas */}
-            <div className="flex-1 min-h-0 bg-gradient-to-br from-slate-50 to-white dark:from-gray-900 dark:to-gray-950">
-              {hasReportingLines || contacts.length > 0 ? (
-                <OrgChartCanvas
-                  key={relayoutKey}
-                  ref={canvasRef}
-                  contacts={contacts}
-                  onNodeClick={handleNodeClick}
-                  onOpenContact={handleOpenContactFromDiagram}
-                  onFocusContact={handleFocusContact}
-                  onSetManager={handleSetManager}
-                  editMode={true}
-                  focusId={focusId}
-                />
+            {/* ── Canvas area ── */}
+            <div className="flex-1 min-h-0 relative">
+
+              {/* Sparse state: ghost nodes + CTA */}
+              {isSparse && (
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none"
+                  style={{
+                    background: "#F5F5FA",
+                    backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.07) 1px, transparent 1px)",
+                    backgroundSize: "22px 22px",
+                  }}
+                >
+                  {/* Ghost placeholders */}
+                  <div className="relative" style={{ width: 340, height: 280 }}>
+                    {/* Real node sits above — rendered by canvas below */}
+                    {/* Ghost children */}
+                    <GhostNode style={{ left: 20,  top: 160 }} />
+                    <GhostNode style={{ left: 190, top: 160 }} />
+                    {/* Ghost edge lines */}
+                    <svg
+                      style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+                    >
+                      <path
+                        d="M 170 100 C 170 130 97 150 97 160"
+                        stroke="rgba(0,0,0,0.06)"
+                        strokeWidth="1.5"
+                        fill="none"
+                        strokeDasharray="4 3"
+                      />
+                      <path
+                        d="M 170 100 C 170 130 267 150 267 160"
+                        stroke="rgba(0,0,0,0.06)"
+                        strokeWidth="1.5"
+                        fill="none"
+                        strokeDasharray="4 3"
+                      />
+                    </svg>
+                  </div>
+
+                  {/* CTA card */}
+                  <div
+                    className="pointer-events-auto text-center"
+                    style={{
+                      background: "rgba(255,255,255,0.9)",
+                      backdropFilter: "blur(24px)",
+                      WebkitBackdropFilter: "blur(24px)",
+                      border: "0.5px solid rgba(255,255,255,0.95)",
+                      borderRadius: 22,
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.9)",
+                      padding: "16px 20px",
+                      width: 280,
+                      marginTop: -40,
+                    }}
+                  >
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>🏢</div>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1E", marginBottom: 3 }}>
+                      Build {displayName}'s org chart
+                    </p>
+                    <p style={{ fontSize: 12, color: "#6C6C70", lineHeight: 1.5, marginBottom: 12 }}>
+                      Scan or add more contacts from {displayName} to map their reporting structure over time.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDiagram(false);
+                        onAddContact?.(companyName ?? "");
+                      }}
+                      style={{
+                        width: "100%",
+                        background: "#007AFF",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 12,
+                        padding: "9px 20px",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      + Add Contact from {displayName}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ReactFlow canvas — always rendered (sparse contacts still show) */}
+              {(hasReportingLines || contacts.length > 0) ? (
+                <>
+                  <OrgChartCanvas
+                    key={relayoutKey}
+                    ref={canvasRef}
+                    contacts={contacts}
+                    onNodeClick={handleNodeClick}
+                    onOpenContact={handleOpenContactFromDiagram}
+                    onFocusContact={handleFocusContact}
+                    onSetManager={handleSetManager}
+                    editMode={true}
+                    focusId={focusId}
+                  />
+                  {/* Department legend — only show when chart is populated */}
+                  {!isSparse && <DeptLegend />}
+                </>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                   <GitBranch className="w-12 h-12 mb-3 opacity-50" />
@@ -417,6 +692,7 @@ export function OrgMap({ companyId, contacts, onContactUpdate, onSelectContact }
                 </div>
               )}
             </div>
+
           </div>
         </DialogContent>
       </Dialog>

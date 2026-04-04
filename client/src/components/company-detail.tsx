@@ -589,6 +589,11 @@ export function CompanyDetail({
             contacts={contacts}
             onContactUpdate={refreshContacts}
             onSelectContact={onSelectContact}
+            companyName={company.name}
+            onAddContact={() => {
+              setActiveTab("contacts");
+              onBack();
+            }}
           />
         </TabsContent>
 
