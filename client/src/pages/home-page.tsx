@@ -92,7 +92,7 @@ export default function HomePage() {
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [contactInitialAction, setContactInitialAction] = useState<"followup" | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
-  const [companyDetailTab, setCompanyDetailTab] = useState<'contacts' | 'orgmap' | 'notes'>('orgmap');
+  const [companyDetailTab, setCompanyDetailTab] = useState<'contacts' | 'orgmap' | 'brief'>('orgmap');
   const [contactsHubTab, setContactsHubTab] = useState<'people' | 'companies'>('people');
   const [eventModeEnabled, setEventModeEnabled] = useState(false);
   const [currentEventName, setCurrentEventName] = useState<string | null>(null);
@@ -107,6 +107,7 @@ export default function HomePage() {
   const [debriefPhase, setDebriefPhase] = useState<"record" | "review" | "success">("record");
   const [debriefTranscript, setDebriefTranscript] = useState("");
   const [debriefSavedContactId, setDebriefSavedContactId] = useState<string | null>(null);
+  const [debriefPreSelectedContactId, setDebriefPreSelectedContactId] = useState<string | null>(null);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -228,7 +229,7 @@ export default function HomePage() {
     setActiveTab("contacts");
   };
 
-  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'notes' = 'contacts') => {
+  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'brief' = 'contacts') => {
     setSelectedCompanyId(companyId);
     setCompanyDetailTab(initialTab);
     setViewMode("company-detail");
@@ -318,6 +319,7 @@ export default function HomePage() {
       setDebriefPhase("record");
       setDebriefTranscript("");
       setDebriefSavedContactId(null);
+      setDebriefPreSelectedContactId(null);
       setDebriefSheetOpen(true);
     }
   };
@@ -336,6 +338,7 @@ export default function HomePage() {
 
   const handleDebriefClose = () => {
     setDebriefSheetOpen(false);
+    setDebriefPreSelectedContactId(null);
     if (debriefSavedContactId) {
       const contacts = loadContacts();
       const saved = contacts.find((c) => c.id === debriefSavedContactId);
@@ -347,7 +350,16 @@ export default function HomePage() {
 
   const handleDebriefCancel = () => {
     setDebriefSheetOpen(false);
+    setDebriefPreSelectedContactId(null);
   };
+
+  const handleStartDebriefForContact = useCallback((contactId: string) => {
+    setDebriefPhase("record");
+    setDebriefTranscript("");
+    setDebriefSavedContactId(null);
+    setDebriefPreSelectedContactId(contactId);
+    setDebriefSheetOpen(true);
+  }, []);
 
   const handleCaptureSheetClose = () => setCaptureSheetMode(null);
 
@@ -531,6 +543,7 @@ export default function HomePage() {
                 onContactUpdated={handleContactUpdated}
                 onViewInOrgMap={(companyId) => handleSelectCompany(companyId, "orgmap")}
                 initialAction={contactInitialAction || undefined}
+                onStartDebrief={handleStartDebriefForContact}
               />
             </motion.div>
           )}
@@ -812,6 +825,7 @@ export default function HomePage() {
                   transcript={debriefTranscript}
                   onComplete={handleDebriefComplete}
                   onCancel={handleDebriefCancel}
+                  preSelectedContactId={debriefPreSelectedContactId}
                 />
               )}
               {debriefPhase === "success" && (

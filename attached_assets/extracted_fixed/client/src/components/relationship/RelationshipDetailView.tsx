@@ -28,6 +28,10 @@ interface RelationshipDetailViewProps {
    * Optional deep-link action for the detail view (used by Home Scoreboard).
    */
   initialAction?: "followup";
+  /**
+   * Launch voice debrief pre-linked to this contact.
+   */
+  onStartDebrief?: (contactId: string) => void;
 }
 
 /**
@@ -44,6 +48,7 @@ export function RelationshipDetailView({
   onContactUpdated,
   onViewInOrgMap,
   initialAction,
+  onStartDebrief,
 }: RelationshipDetailViewProps) {
   const { toast } = useToast();
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
@@ -137,6 +142,7 @@ export function RelationshipDetailView({
       onViewInOrgMap={onViewInOrgMap}
       companyId={companyId}
       autoOpenFollowUp={initialAction === "followup"}
+      onStartDebrief={onStartDebrief}
     />
   );
 }

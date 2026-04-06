@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, Bell, CheckSquare, ChevronDown, Loader2, X, Check, Mail } from "lucide-react";
+import { Sparkles, Bell, CheckSquare, ChevronDown, Loader2, X, Check, Mail, GitBranch, Flag, Zap } from "lucide-react";
 import { loadContacts } from "@/lib/contactsStorage";
 import type { StoredContact } from "@/lib/contactsStorage";
 import {
@@ -10,7 +10,7 @@ import {
   upsertContact,
   getContactById,
 } from "@/lib/contacts/storage";
-import type { CommunicationIntent, DraftAction } from "@/lib/contacts/types";
+import type { CommunicationIntent, DraftAction, OrgRelationship, ActionItem, DealSignal } from "@/lib/contacts/types";
 import { fuzzyMatchContact } from "@/lib/contacts/fuzzyMatch";
 import { parseNaturalDate } from "@/lib/contacts/dateParser";
 import { generateId } from "@/lib/contacts/ids";
@@ -20,6 +20,8 @@ interface VoiceDebriefReviewProps {
   transcript: string;
   onComplete: (contactId: string) => void;
   onCancel: () => void;
+  /** Pre-select a contact when launching debrief from Contact Detail view */
+  preSelectedContactId?: string | null;
 }
 
 interface MatchedContact {
@@ -49,6 +51,9 @@ interface ParseResult {
   tasks: ParsedTask[];
   reminders: ParsedReminder[];
   communicationIntents: CommunicationIntent[];
+  orgRelationships: OrgRelationship[];
+  actionItems: ActionItem[];
+  dealSignals: DealSignal[];
   rawTranscript: string;
 }
 
@@ -78,7 +83,7 @@ function getInitials(name: string): string {
     .join("");
 }
 
-export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: VoiceDebriefReviewProps) {
+export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preSelectedContactId }: VoiceDebriefReviewProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,8 +94,11 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
   const [warmthLevel, setWarmthLevel] = useState<WarmthLevel>("neutral");
   const [tasks, setTasks] = useState<ParsedTask[]>([]);
   const [reminders, setReminders] = useState<ParsedReminder[]>([]);
+  const [orgRelationships, setOrgRelationships] = useState<OrgRelationship[]>([]);
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [dealSignals, setDealSignals] = useState<DealSignal[]>([]);
 
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(preSelectedContactId || null);
   const [isCreateNew, setIsCreateNew] = useState(false);
   const [newContactName, setNewContactName] = useState("");
   const [newContactCompany, setNewContactCompany] = useState("");
@@ -135,8 +143,18 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
         setWarmthLevel(data.warmthLevel || "neutral");
         setTasks(data.tasks || []);
         setReminders(data.reminders || []);
+        setOrgRelationships(data.orgRelationships || []);
+        setActionItems(data.actionItems || []);
+        setDealSignals(data.dealSignals || []);
 
-        if (data.matchedContact?.id) {
+        // If pre-selected contact, skip matching
+        if (preSelectedContactId) {
+          const localContact = contacts.find((c) => c.id === preSelectedContactId);
+          if (localContact) {
+            setSelectedContactId(preSelectedContactId);
+            setShowSuggestions(false);
+          }
+        } else if (data.matchedContact?.id) {
           const localContact = contacts.find((c) => c.id === data.matchedContact.id);
           if (localContact) {
             setSelectedContactId(data.matchedContact.id);
@@ -148,7 +166,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           handleLowConfidenceMatch(data, contacts);
         }
 
-        // Fire draft generation in parallel, independently of rest of review sheet
+        // Fire draft generation in parallel
         const intents: CommunicationIntent[] = data.communicationIntents || [];
         if (intents.length > 0) {
           setDraftsLoading(true);
@@ -187,7 +205,6 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
                   status: "ready",
                 });
               }
-              // rejected → silently skip
             });
             setDraftActions(drafts);
             setDraftsLoading(false);
@@ -227,7 +244,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
     }
 
     fetchParse();
-  }, [transcript]);
+  }, [transcript, preSelectedContactId]);
 
   const handleConfirm = async () => {
     let contactId = selectedContactId;
@@ -261,11 +278,13 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
 
     setSaving(true);
     try {
+      // Save tasks
       for (const task of tasks) {
         const dueDate = task.dueDescription ? parseNaturalDate(task.dueDescription) : null;
         await addTask(contactId, task.title, dueDate?.toISOString(), task.draftBody);
       }
 
+      // Save reminders
       for (const reminder of reminders) {
         const remindAt = reminder.whenDescription
           ? parseNaturalDate(reminder.whenDescription)
@@ -275,6 +294,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
         }
       }
 
+      // Update warmth
       const existingContact = getContactById(contactId);
       const currentOrg = existingContact?.org ?? DEFAULT_ORG;
       await updateContactV2(contactId, {
@@ -285,10 +305,31 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
         lastTouchedAt: new Date().toISOString(),
       });
 
+      // Auto-create org relationships from parsed data
+      for (const rel of orgRelationships) {
+        if (rel.personContactId && rel.reportsToContactId) {
+          // Both contacts identified — update the person's reportsToId
+          const personContact = getContactById(rel.personContactId);
+          if (personContact) {
+            const personOrg = personContact.org ?? DEFAULT_ORG;
+            await updateContactV2(rel.personContactId, {
+              org: {
+                ...personOrg,
+                reportsToId: rel.reportsToContactId,
+              },
+            });
+          }
+        }
+      }
+
+      // Save timeline event with enhanced metadata
       await addTimelineEvent(contactId, "voice_debrief", noteSummary.trim(), {
         rawTranscript: transcript,
         sentiment,
         warmth: warmthLevel,
+        orgRelationships: orgRelationships.length > 0 ? orgRelationships : undefined,
+        actionItems: actionItems.length > 0 ? actionItems : undefined,
+        dealSignals: dealSignals.length > 0 ? dealSignals : undefined,
       });
 
       onComplete(contactId);
@@ -426,6 +467,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
 
       <div className="overflow-y-auto px-5 pb-8 space-y-5 pt-4">
 
+        {/* Contact selection */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact</p>
 
@@ -440,18 +482,25 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
                   <p className="text-xs text-muted-foreground truncate">{displayCompany}</p>
                 )}
               </div>
-              {matchedContact?.confidence === "high" && (
+              {matchedContact?.confidence === "high" && !preSelectedContactId && (
                 <span className="text-xs bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-medium px-2 py-0.5 rounded-full flex-shrink-0">
                   Matched
                 </span>
               )}
-              <button
-                onClick={() => { setShowSuggestions(true); setSelectedContactId(null); }}
-                className="text-xs text-muted-foreground underline underline-offset-2 flex-shrink-0"
-                data-testid="button-change-contact"
-              >
-                Change
-              </button>
+              {preSelectedContactId && (
+                <span className="text-xs bg-[#4B68F5]/10 text-[#4B68F5] font-medium px-2 py-0.5 rounded-full flex-shrink-0">
+                  Pre-linked
+                </span>
+              )}
+              {!preSelectedContactId && (
+                <button
+                  onClick={() => { setShowSuggestions(true); setSelectedContactId(null); }}
+                  className="text-xs text-muted-foreground underline underline-offset-2 flex-shrink-0"
+                  data-testid="button-change-contact"
+                >
+                  Change
+                </button>
+              )}
             </div>
           ) : isCreateNew ? (
             <div className="space-y-2 p-3 rounded-2xl bg-muted/40">
@@ -510,6 +559,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           )}
         </div>
 
+        {/* Meeting Note */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Meeting Note</p>
           <textarea
@@ -522,6 +572,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           />
         </div>
 
+        {/* Sentiment */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sentiment</p>
           <div className="flex gap-2">
@@ -549,6 +600,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           </div>
         </div>
 
+        {/* Warmth */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Warmth</p>
           <div className="flex gap-2">
@@ -576,6 +628,126 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           </div>
         </div>
 
+        {/* Org Relationships — NEW */}
+        {orgRelationships.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Org Relationships <span className="normal-case font-normal">({orgRelationships.length})</span>
+            </p>
+            <div className="space-y-2">
+              {orgRelationships.map((rel, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-muted/40">
+                  <GitBranch className="w-4 h-4 text-[#4B68F5] mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground">
+                      <span className="font-semibold">{rel.personName}</span>
+                      {" reports to "}
+                      <span className="font-semibold">{rel.reportsToName}</span>
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {rel.personContactId && rel.reportsToContactId && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600">
+                          Will auto-link
+                        </span>
+                      )}
+                      <span className="text-[10px] font-medium text-muted-foreground">
+                        {rel.confidence} confidence
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setOrgRelationships((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                    aria-label="Remove relationship"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Deal Signals — NEW */}
+        {dealSignals.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Deal Signals <span className="normal-case font-normal">({dealSignals.length})</span>
+            </p>
+            <div className="space-y-2">
+              {dealSignals.map((signal, i) => {
+                const strengthColors: Record<string, string> = {
+                  strong: "bg-emerald-500/15 text-emerald-600",
+                  moderate: "bg-amber-500/15 text-amber-600",
+                  weak: "bg-slate-500/15 text-slate-600",
+                };
+                return (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-muted/40">
+                    <Zap className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground">{signal.signal}</p>
+                      <span className={`inline-block mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${strengthColors[signal.strength] || strengthColors.weak}`}>
+                        {signal.strength}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setDealSignals((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                      aria-label="Remove signal"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Action Items — NEW */}
+        {actionItems.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Action Items <span className="normal-case font-normal">({actionItems.length})</span>
+            </p>
+            <div className="space-y-2">
+              {actionItems.map((item, i) => {
+                const ownerColors: Record<string, string> = {
+                  user: "bg-[#4B68F5]/10 text-[#4B68F5]",
+                  contact: "bg-amber-500/10 text-amber-700",
+                  unknown: "bg-slate-500/10 text-slate-600",
+                };
+                return (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-muted/40">
+                    <Flag className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground">{item.description}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${ownerColors[item.owner] || ownerColors.unknown}`}>
+                          {item.owner === "user" ? "You" : item.owner === "contact" ? "Them" : "TBD"}
+                        </span>
+                        {item.dueDescription && (
+                          <span className="text-[10px] font-medium text-muted-foreground">
+                            {item.dueDescription}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActionItems((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                      aria-label="Remove action item"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tasks */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Tasks {tasks.length > 0 && <span className="normal-case font-normal">({tasks.length})</span>}
@@ -611,6 +783,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           )}
         </div>
 
+        {/* Reminders */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Reminders {reminders.length > 0 && <span className="normal-case font-normal">({reminders.length})</span>}
@@ -642,7 +815,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           )}
         </div>
 
-        {/* Drafts section — loads independently after parse */}
+        {/* Drafts section */}
         {(draftsLoading || draftActions.length > 0) && (
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -762,6 +935,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel }: Vo
           </div>
         )}
 
+        {/* Raw Transcript */}
         <details className="group">
           <summary className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none list-none">
             <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />

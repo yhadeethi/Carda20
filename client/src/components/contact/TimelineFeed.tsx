@@ -25,7 +25,8 @@ export type TimelineEventType =
   | "hubspot_synced"
   | "salesforce_synced"
   | "followup_sent"
-  | "voice_debrief";
+  | "voice_debrief"
+  | "call_logged";
 
 export interface TimelineItem {
   id: string;
@@ -69,6 +70,7 @@ const EVENT_DOT: Record<string, string> = {
   contact_updated:   "bg-black/20",
   contact_merged:    "bg-pink-500",
   voice_debrief:     "bg-violet-500",
+  call_logged:       "bg-emerald-500",
 };
 
 // ── Month key helper ──────────────────────────────────────────────────────

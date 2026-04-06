@@ -42,16 +42,20 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Download,
   Edit,
+  Flag,
   Globe,
   Linkedin,
   Mail,
+  Mic,
   MoreHorizontal,
   Phone,
   Plus,
   Sparkles,
   StickyNote,
   Trash2,
+  Upload,
   Users,
   X,
 } from "lucide-react";
@@ -104,6 +108,17 @@ import {
   getQuickTimeSlots,
 } from "@/lib/calendar/ics";
 
+// ── Timeline types we actually show to the user ─────────────────────────
+// Everything else (scan_created, contact_updated, task_added, etc.) is hidden
+const VISIBLE_TIMELINE_TYPES = new Set<string>([
+  "voice_debrief",
+  "followup_sent",
+  "meeting_scheduled",
+  "event_attended",
+  "note_added",
+  "call_logged",
+]);
+
 interface ContactDetailViewProps {
   contact: StoredContact;
   contactV2: ContactV2 | null;
@@ -115,6 +130,7 @@ interface ContactDetailViewProps {
   onViewInOrgMap?: (companyId: string) => void;
   companyId?: string | null;
   autoOpenFollowUp?: boolean;
+  onStartDebrief?: (contactId: string) => void;
 }
 
 function toDatetimeLocalValue(d: Date): string {
@@ -195,6 +211,7 @@ export function ContactDetailView({
   onViewInOrgMap,
   companyId,
   autoOpenFollowUp,
+  onStartDebrief,
 }: ContactDetailViewProps) {
   const { toast } = useToast();
 
@@ -203,7 +220,8 @@ export function ContactDetailView({
   const [isEditing, setIsEditing] = useState(false);
   const [cardExpanded, setCardExpanded] = useState(false);
   const [showLogStrip, setShowLogStrip] = useState(false);
-  const [timelineFilter, setTimelineFilter] = useState<"all" | "note" | "meeting" | "followup">("all");
+  const [briefExpanded, setBriefExpanded] = useState(false);
+  const [timelineFilter, setTimelineFilter] = useState<"all" | "calls" | "emails" | "meetings" | "notes">("all");
 
   // ── Edit form ─────────────────────────────────────────────────────────────
   const [editedFields, setEditedFields] = useState({
@@ -293,6 +311,20 @@ export function ContactDetailView({
     return Math.round((Date.now() - new Date(contactV2.lastTouchedAt).getTime()) / 86400000);
   }, [contactV2?.lastTouchedAt]);
 
+  // Staleness level for the strip under hero card
+  const stalenessLevel = useMemo<"fresh" | "warm" | "cold">(() => {
+    if (daysSinceLastTouch === null) return "cold";
+    if (daysSinceLastTouch <= 7) return "fresh";
+    if (daysSinceLastTouch <= 21) return "warm";
+    return "cold";
+  }, [daysSinceLastTouch]);
+
+  const STALENESS_COLORS = {
+    fresh: "bg-[#1A9E4A]",
+    warm: "bg-amber-400",
+    cold: "bg-[#D92B2B]",
+  };
+
   const companyNameForIntel = useMemo(() => {
     const c = (editedFields.company || contact.company || "").trim();
     return c.length ? c : null;
@@ -314,9 +346,11 @@ export function ContactDetailView({
     return a.length ? a : null;
   }, [editedFields.address, contact.address]);
 
+  // ── Timeline with visibility filter ───────────────────────────────────────
   const timelineItems: TimelineItem[] = useMemo(() => {
     if (!contactV2?.timeline) return [];
     return contactV2.timeline
+      .filter((t) => VISIBLE_TIMELINE_TYPES.has(t.type))
       .map((t) => ({
         id: t.id,
         type: t.type,
@@ -340,8 +374,34 @@ export function ContactDetailView({
 
   const filteredTimelineItems = useMemo(() => {
     if (timelineFilter === "all") return timelineItems;
-    return timelineItems.filter((t) => t.type.includes(timelineFilter));
+    if (timelineFilter === "calls") return timelineItems.filter((t) => t.type === "call_logged");
+    if (timelineFilter === "emails") return timelineItems.filter((t) => t.type === "followup_sent");
+    if (timelineFilter === "meetings") return timelineItems.filter((t) => t.type === "meeting_scheduled" || t.type === "event_attended");
+    if (timelineFilter === "notes") return timelineItems.filter((t) => t.type === "voice_debrief" || t.type === "note_added");
+    return timelineItems;
   }, [timelineItems, timelineFilter]);
+
+  // ── Context Brief placeholder ─────────────────────────────────────────────
+  const contextBriefText = useMemo(() => {
+    // Build a simple brief from available timeline data
+    const debriefs = timelineItems.filter((t) => t.type === "voice_debrief");
+    if (debriefs.length > 0) {
+      return debriefs[0].title; // Most recent debrief summary
+    }
+    if (timelineItems.length > 0) {
+      return `${timelineItems.length} interaction${timelineItems.length !== 1 ? "s" : ""} logged. Add a voice debrief for a richer context summary.`;
+    }
+    return null;
+  }, [timelineItems]);
+
+  const contextBriefMeta = useMemo(() => {
+    const debriefs = timelineItems.filter((t) => t.type === "voice_debrief");
+    if (debriefs.length > 0) {
+      const d = new Date(debriefs[0].at);
+      return `From voice debrief · ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    }
+    return null;
+  }, [timelineItems]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleUpdateWarmth = async (value: RelationshipStrength) => {
@@ -637,18 +697,28 @@ export function ContactDetailView({
     await intelV2.fetchIntel(companyNameForIntel, domainForIntel, roleForIntel, addressForIntel, forceRefresh);
   };
 
-  const handleSetReminder = () => {
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 3);
-    addReminder(contact.id, `Follow up with ${contact.name || "this contact"}`, dueDate.toISOString());
-    onUpdate();
-    toast({ title: "Reminder set for 3 days" });
+  const handleStartVoiceDebrief = () => {
+    if (onStartDebrief) {
+      onStartDebrief(contact.id);
+    } else {
+      toast({ title: "Voice Debrief", description: "Use the Capture button to start a debrief." });
+    }
+  };
+
+  const handleExportToCRM = () => {
+    if (hubspotStatus?.connected) {
+      handleSyncToHubspot();
+    } else if (salesforceStatus?.connected) {
+      handleSyncToSalesforce();
+    } else {
+      toast({ title: "No CRM connected", description: "Connect HubSpot or Salesforce from your profile menu." });
+    }
   };
 
   const LOG_INTERACTION_CHIPS = [
     { type: "meeting_scheduled" as TimelineEventType, label: "Met",      icon: <Users className="w-3.5 h-3.5" /> },
-    { type: "note_added" as TimelineEventType,        label: "Called",   icon: <Phone className="w-3.5 h-3.5" /> },
-    { type: "note_added" as TimelineEventType,        label: "Emailed",  icon: <Mail className="w-3.5 h-3.5" /> },
+    { type: "call_logged" as TimelineEventType,       label: "Called",   icon: <Phone className="w-3.5 h-3.5" /> },
+    { type: "followup_sent" as TimelineEventType,     label: "Emailed",  icon: <Mail className="w-3.5 h-3.5" /> },
     { type: "note_added" as TimelineEventType,        label: "LinkedIn", icon: <Linkedin className="w-3.5 h-3.5" /> },
   ];
 
@@ -660,18 +730,19 @@ export function ContactDetailView({
   ];
 
   // ── Timeline filter config ────────────────────────────────────────────────
-  const tlFilters: { value: "all" | "note" | "meeting" | "followup"; label: string }[] = [
+  const tlFilters: { value: typeof timelineFilter; label: string }[] = [
     { value: "all",      label: "All" },
-    { value: "note",     label: "Notes" },
-    { value: "meeting",  label: "Meetings" },
-    { value: "followup", label: "Follow-ups" },
+    { value: "calls",    label: "Calls" },
+    { value: "emails",   label: "Emails" },
+    { value: "meetings", label: "Meetings" },
+    { value: "notes",    label: "Notes" },
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col min-h-full pb-24 px-4" data-testid="contact-detail-view">
+    <div className="flex flex-col min-h-full pb-32 px-4" data-testid="contact-detail-view">
 
       {/* ── Nav header ── */}
       <div className="flex items-center justify-between gap-2 pt-2 mb-4">
@@ -748,7 +819,7 @@ export function ContactDetailView({
         </div>
       ) : (
         <>
-          {/* ── Section 1: Hero Card (dark, unchanged) ── */}
+          {/* ── Section 1: Hero Card ── */}
           <div className="bg-[#1C1C1E] rounded-2xl p-4 text-white relative overflow-hidden">
             <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/[0.03] pointer-events-none" />
             <div className="absolute -bottom-6 left-6 w-24 h-24 rounded-full bg-white/[0.02] pointer-events-none" />
@@ -777,7 +848,10 @@ export function ContactDetailView({
             </div>
           </div>
 
-          {/* Expand hint */}
+          {/* ── Staleness strip ── */}
+          <div className={`h-[3px] -mt-[3px] rounded-b-2xl ${STALENESS_COLORS[stalenessLevel]}`} />
+
+          {/* ── Expand contact details ── */}
           <button
             onClick={() => setCardExpanded(!cardExpanded)}
             className="flex items-center justify-center gap-2 py-2.5 w-full text-muted-foreground transition-colors"
@@ -798,8 +872,8 @@ export function ContactDetailView({
             <div className="rounded-xl border border-black/10 bg-white shadow-sm overflow-hidden mb-4">
               {contact.phone && (
                 <button onClick={handleCall} className="w-full flex items-center gap-3 px-4 py-3 border-b border-black/[0.06] hover:bg-black/[0.02] transition-colors text-left" data-testid="row-phone">
-                  <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-                    <Phone className="w-4 h-4 text-green-600" />
+                  <div className="w-8 h-8 rounded-lg bg-[#1A9E4A]/10 flex items-center justify-center shrink-0">
+                    <Phone className="w-4 h-4 text-[#1A9E4A]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Phone</p>
@@ -810,8 +884,8 @@ export function ContactDetailView({
               )}
               {contact.email && (
                 <button onClick={handleEmail} className="w-full flex items-center gap-3 px-4 py-3 border-b border-black/[0.06] hover:bg-black/[0.02] transition-colors text-left" data-testid="row-email">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                    <Mail className="w-4 h-4 text-blue-600" />
+                  <div className="w-8 h-8 rounded-lg bg-[#4B68F5]/10 flex items-center justify-center shrink-0">
+                    <Mail className="w-4 h-4 text-[#4B68F5]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Email</p>
@@ -845,6 +919,46 @@ export function ContactDetailView({
             </div>
           )}
 
+          {/* ── Context Brief (collapsible) ── */}
+          {contextBriefText && (
+            <div className="rounded-xl border border-black/10 bg-white shadow-sm overflow-hidden mb-4">
+              <button
+                onClick={() => setBriefExpanded(!briefExpanded)}
+                className="w-full flex items-center gap-3 px-3 py-3 text-left"
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+              >
+                <div className="w-7 h-7 rounded-lg bg-[#4B68F5]/10 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-[#4B68F5]" />
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-[#4B68F5] shrink-0">
+                  Context Brief
+                </span>
+                {!briefExpanded && (
+                  <span className="text-[13px] text-muted-foreground truncate flex-1 ml-1">
+                    {contextBriefText.slice(0, 50)}…
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-4 h-4 text-muted-foreground/50 shrink-0 transition-transform duration-200 ${
+                    briefExpanded ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {briefExpanded && (
+                <div className="px-3 pb-3 pt-0">
+                  <p className="text-[14px] leading-relaxed text-foreground">
+                    {contextBriefText}
+                  </p>
+                  {contextBriefMeta && (
+                    <p className="text-[11px] font-semibold text-muted-foreground/60 mt-2">
+                      {contextBriefMeta}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Section 2: Relationship ── */}
           <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-2">Relationship</p>
           <div className="flex gap-2 mb-5">
@@ -863,62 +977,88 @@ export function ContactDetailView({
             ))}
           </div>
 
-          {/* ── Section 3: Suggested actions ── */}
-          <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-2">Suggested actions</p>
+          {/* ── Section 3: Quick Actions (3-tier grid) ── */}
+          <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-2">Quick Actions</p>
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="flex flex-col gap-2 mb-5">
+            {/* Tier 1: Voice Debrief — full width hero */}
             <button
-              onClick={() => { setShowFollowUp(true); setFollowUpResult(null); }}
-              className="rounded-2xl bg-gradient-to-br from-[#4B68F5] to-[#7B5CF0] text-white p-4 text-left transition-opacity active:opacity-85"
-              style={{ touchAction: "manipulation" } as React.CSSProperties}
+              onClick={handleStartVoiceDebrief}
+              className="w-full flex items-center gap-3.5 p-4 rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white text-left active:opacity-85 transition-opacity"
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+              data-testid="button-voice-debrief"
             >
-              <Sparkles className="w-5 h-5 mb-2 opacity-90" />
-              <p className="text-[13px] font-bold">Follow-up email</p>
-              <p className="text-[11px] opacity-65 mt-0.5">
-                {daysSinceLastTouch != null ? `${daysSinceLastTouch}d since last touch` : "Draft with AI"}
-              </p>
+              <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <Mic className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[15px] font-bold">Voice Debrief</p>
+                <p className="text-[13px] font-medium text-white/60 mt-0.5">Record a quick voice note about this contact</p>
+              </div>
             </button>
-            <button
-              onClick={handleSetReminder}
-              className="rounded-2xl bg-white border border-black/10 shadow-sm p-4 text-left active:opacity-75 transition-opacity"
-              style={{ touchAction: "manipulation" } as React.CSSProperties}
-            >
-              <Bell className="w-5 h-5 mb-2 text-muted-foreground" />
-              <p className="text-[13px] font-bold text-foreground">Set reminder</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Check in +3 days</p>
-            </button>
-          </div>
 
-          <div className="flex gap-2 mb-5">
-            <button
-              onClick={() => void openIntel(false)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-black/10 shadow-sm text-[13px] font-semibold text-foreground active:opacity-75 transition-opacity"
-              style={{ touchAction: "manipulation" } as React.CSSProperties}
-            >
-              <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
-              Company brief
-            </button>
-            <button
-              onClick={() => setShowMeeting(true)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-black/10 shadow-sm text-[13px] font-semibold text-foreground active:opacity-75 transition-opacity"
-              style={{ touchAction: "manipulation" } as React.CSSProperties}
-            >
-              <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-              Schedule
-            </button>
-            <button
-              onClick={() => setShowLogStrip(!showLogStrip)}
-              className={[
-                "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[13px] font-semibold transition-all active:opacity-75",
-                showLogStrip
-                  ? "bg-[#4B68F5] text-white border-[#4B68F5]"
-                  : "bg-white border-black/10 shadow-sm text-foreground",
-              ].join(" ")}
-              style={{ touchAction: "manipulation" } as React.CSSProperties}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Log
-            </button>
+            {/* Tier 2: Log + Email — frequent actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowLogStrip(!showLogStrip)}
+                className={[
+                  "flex-1 flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all active:opacity-75",
+                  showLogStrip
+                    ? "bg-[#4B68F5] text-white border-[#4B68F5]"
+                    : "bg-white border-black/10 shadow-sm text-foreground",
+                ].join(" ")}
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                data-testid="button-log-interaction"
+              >
+                <Plus className={`w-4 h-4 ${showLogStrip ? "text-white" : "text-muted-foreground"}`} />
+                <div>
+                  <p className="text-[14px] font-bold">Log</p>
+                  <p className={`text-[12px] font-medium ${showLogStrip ? "text-white/60" : "text-muted-foreground"}`}>Call · Meet · Note</p>
+                </div>
+              </button>
+              <button
+                onClick={() => { setShowFollowUp(true); setFollowUpResult(null); }}
+                className="flex-1 flex items-center gap-2.5 p-3 rounded-xl bg-white border border-black/10 shadow-sm text-left active:opacity-75 transition-opacity"
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                data-testid="button-follow-up-email"
+              >
+                <Mail className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-[14px] font-bold text-foreground">Email</p>
+                  <p className="text-[12px] font-medium text-muted-foreground">Follow up</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Tier 3: Save to Phone + Export to CRM — occasional actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={onDownloadVCard}
+                className="flex-1 flex items-center gap-2.5 p-3 rounded-xl bg-white border border-black/10 shadow-sm text-left active:opacity-75 transition-opacity"
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                data-testid="button-save-to-phone"
+              >
+                <Download className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-[14px] font-bold text-foreground">Save to Phone</p>
+                  <p className="text-[12px] font-medium text-muted-foreground">Export vCard</p>
+                </div>
+              </button>
+              <button
+                onClick={handleExportToCRM}
+                className="flex-1 flex items-center gap-2.5 p-3 rounded-xl bg-white border border-black/10 shadow-sm text-left active:opacity-75 transition-opacity"
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                data-testid="button-export-crm"
+              >
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-[14px] font-bold text-foreground">Export to CRM</p>
+                  <p className="text-[12px] font-medium text-muted-foreground">
+                    {hubspotStatus?.connected ? "HubSpot" : salesforceStatus?.connected ? "Salesforce" : "Connect CRM"}
+                  </p>
+                </div>
+              </button>
+            </div>
           </div>
 
           {/* Log chip strip */}
@@ -1271,21 +1411,6 @@ export function ContactDetailView({
           </div>
         </DrawerContent>
       </Drawer>
-
-      {/* ── Bottom Bar ── */}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-50 bg-[#F2F2F7]/85 backdrop-blur-xl border-t border-black/[0.08]"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <Button
-            onClick={onDownloadVCard}
-            className="w-full gap-2 rounded-xl h-12 bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] border-0 font-bold text-[15px]"
-          >
-            Save to Phone
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

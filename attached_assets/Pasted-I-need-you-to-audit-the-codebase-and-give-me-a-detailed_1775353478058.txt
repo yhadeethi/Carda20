@@ -1,0 +1,43 @@
+I need you to audit the codebase and give me a detailed report for the following planned changes. Do NOT make any changes yet. Just read the files and tell me:
+
+1. The exact file paths that need to be modified
+2. The exact function/component names affected
+3. Any shared types, interfaces, or storage functions that will need updates
+4. Any new files that need to be created
+5. Any dependencies between changes (what must be done first)
+
+Here are the planned changes:
+
+## CONTACT DETAIL VIEW CHANGES
+
+A) Remove the floating "Save to Phone" button from the bottom of the screen (it conflicts with bottom nav).
+
+B) Add a staleness indicator strip (3px colored bar) at the bottom edge of the hero card. Green = last interaction within 7 days, orange = 7-21 days, red = 21+ days. Calculated from most recent timeline event date.
+
+C) Add a new collapsible "AI Context Brief" card. It sits BELOW the contact details toggle (the "Tap to reveal contact details" section), ABOVE the warmth selector. It shows a 2-3 sentence AI-generated summary of all timeline events for the contact. Collapsible with collapsed state stored in localStorage. Shows a one-line preview when collapsed.
+
+D) Redesign the action strip into a 3-tier grid:
+   - Tier 1: Voice Debrief (full-width primary button, accent background)
+   - Tier 2: Log + Email (side by side, standard card style, monochrome icons)
+   - Tier 3: Save to Phone + Export to CRM (side by side, same style as tier 2)
+   - REMOVE: "Set Reminder", "Schedule", "Company Brief" action cards
+
+E) Clean up the activity timeline - filter out system events. Only show: voice_debrief, email_sent, call_logged, meeting_logged, manually flagged notes. Hide: contact_created, contact_scanned, note_added, tag_added, enrichment_completed, and other system events. Month headers show count of visible interactions only.
+
+F) Enhance Voice Debrief parsing to return structured JSON with: org_relationships[], action_items[], deal_signals[], follow_up_date. When org relationships are detected (e.g. "person X reports to person Y"), auto-update the contact's org.reportsToId field.
+
+## COMPANY DETAIL VIEW CHANGES
+
+G) Rename the "Notes" tab to "Brief" in the tab strip.
+
+H) Brief tab content: AI-generated Company Brief card with sections (Overview, Your Relationship, Key Intelligence), auto-generated tags, and two buttons (Export PDF using existing generateCompanyReport, Refresh to re-trigger intel generation). Below the brief card, keep the existing notes textarea under a "Notes" section header.
+
+I) Remove the PDF download icon button from the company header area (functionality moves into the Brief tab).
+
+## FOR EACH CHANGE, TELL ME:
+- Which files to modify (full paths)
+- Which components/functions are affected
+- What props or types need to change
+- What new components or utility functions need to be created
+- What the rendering order/hierarchy should be
+- Any risks or things that might break

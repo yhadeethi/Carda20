@@ -1,6 +1,7 @@
 /**
  * Company Detail Page for Org Intelligence
- * Shows company info with tabs: Contacts, Org Map, Notes
+ * Shows company info with tabs: People, Org, Brief
+ * Brief tab includes AI-generated company brief + notes textarea
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -31,7 +32,7 @@ import {
   MapPin,
   Users,
   Network,
-  StickyNote,
+  Sparkles,
   User,
   Shield,
   Minus,
@@ -42,6 +43,7 @@ import {
   Filter,
   FileDown,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { FilterSheet, getFilterSummary } from "@/components/filters/FilterSheet";
 import {
@@ -65,12 +67,13 @@ import { useToast } from "@/hooks/use-toast";
 import { OrgMap } from "@/components/org-map";
 import { CompanyAvatar } from "@/components/companies/CompanyAvatar";
 import { generateCompanyReport } from "@/lib/companyReportPdf";
+import { useIntelV2 } from "@/hooks/use-intel-v2";
 
 interface CompanyDetailProps {
   companyId: string;
   onBack: () => void;
   onSelectContact: (contact: StoredContact) => void;
-  initialTab?: "contacts" | "orgmap" | "notes";
+  initialTab?: "contacts" | "orgmap" | "brief";
   onScanForCompany?: (companyName: string) => void;
 }
 
@@ -177,6 +180,9 @@ export function CompanyDetail({
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const { toast } = useToast();
 
+  // Intel for company brief
+  const intelV2 = useIntelV2();
+
   // Load company and contacts
   useEffect(() => {
     const loadedCompany = getCompanyById(companyId);
@@ -229,6 +235,64 @@ export function CompanyDetail({
     if (departmentFilter === "ALL") return contacts;
     return contacts.filter((c) => (c.org?.department || "UNKNOWN") === departmentFilter);
   }, [contacts, departmentFilter]);
+
+  // ── Brief data ────────────────────────────────────────────────────────────
+  // Compute relationship summary from contacts
+  const briefRelationshipSummary = useMemo(() => {
+    if (contacts.length === 0) return null;
+
+    const departments = new Set<string>();
+    let latestTouch: Date | null = null;
+    let primaryContact: ContactV2 | null = null;
+
+    contacts.forEach((c) => {
+      const dept = c.org?.department || "UNKNOWN";
+      if (dept !== "UNKNOWN") departments.add(DEPARTMENT_LABELS[dept as Department] || dept);
+
+      const touched = c.lastTouchedAt ? new Date(c.lastTouchedAt) : null;
+      if (touched && (!latestTouch || touched > latestTouch)) {
+        latestTouch = touched;
+        primaryContact = c;
+      }
+    });
+
+    const deptStr = departments.size > 0
+      ? Array.from(departments).join(" and ")
+      : "various departments";
+
+    const daysSince = latestTouch
+      ? Math.round((Date.now() - latestTouch.getTime()) / 86400000)
+      : null;
+
+    const lastTouchStr = daysSince !== null
+      ? daysSince === 0 ? "today" : daysSince === 1 ? "yesterday" : `${daysSince} days ago`
+      : "unknown";
+
+    return {
+      text: `${contacts.length} contact${contacts.length !== 1 ? "s" : ""} across ${deptStr}. ${
+        primaryContact ? `Primary contact is ${(primaryContact as ContactV2).name || "unknown"}.` : ""
+      } Last interaction ${lastTouchStr}.`,
+      primaryName: primaryContact ? (primaryContact as ContactV2).name : null,
+    };
+  }, [contacts]);
+
+  // Tags for the brief
+  const briefTags = useMemo(() => {
+    const tags: string[] = [];
+    if (company?.industry) tags.push(company.industry);
+    const locationParts = [company?.city, company?.state, company?.country].filter(Boolean);
+    if (locationParts.length > 0) tags.push(locationParts.join(", "));
+    if (company?.domain) {
+      // Derive industry hints from domain if no explicit industry
+      if (!company.industry) {
+        const d = company.domain.toLowerCase();
+        if (d.includes("energy") || d.includes("power")) tags.push("Energy");
+        if (d.includes("tech") || d.includes("software")) tags.push("Technology");
+        if (d.includes("finance") || d.includes("bank")) tags.push("Finance");
+      }
+    }
+    return tags;
+  }, [company]);
 
   // Auto-group handler
   const handleAutoGroup = useCallback(() => {
@@ -294,14 +358,14 @@ export function CompanyDetail({
       toast({ title: "Generating report...", description: "Fetching latest company data" });
 
       let intel = null;
-      let intelV2 = null;
+      let intelV2Data = null;
 
       try {
         const params = new URLSearchParams();
         params.set("companyName", company.name);
         if (company.domain) params.set("domain", company.domain);
         const res = await fetch(`/api/intel-v2?${params.toString()}`);
-        if (res.ok) intelV2 = await res.json();
+        if (res.ok) intelV2Data = await res.json();
       } catch (e) {
         console.warn("[Report] Failed to fetch intel v2:", e);
       }
@@ -339,7 +403,7 @@ export function CompanyDetail({
         company,
         contacts: freshContacts,
         intel,
-        intelV2,
+        intelV2: intelV2Data,
       });
 
       toast({ title: "Report downloaded", description: `${company.name} report saved as PDF` });
@@ -353,7 +417,19 @@ export function CompanyDetail({
     } finally {
       setIsGeneratingReport(false);
     }
-  }, [company, companyId, contacts, isGeneratingReport, toast]);
+  }, [company, companyId, isGeneratingReport, toast]);
+
+  const handleFetchBrief = useCallback(async (forceRefresh = false) => {
+    if (!company) return;
+    await intelV2.fetchIntel(company.name, company.domain || null, null, null, forceRefresh);
+  }, [company, intelV2]);
+
+  // Auto-fetch brief when Brief tab is first opened
+  useEffect(() => {
+    if (activeTab === "brief" && company && !intelV2.intel && !intelV2.isLoading) {
+      handleFetchBrief(false);
+    }
+  }, [activeTab, company, intelV2.intel, intelV2.isLoading, handleFetchBrief]);
 
   const handleNotesChange = (value: string) => {
     setNotes(value);
@@ -400,7 +476,7 @@ export function CompanyDetail({
         Back to Companies
       </Button>
 
-      {/* Hero header */}
+      {/* Hero header — PDF button removed from here, now in Brief tab */}
       <div className="flex items-start justify-between gap-3 mt-2">
         <div className="flex-1 min-w-0">
           <CompanyHeader company={company} contactCount={contacts.length} contacts={contacts} />
@@ -423,25 +499,9 @@ export function CompanyDetail({
             </div>
           )}
         </div>
-
-        {/* PDF button */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={handleDownloadReport}
-          disabled={isGeneratingReport}
-          className="shrink-0 w-10 h-10 rounded-xl bg-white border border-black/10 shadow-sm"
-          data-testid="button-download-report"
-        >
-          {isGeneratingReport ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <FileDown className="w-4 h-4" />
-          )}
-        </Button>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs: People · Org · Brief */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="relative flex h-auto w-full rounded-2xl bg-[#F2F2F7] border border-black/10 shadow-sm p-1 gap-0 mt-4">
           <motion.span
@@ -481,15 +541,15 @@ export function CompanyDetail({
           </TabsTrigger>
 
           <TabsTrigger
-            value="notes"
+            value="brief"
             className="relative flex-1 min-w-0 rounded-xl py-2.5 text-[13px] font-bold bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
-            data-testid="tab-notes"
+            data-testid="tab-brief"
           >
             <span className="relative z-10 flex w-full min-w-0 items-center justify-center gap-1.5">
-              <StickyNote
-                className={`w-4 h-4 shrink-0 ${activeTab === "notes" ? "text-[#4B68F5]" : ""}`}
+              <Sparkles
+                className={`w-4 h-4 shrink-0 ${activeTab === "brief" ? "text-[#4B68F5]" : ""}`}
               />
-              <span className="min-w-0 truncate">Notes</span>
+              <span className="min-w-0 truncate">Brief</span>
             </span>
           </TabsTrigger>
         </TabsList>
@@ -497,10 +557,12 @@ export function CompanyDetail({
         {/* People Tab */}
         <TabsContent value="contacts" className="mt-4 space-y-3">
           {contacts.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No contacts yet for this company.</p>
-              <p className="text-sm mt-1">Scan a card or link existing people to this company.</p>
+            <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-8 text-center">
+              <div className="w-12 h-12 rounded-xl bg-[#4B68F5]/10 mx-auto mb-3 flex items-center justify-center">
+                <Users className="w-6 h-6 text-[#4B68F5]" />
+              </div>
+              <p className="text-[15px] font-bold text-foreground">No contacts yet</p>
+              <p className="text-[13px] font-medium text-muted-foreground/70 mt-1">Scan a card or link existing people to this company.</p>
             </div>
           ) : (
             <>
@@ -533,6 +595,7 @@ export function CompanyDetail({
                       key={contact.id}
                       className="relative bg-white rounded-xl border border-black/10 shadow-sm p-3 flex items-start gap-3 cursor-pointer active:opacity-75 transition-opacity overflow-hidden"
                       onClick={() => onSelectContact(contact)}
+                      style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
                       data-testid={`company-contact-${contact.id}`}
                     >
                       {/* Department stripe */}
@@ -598,29 +661,144 @@ export function CompanyDetail({
           />
         </TabsContent>
 
-        {/* Notes Tab */}
-        <TabsContent value="notes" className="mt-4">
-          <div className="bg-white rounded-2xl border border-black/10 shadow-sm overflow-hidden">
-            <Textarea
-              placeholder="Add notes about this company..."
-              value={notes}
-              onChange={(e) => handleNotesChange(e.target.value)}
-              className="w-full min-h-[140px] p-4 text-[15px] font-medium border-0 outline-none resize-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
-              data-testid="company-notes-input"
-            />
-            <div className="flex items-center justify-between px-4 py-3 border-t border-black/[0.08]">
-              <span className="text-[11px] font-semibold text-muted-foreground/60">
-                {notesSaved ? "All changes saved" : "Unsaved changes"}
-              </span>
-              <Button
-                variant="ghost"
-                onClick={handleSaveNotes}
-                disabled={notesSaved}
-                className="text-[13px] font-bold text-[#4B68F5] h-auto px-0 hover:bg-transparent disabled:opacity-40"
-                data-testid="button-save-notes"
+        {/* Brief Tab */}
+        <TabsContent value="brief" className="mt-4 space-y-4">
+          {/* AI Company Brief Card */}
+          <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-5" data-testid="company-brief-card">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-lg bg-[#4B68F5]/10 flex items-center justify-center shrink-0">
+                <Sparkles className="w-3.5 h-3.5 text-[#4B68F5]" />
+              </div>
+              <h3 className="text-[16px] font-bold text-foreground">Company Brief</h3>
+            </div>
+
+            {/* Overview section */}
+            <div className="mb-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 mb-1.5">Overview</p>
+              {intelV2.isLoading ? (
+                <div className="space-y-2">
+                  <div className="h-4 rounded bg-black/5 animate-pulse w-full" />
+                  <div className="h-4 rounded bg-black/5 animate-pulse w-3/4" />
+                </div>
+              ) : intelV2.intel?.overview ? (
+                <p className="text-[14px] leading-relaxed text-foreground">{intelV2.intel.overview}</p>
+              ) : (
+                <p className="text-[14px] leading-relaxed text-foreground">
+                  {company.name}{company.domain ? ` (${company.domain})` : ""}. {locationString ? `Based in ${locationString}.` : ""}
+                  {contacts.length > 0 ? ` ${contacts.length} contact${contacts.length !== 1 ? "s" : ""} in your network.` : ""}
+                </p>
+              )}
+            </div>
+
+            {/* Your Relationship section */}
+            <div className="mb-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 mb-1.5">Your Relationship</p>
+              {briefRelationshipSummary ? (
+                <p className="text-[14px] leading-relaxed text-foreground">{briefRelationshipSummary.text}</p>
+              ) : (
+                <p className="text-[14px] leading-relaxed text-muted-foreground">No contacts linked to this company yet.</p>
+              )}
+            </div>
+
+            {/* Key Intelligence section */}
+            <div className="mb-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 mb-1.5">Key Intelligence</p>
+              {intelV2.isLoading ? (
+                <div className="space-y-2">
+                  <div className="h-4 rounded bg-black/5 animate-pulse w-full" />
+                  <div className="h-4 rounded bg-black/5 animate-pulse w-2/3" />
+                </div>
+              ) : intelV2.intel?.keyInsights ? (
+                <p className="text-[14px] leading-relaxed text-foreground">{intelV2.intel.keyInsights}</p>
+              ) : intelV2.intel?.talkingPoints && intelV2.intel.talkingPoints.length > 0 ? (
+                <p className="text-[14px] leading-relaxed text-foreground">
+                  {intelV2.intel.talkingPoints.slice(0, 3).join(". ")}.
+                </p>
+              ) : (
+                <p className="text-[14px] leading-relaxed text-muted-foreground">
+                  Tap Refresh to generate AI-powered intelligence about this company.
+                </p>
+              )}
+            </div>
+
+            {/* Tags */}
+            {briefTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {briefTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[12px] font-semibold px-2.5 py-1 rounded-full bg-[#4B68F5]/10 text-[#4B68F5]"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {/* Add industry tags from intel if available */}
+                {intelV2.intel?.industry && !briefTags.includes(intelV2.intel.industry) && (
+                  <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full bg-[#4B68F5]/10 text-[#4B68F5]">
+                    {intelV2.intel.industry}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-2 pt-3 border-t border-black/[0.06]">
+              <button
+                onClick={handleDownloadReport}
+                disabled={isGeneratingReport}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-black/10 shadow-sm text-[13px] font-bold text-foreground active:opacity-75 transition-opacity disabled:opacity-40"
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                data-testid="button-export-pdf"
               >
-                Save Notes
-              </Button>
+                {isGeneratingReport ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileDown className="w-4 h-4 text-muted-foreground" />
+                )}
+                Export PDF
+              </button>
+              <button
+                onClick={() => handleFetchBrief(true)}
+                disabled={intelV2.isLoading}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white text-[13px] font-bold active:opacity-85 transition-opacity disabled:opacity-60"
+                style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                data-testid="button-refresh-brief"
+              >
+                {intelV2.isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Notes section — preserved below the Brief */}
+          <div>
+            <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-2">Notes</p>
+            <div className="bg-white rounded-2xl border border-black/10 shadow-sm overflow-hidden">
+              <Textarea
+                placeholder="Add notes about this company..."
+                value={notes}
+                onChange={(e) => handleNotesChange(e.target.value)}
+                className="w-full min-h-[140px] p-4 text-[15px] font-medium border-0 outline-none resize-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
+                data-testid="company-notes-input"
+              />
+              <div className="flex items-center justify-between px-4 py-3 border-t border-black/[0.08]">
+                <span className="text-[11px] font-semibold text-muted-foreground/60">
+                  {notesSaved ? "All changes saved" : "Unsaved changes"}
+                </span>
+                <Button
+                  variant="ghost"
+                  onClick={handleSaveNotes}
+                  disabled={notesSaved}
+                  className="text-[13px] font-bold text-[#4B68F5] h-auto px-0 hover:bg-transparent disabled:opacity-40"
+                  data-testid="button-save-notes"
+                >
+                  Save Notes
+                </Button>
+              </div>
             </div>
           </div>
         </TabsContent>
