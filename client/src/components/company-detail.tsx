@@ -44,6 +44,10 @@ import {
   FileDown,
   Loader2,
   RefreshCw,
+  Building2,
+  Calendar as CalendarIcon,
+  UserCircle,
+  ExternalLink,
 } from "lucide-react";
 import { FilterSheet, getFilterSummary } from "@/components/filters/FilterSheet";
 import {
@@ -157,6 +161,17 @@ function getContactInitials(name?: string | null): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   return name.trim().slice(0, 2).toUpperCase();
+}
+
+// Format signal date
+function formatSignalDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
 }
 
 export function CompanyDetail({
@@ -275,24 +290,6 @@ export function CompanyDetail({
       primaryName: primaryContact ? (primaryContact as ContactV2).name : null,
     };
   }, [contacts]);
-
-  // Tags for the brief
-  const briefTags = useMemo(() => {
-    const tags: string[] = [];
-    if (company?.industry) tags.push(company.industry);
-    const locationParts = [company?.city, company?.state, company?.country].filter(Boolean);
-    if (locationParts.length > 0) tags.push(locationParts.join(", "));
-    if (company?.domain) {
-      // Derive industry hints from domain if no explicit industry
-      if (!company.industry) {
-        const d = company.domain.toLowerCase();
-        if (d.includes("energy") || d.includes("power")) tags.push("Energy");
-        if (d.includes("tech") || d.includes("software")) tags.push("Technology");
-        if (d.includes("finance") || d.includes("bank")) tags.push("Finance");
-      }
-    }
-    return tags;
-  }, [company]);
 
   // Auto-group handler
   const handleAutoGroup = useCallback(() => {
@@ -462,6 +459,22 @@ export function CompanyDetail({
   // Build location string for intel chips
   const locationParts = [company.city, company.state, company.country].filter(Boolean);
   const locationString = locationParts.join(", ");
+
+  // Derived intel values from real CompanyIntelV2 shape
+  const intel = intelV2.intel;
+  const intelHqString = intel?.hq
+    ? [intel.hq.city, intel.hq.country].filter(Boolean).join(", ")
+    : null;
+  const latestSignals = intel?.latestSignals || [];
+  const competitors = intel?.competitors || [];
+
+  // Build tags for the brief
+  const briefTags: string[] = [];
+  if (intel?.industry) briefTags.push(intel.industry);
+  if (intel?.founded) briefTags.push(`Founded ${intel.founded}`);
+  if (intel?.headcount?.range) briefTags.push(`${intel.headcount.range} employees`);
+  if (intelHqString) briefTags.push(intelHqString);
+  if (briefTags.length === 0 && locationString) briefTags.push(locationString);
 
   return (
     <div className="px-4 pt-2 pb-32 max-w-2xl mx-auto space-y-4">
@@ -672,7 +685,7 @@ export function CompanyDetail({
               <h3 className="text-[16px] font-bold text-foreground">Company Brief</h3>
             </div>
 
-            {/* Overview section */}
+            {/* Overview section — pulls intel.summary */}
             <div className="mb-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 mb-1.5">Overview</p>
               {intelV2.isLoading ? (
@@ -680,8 +693,8 @@ export function CompanyDetail({
                   <div className="h-4 rounded bg-black/5 animate-pulse w-full" />
                   <div className="h-4 rounded bg-black/5 animate-pulse w-3/4" />
                 </div>
-              ) : intelV2.intel?.overview ? (
-                <p className="text-[14px] leading-relaxed text-foreground">{intelV2.intel.overview}</p>
+              ) : intel?.summary ? (
+                <p className="text-[14px] leading-relaxed text-foreground">{intel.summary}</p>
               ) : (
                 <p className="text-[14px] leading-relaxed text-foreground">
                   {company.name}{company.domain ? ` (${company.domain})` : ""}. {locationString ? `Based in ${locationString}.` : ""}
@@ -689,6 +702,51 @@ export function CompanyDetail({
                 </p>
               )}
             </div>
+
+            {/* Company Facts — headcount, founded, HQ, CEO/founder from real intel */}
+            {intel && (intel.headcount || intel.founded || intel.founderOrCeo || intelHqString) && (
+              <div className="mb-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 mb-1.5">Company Facts</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {intel.headcount?.range && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#F2F2F7] border border-black/[0.06]">
+                      <Users className="w-4 h-4 text-[#4B68F5] shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.4px] text-muted-foreground/60">Headcount</p>
+                        <p className="text-[13px] font-bold text-foreground truncate">{intel.headcount.range}</p>
+                      </div>
+                    </div>
+                  )}
+                  {intel.founded && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#F2F2F7] border border-black/[0.06]">
+                      <CalendarIcon className="w-4 h-4 text-[#4B68F5] shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.4px] text-muted-foreground/60">Founded</p>
+                        <p className="text-[13px] font-bold text-foreground truncate">{intel.founded}</p>
+                      </div>
+                    </div>
+                  )}
+                  {intelHqString && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#F2F2F7] border border-black/[0.06]">
+                      <Building2 className="w-4 h-4 text-[#4B68F5] shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.4px] text-muted-foreground/60">HQ</p>
+                        <p className="text-[13px] font-bold text-foreground truncate">{intelHqString}</p>
+                      </div>
+                    </div>
+                  )}
+                  {intel.founderOrCeo && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#F2F2F7] border border-black/[0.06]">
+                      <UserCircle className="w-4 h-4 text-[#4B68F5] shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.4px] text-muted-foreground/60">CEO / Founder</p>
+                        <p className="text-[13px] font-bold text-foreground truncate">{intel.founderOrCeo}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Your Relationship section */}
             <div className="mb-4">
@@ -700,26 +758,68 @@ export function CompanyDetail({
               )}
             </div>
 
-            {/* Key Intelligence section */}
-            <div className="mb-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 mb-1.5">Key Intelligence</p>
-              {intelV2.isLoading ? (
-                <div className="space-y-2">
-                  <div className="h-4 rounded bg-black/5 animate-pulse w-full" />
-                  <div className="h-4 rounded bg-black/5 animate-pulse w-2/3" />
+            {/* Latest Signals — real news from intel.latestSignals */}
+            {(intelV2.isLoading || latestSignals.length > 0 || (!intel && !intelV2.isLoading)) && (
+              <div className="mb-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 mb-1.5">Latest Signals</p>
+                {intelV2.isLoading ? (
+                  <div className="space-y-2">
+                    <div className="h-12 rounded-lg bg-black/5 animate-pulse w-full" />
+                    <div className="h-12 rounded-lg bg-black/5 animate-pulse w-full" />
+                  </div>
+                ) : latestSignals.length > 0 ? (
+                  <div className="space-y-2">
+                    {latestSignals.slice(0, 4).map((signal, i) => (
+                      <a
+                        key={i}
+                        href={signal.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block p-3 rounded-xl bg-[#F2F2F7] border border-black/[0.06] active:opacity-75 transition-opacity"
+                        style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-semibold text-foreground leading-snug">{signal.title}</p>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[11px] font-medium text-muted-foreground/70">{signal.sourceName}</span>
+                              {signal.date && (
+                                <>
+                                  <span className="text-muted-foreground/40">·</span>
+                                  <span className="text-[11px] font-medium text-muted-foreground/70">{formatSignalDate(signal.date)}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <ExternalLink className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0 mt-0.5" />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[14px] leading-relaxed text-muted-foreground">
+                    Tap Refresh to generate AI-powered intelligence about this company.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Competitors */}
+            {competitors.length > 0 && (
+              <div className="mb-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground/60 mb-1.5">Competitors</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {competitors.slice(0, 6).map((comp, i) => (
+                    <span
+                      key={i}
+                      className="text-[12px] font-semibold px-2.5 py-1 rounded-full bg-[#F2F2F7] text-foreground border border-black/[0.06]"
+                    >
+                      {comp.name}
+                    </span>
+                  ))}
                 </div>
-              ) : intelV2.intel?.keyInsights ? (
-                <p className="text-[14px] leading-relaxed text-foreground">{intelV2.intel.keyInsights}</p>
-              ) : intelV2.intel?.talkingPoints && intelV2.intel.talkingPoints.length > 0 ? (
-                <p className="text-[14px] leading-relaxed text-foreground">
-                  {intelV2.intel.talkingPoints.slice(0, 3).join(". ")}.
-                </p>
-              ) : (
-                <p className="text-[14px] leading-relaxed text-muted-foreground">
-                  Tap Refresh to generate AI-powered intelligence about this company.
-                </p>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Tags */}
             {briefTags.length > 0 && (
@@ -732,12 +832,6 @@ export function CompanyDetail({
                     {tag}
                   </span>
                 ))}
-                {/* Add industry tags from intel if available */}
-                {intelV2.intel?.industry && !briefTags.includes(intelV2.intel.industry) && (
-                  <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full bg-[#4B68F5]/10 text-[#4B68F5]">
-                    {intelV2.intel.industry}
-                  </span>
-                )}
               </div>
             )}
 

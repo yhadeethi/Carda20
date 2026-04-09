@@ -88,7 +88,8 @@ export default function HomePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("home");
 
   const [scanShowingContact, setScanShowingContact] = useState(false);
-  const showBottomNav = viewMode !== "contact-detail" && viewMode !== "event-detail" && !scanShowingContact;
+  // Bottom nav now shows on contact-detail since the floating Save to Phone button was removed.
+  const showBottomNav = viewMode !== "event-detail" && !scanShowingContact;
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [contactInitialAction, setContactInitialAction] = useState<"followup" | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
