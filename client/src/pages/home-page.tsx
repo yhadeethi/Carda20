@@ -601,6 +601,16 @@ export default function HomePage() {
           style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
           data-testid="nav-bottom"
         >
+          {/* SVG gradient definition — referenced by active nav icons */}
+          <svg className="absolute w-0 h-0 overflow-hidden" aria-hidden="true">
+            <defs>
+              <linearGradient id="brand-nav-gradient" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#4B68F5" />
+                <stop offset="100%" stopColor="#7B5CF0" />
+              </linearGradient>
+            </defs>
+          </svg>
+
           {/* Left Pill: Scoreboard | Network */}
           <div className="pointer-events-auto relative inline-flex items-center h-[50px] rounded-full bg-white/[0.18] dark:bg-white/[0.06] backdrop-blur-[60px] saturate-[2] shadow-[0_0_0_0.5px_rgba(255,255,255,0.55),0_2px_20px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.65)] dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.12),0_2px_20px_rgba(0,0,0,0.32),inset_0_0.5px_0_rgba(255,255,255,0.16)] p-1">
             {/* Sliding bubble indicator */}
@@ -629,9 +639,10 @@ export default function HomePage() {
               aria-label="Scoreboard"
               data-testid="nav-home"
             >
-              <Home className={`w-[21px] h-[21px] transition-colors duration-250 ${
-                activeTab === "home" ? "text-[#4B68F5]" : "text-foreground/[0.45]"
-              }`} />
+              <Home
+                className={`w-[21px] h-[21px] ${activeTab !== "home" ? "text-foreground/[0.45]" : ""}`}
+                style={activeTab === "home" ? { stroke: "url(#brand-nav-gradient) #4B68F5" } : undefined}
+              />
               <span className={`text-[10px] leading-tight font-semibold transition-all duration-250 ${
                 activeTab === "home"
                   ? "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent"
@@ -649,11 +660,16 @@ export default function HomePage() {
               aria-label="Network"
               data-testid="nav-tab-contacts"
             >
-              <Users className={`w-[21px] h-[21px] transition-colors duration-250 ${
-                activeTab === "contacts" || viewMode === "company-detail"
-                  ? "text-[#4B68F5]"
-                  : "text-foreground/[0.45]"
-              }`} />
+              <Users
+                className={`w-[21px] h-[21px] ${
+                  activeTab !== "contacts" && viewMode !== "company-detail" ? "text-foreground/[0.45]" : ""
+                }`}
+                style={
+                  activeTab === "contacts" || viewMode === "company-detail"
+                    ? { stroke: "url(#brand-nav-gradient) #4B68F5" }
+                    : undefined
+                }
+              />
               <span className={`text-[10px] leading-tight font-semibold transition-all duration-250 ${
                 activeTab === "contacts" || viewMode === "company-detail"
                   ? "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent"
