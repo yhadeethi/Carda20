@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "@/hooks/use-theme";
-import { useScrollDirectionNav } from "@/hooks/use-scroll-direction-nav";
 import type { Contact } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { logDebriefEvent } from "@/lib/debriefEvents";
@@ -65,7 +64,6 @@ function saveRecentAccount(email: string): void {
 
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
-  const { isHidden, isCompact } = useScrollDirectionNav();
   const { user } = useAuth();
   const { toast } = useToast();
   const { failedCount, retry: retrySyncFailures } = useSyncStatus();
@@ -369,11 +367,6 @@ export default function HomePage() {
     setShowCreateContactDrawer(true);
   }, []);
 
-  const tabs = [
-    { id: "contacts" as TabMode, label: "Network", icon: Users },
-    { id: "events" as TabMode, label: "Events", icon: Calendar },
-  ];
-
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="h-14 border-b flex items-center justify-between px-4 bg-card shrink-0">
@@ -601,81 +594,87 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar */}
+      {/* Bottom Navigation Bar — Liquid Glass */}
       {showBottomNav && (
         <nav
-          className={`fixed inset-x-0 bottom-0 z-30 flex items-center justify-between px-4 transition-all duration-300 ease-out ${
-            isHidden ? "translate-y-full opacity-0" : "translate-y-0 opacity-100"
-          }`}
-          style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+          className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between px-5 pointer-events-none"
+          style={{ paddingBottom: "max(14px, env(safe-area-inset-bottom))" }}
           data-testid="nav-bottom"
         >
-          <div className="flex items-center gap-3">
-            {/* Home */}
+          {/* Left Pill: Scoreboard | Network */}
+          <div
+            className="pointer-events-auto inline-flex items-center h-[52px] rounded-full bg-white/[0.72] dark:bg-slate-800/[0.72] backdrop-blur-[40px] saturate-[1.8] border border-white/55 dark:border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.10),0_1.5px_4px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.35),0_1.5px_4px_rgba(0,0,0,0.18)] p-1 gap-0.5"
+          >
+            {/* Scoreboard tab */}
             <button
               onClick={() => handleTabChange("home")}
-              className={`h-12 w-12 rounded-full backdrop-blur-sm shadow-xl border transition-all duration-200 flex items-center justify-center ${
-                activeTab === "home" ? "bg-white/95 dark:bg-slate-900/95 text-foreground" : "bg-white/80 dark:bg-slate-900/80 text-foreground/60 hover:text-foreground"
+              className={`flex flex-col items-center justify-center gap-[1px] h-11 px-[18px] rounded-full transition-all duration-200 active:scale-[0.92] ${
+                activeTab === "home"
+                  ? "bg-[#4B68F5]/[0.14] dark:bg-[#4B68F5]/[0.22]"
+                  : ""
               }`}
               style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-              aria-label="Home"
+              aria-label="Scoreboard"
               data-testid="nav-home"
             >
-              <Home className="w-5 h-5" />
+              <Home className={`w-5 h-5 transition-colors duration-200 ${
+                activeTab === "home"
+                  ? "text-[#4B68F5]"
+                  : "text-foreground/40 dark:text-foreground/40"
+              }`} />
+              <span className={`text-[10px] leading-tight transition-colors duration-200 ${
+                activeTab === "home"
+                  ? "text-[#4B68F5] font-semibold"
+                  : "text-foreground/40 dark:text-foreground/40 font-medium"
+              }`}>
+                Scoreboard
+              </span>
             </button>
 
-            {/* Pill — Network + Events */}
-            <div
-              className={`inline-flex items-center h-12 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-xl border transition-all duration-300 ease-out ${
-                isCompact ? "gap-4 px-4" : "gap-6 px-5"
+            {/* Network tab */}
+            <button
+              onClick={() => handleTabChange("contacts")}
+              className={`flex flex-col items-center justify-center gap-[1px] h-11 px-[18px] rounded-full transition-all duration-200 active:scale-[0.92] ${
+                activeTab === "contacts" || viewMode === "company-detail"
+                  ? "bg-[#4B68F5]/[0.14] dark:bg-[#4B68F5]/[0.22]"
+                  : ""
               }`}
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+              aria-label="Network"
+              data-testid="nav-tab-contacts"
             >
-              {tabs.map((tab) => {
-                const isActive =
-                  activeTab === tab.id || (viewMode === "company-detail" && tab.id === "contacts");
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => handleTabChange(tab.id)}
-                    className={`flex flex-col items-center justify-center transition-all duration-200 ${
-                      isCompact ? "gap-0" : "gap-0.5"
-                    } ${
-                      isActive
-                        ? "text-foreground"
-                        : "text-foreground/50 hover:text-foreground/80"
-                    }`}
-                    style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-                    data-testid={`nav-tab-${tab.id}`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span
-                      className={`transition-all duration-200 overflow-hidden whitespace-nowrap ${
-                        isCompact ? "max-h-0 opacity-0 scale-y-0" : "max-h-4 opacity-100 scale-y-100"
-                      } text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}
-                      style={{ transformOrigin: "top" }}
-                    >
-                      {tab.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+              <Users className={`w-5 h-5 transition-colors duration-200 ${
+                activeTab === "contacts" || viewMode === "company-detail"
+                  ? "text-[#4B68F5]"
+                  : "text-foreground/40 dark:text-foreground/40"
+              }`} />
+              <span className={`text-[10px] leading-tight transition-colors duration-200 ${
+                activeTab === "contacts" || viewMode === "company-detail"
+                  ? "text-[#4B68F5] font-semibold"
+                  : "text-foreground/40 dark:text-foreground/40 font-medium"
+              }`}>
+                Network
+              </span>
+            </button>
           </div>
 
-          {/* Capture button */}
+          {/* Right Circle: Capture */}
           <button
             onClick={handleCaptureToggle}
-            className={`h-12 w-12 rounded-full backdrop-blur-sm shadow-xl border transition-all duration-300 flex items-center justify-center ${
+            className={`pointer-events-auto h-[52px] w-[52px] rounded-full backdrop-blur-[40px] saturate-[1.8] border transition-all duration-300 flex items-center justify-center active:scale-[0.9] ${
               captureMenuOpen
-                ? "bg-white/95 dark:bg-slate-900/95 text-muted-foreground"
-                : "bg-primary text-primary-foreground"
-            }`}
+                ? "bg-[#4B68F5]/[0.14] dark:bg-[#4B68F5]/[0.22] border-white/55 dark:border-white/[0.08]"
+                : "bg-white/[0.72] dark:bg-slate-800/[0.72] border-white/55 dark:border-white/[0.08]"
+            } shadow-[0_8px_32px_rgba(0,0,0,0.10),0_1.5px_4px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.35),0_1.5px_4px_rgba(0,0,0,0.18)]`}
             style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
             aria-label="Capture"
             data-testid="nav-capture"
           >
-            <Plus className={`w-5 h-5 transition-transform duration-300 ${captureMenuOpen ? "rotate-45" : ""}`} />
+            <Plus className={`w-[22px] h-[22px] transition-all duration-300 ${
+              captureMenuOpen
+                ? "rotate-45 text-foreground/40"
+                : "text-[#4B68F5]"
+            }`} />
           </button>
         </nav>
       )}
