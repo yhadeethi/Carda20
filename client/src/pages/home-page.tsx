@@ -375,8 +375,8 @@ export default function HomePage() {
           onClick={handleLogoClick}
           data-testid="button-logo"
         >
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <CreditCard className="w-4 h-4 text-primary-foreground" />
+          <div className="w-8 h-8 bg-gradient-to-br from-[#4B68F5] to-[#7B5CF0] rounded-lg flex items-center justify-center">
+            <CreditCard className="w-4 h-4 text-white" />
           </div>
           <span className="font-semibold text-lg">Carda</span>
         </button>
@@ -630,10 +630,12 @@ export default function HomePage() {
               data-testid="nav-home"
             >
               <Home className={`w-[21px] h-[21px] transition-colors duration-250 ${
-                activeTab === "home" ? "text-primary" : "text-foreground/[0.45]"
+                activeTab === "home" ? "text-[#4B68F5]" : "text-foreground/[0.45]"
               }`} />
-              <span className={`text-[10px] leading-tight transition-colors duration-250 ${
-                activeTab === "home" ? "text-primary font-semibold" : "text-foreground/[0.45] font-medium"
+              <span className={`text-[10px] leading-tight font-semibold transition-all duration-250 ${
+                activeTab === "home"
+                  ? "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent"
+                  : "text-foreground/[0.45] font-medium"
               }`}>
                 Scoreboard
               </span>
@@ -649,12 +651,12 @@ export default function HomePage() {
             >
               <Users className={`w-[21px] h-[21px] transition-colors duration-250 ${
                 activeTab === "contacts" || viewMode === "company-detail"
-                  ? "text-primary"
+                  ? "text-[#4B68F5]"
                   : "text-foreground/[0.45]"
               }`} />
-              <span className={`text-[10px] leading-tight transition-colors duration-250 ${
+              <span className={`text-[10px] leading-tight font-semibold transition-all duration-250 ${
                 activeTab === "contacts" || viewMode === "company-detail"
-                  ? "text-primary font-semibold"
+                  ? "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent"
                   : "text-foreground/[0.45] font-medium"
               }`}>
                 Network

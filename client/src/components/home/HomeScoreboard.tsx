@@ -187,7 +187,7 @@ export function HomeScoreboard({
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white rounded-xl border border-black/10 p-3 shadow-sm">
           <div className="text-[11px] text-muted-foreground/60 mb-1 font-medium">Contacts</div>
-          <div className="text-xl font-bold text-blue-600">{contacts.length}</div>
+          <div className="text-xl font-bold bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent">{contacts.length}</div>
         </div>
         <button
           onClick={() => { setInboxTab("followups"); setInboxOpen(true); }}
@@ -317,8 +317,8 @@ export function HomeScoreboard({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm truncate">{contact.name || "Unknown contact"}</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 shrink-0">
-                      New
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#4B68F5]/10 border border-[#4B68F5]/20 shrink-0">
+                      <span className="bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent">New</span>
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground truncate mt-0.5">

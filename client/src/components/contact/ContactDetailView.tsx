@@ -725,7 +725,7 @@ export function ContactDetailView({
   // ── Warmth config ─────────────────────────────────────────────────────────
   const warmthConfig: { value: RelationshipStrength; label: string; active: string; inactive: string }[] = [
     { value: "CASUAL", label: "Casual", active: "bg-white text-foreground border-black/10 shadow-sm", inactive: "bg-transparent text-muted-foreground border-black/10" },
-    { value: "NORMAL", label: "Normal", active: "bg-[#4B68F5] text-white border-[#4B68F5]",           inactive: "bg-transparent text-muted-foreground border-black/10" },
+    { value: "NORMAL", label: "Normal", active: "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white border-transparent",           inactive: "bg-transparent text-muted-foreground border-black/10" },
     { value: "CLOSE",  label: "Close",  active: "bg-red-500 text-white border-red-500",               inactive: "bg-transparent text-muted-foreground border-black/10" },
   ];
 
