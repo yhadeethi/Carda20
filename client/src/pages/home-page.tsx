@@ -598,19 +598,19 @@ export default function HomePage() {
       {showBottomNav && (
         <nav
           className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between px-5 pointer-events-none"
-          style={{ paddingBottom: "max(14px, env(safe-area-inset-bottom))" }}
+          style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
           data-testid="nav-bottom"
         >
           {/* Left Pill: Scoreboard | Network */}
           <div
-            className="pointer-events-auto inline-flex items-center h-[52px] rounded-full bg-white/[0.72] dark:bg-slate-800/[0.72] backdrop-blur-[40px] saturate-[1.8] border border-white/55 dark:border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.10),0_1.5px_4px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.35),0_1.5px_4px_rgba(0,0,0,0.18)] p-1 gap-0.5"
+            className="pointer-events-auto inline-flex items-center h-[52px] rounded-full bg-card/80 backdrop-blur-[40px] saturate-[1.8] border border-border/50 shadow-[0_8px_32px_rgba(0,0,0,0.08),0_1.5px_4px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.35),0_1.5px_4px_rgba(0,0,0,0.18)] p-1 gap-0.5"
           >
             {/* Scoreboard tab */}
             <button
               onClick={() => handleTabChange("home")}
-              className={`flex flex-col items-center justify-center gap-[1px] h-11 px-[18px] rounded-full transition-all duration-200 active:scale-[0.92] ${
+              className={`flex-1 flex flex-col items-center justify-center gap-[1px] h-11 px-[18px] rounded-full transition-all duration-200 active:scale-[0.92] ${
                 activeTab === "home"
-                  ? "bg-[#4B68F5]/[0.14] dark:bg-[#4B68F5]/[0.22]"
+                  ? "bg-primary/20 dark:bg-primary/[0.28]"
                   : ""
               }`}
               style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
@@ -619,13 +619,13 @@ export default function HomePage() {
             >
               <Home className={`w-5 h-5 transition-colors duration-200 ${
                 activeTab === "home"
-                  ? "text-[#4B68F5]"
-                  : "text-foreground/40 dark:text-foreground/40"
+                  ? "text-primary"
+                  : "text-foreground/50"
               }`} />
               <span className={`text-[10px] leading-tight transition-colors duration-200 ${
                 activeTab === "home"
-                  ? "text-[#4B68F5] font-semibold"
-                  : "text-foreground/40 dark:text-foreground/40 font-medium"
+                  ? "text-primary font-semibold"
+                  : "text-foreground/50 font-medium"
               }`}>
                 Scoreboard
               </span>
@@ -634,9 +634,9 @@ export default function HomePage() {
             {/* Network tab */}
             <button
               onClick={() => handleTabChange("contacts")}
-              className={`flex flex-col items-center justify-center gap-[1px] h-11 px-[18px] rounded-full transition-all duration-200 active:scale-[0.92] ${
+              className={`flex-1 flex flex-col items-center justify-center gap-[1px] h-11 px-[18px] rounded-full transition-all duration-200 active:scale-[0.92] ${
                 activeTab === "contacts" || viewMode === "company-detail"
-                  ? "bg-[#4B68F5]/[0.14] dark:bg-[#4B68F5]/[0.22]"
+                  ? "bg-primary/20 dark:bg-primary/[0.28]"
                   : ""
               }`}
               style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
@@ -645,13 +645,13 @@ export default function HomePage() {
             >
               <Users className={`w-5 h-5 transition-colors duration-200 ${
                 activeTab === "contacts" || viewMode === "company-detail"
-                  ? "text-[#4B68F5]"
-                  : "text-foreground/40 dark:text-foreground/40"
+                  ? "text-primary"
+                  : "text-foreground/50"
               }`} />
               <span className={`text-[10px] leading-tight transition-colors duration-200 ${
                 activeTab === "contacts" || viewMode === "company-detail"
-                  ? "text-[#4B68F5] font-semibold"
-                  : "text-foreground/40 dark:text-foreground/40 font-medium"
+                  ? "text-primary font-semibold"
+                  : "text-foreground/50 font-medium"
               }`}>
                 Network
               </span>
@@ -661,19 +661,19 @@ export default function HomePage() {
           {/* Right Circle: Capture */}
           <button
             onClick={handleCaptureToggle}
-            className={`pointer-events-auto h-[52px] w-[52px] rounded-full backdrop-blur-[40px] saturate-[1.8] border transition-all duration-300 flex items-center justify-center active:scale-[0.9] ${
+            className={`pointer-events-auto h-[52px] w-[52px] rounded-full backdrop-blur-[40px] saturate-[1.8] border border-border/50 transition-all duration-300 flex items-center justify-center active:scale-[0.9] ${
               captureMenuOpen
-                ? "bg-[#4B68F5]/[0.14] dark:bg-[#4B68F5]/[0.22] border-white/55 dark:border-white/[0.08]"
-                : "bg-white/[0.72] dark:bg-slate-800/[0.72] border-white/55 dark:border-white/[0.08]"
-            } shadow-[0_8px_32px_rgba(0,0,0,0.10),0_1.5px_4px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.35),0_1.5px_4px_rgba(0,0,0,0.18)]`}
+                ? "bg-primary/20 dark:bg-primary/[0.28]"
+                : "bg-card/80"
+            } shadow-[0_8px_32px_rgba(0,0,0,0.08),0_1.5px_4px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.35),0_1.5px_4px_rgba(0,0,0,0.18)]`}
             style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
             aria-label="Capture"
             data-testid="nav-capture"
           >
             <Plus className={`w-[22px] h-[22px] transition-all duration-300 ${
               captureMenuOpen
-                ? "rotate-45 text-foreground/40"
-                : "text-[#4B68F5]"
+                ? "rotate-45 text-foreground/50"
+                : "text-primary"
             }`} />
           </button>
         </nav>
