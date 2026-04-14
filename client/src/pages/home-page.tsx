@@ -690,8 +690,8 @@ export default function HomePage() {
           >
             <Plus className={`w-[22px] h-[22px] transition-all duration-300 ${
               captureMenuOpen
-                ? "rotate-45 text-foreground/[0.45]"
-                : "text-primary"
+                ? "rotate-45 text-white/70"
+                : "text-white"
             }`} />
           </button>
         </nav>
