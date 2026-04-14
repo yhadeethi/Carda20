@@ -277,13 +277,19 @@ export function HomeScoreboard({
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyCapturesSeries} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#4B68F5" />
+                    <stop offset="100%" stopColor="#7B5CF0" />
+                  </linearGradient>
+                </defs>
                 <XAxis dataKey="dayLabel" tickLine={false} axisLine={false} fontSize={12} />
                 <Tooltip
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
                   formatter={(value: any) => [value, "captures"]}
                   labelFormatter={(label: any) => String(label)}
                 />
-                <Bar dataKey="captures" radius={[8, 8, 8, 8]} fill="hsl(var(--primary))" />
+                <Bar dataKey="captures" radius={[8, 8, 8, 8]} fill="url(#barGradient)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -348,7 +354,8 @@ export function HomeScoreboard({
       <section className="pt-2 space-y-3">
         <Button
           onClick={onStartScan}
-          className="w-full h-12 rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] hover:from-[#3d5ae0] hover:to-[#6b4dd6] text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 active:scale-[0.98]"
+          variant="gradient"
+          className="w-full rounded-2xl"
           size="lg"
         >
           <Camera className="w-5 h-5 mr-2" />

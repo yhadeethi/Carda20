@@ -133,7 +133,7 @@ const HierarchyRow = memo(function HierarchyRow({
         <div className="w-6" />
       )}
 
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/70 to-primary flex items-center justify-center text-primary-foreground font-semibold text-sm shrink-0 shadow-sm">
+      <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm shrink-0 shadow-sm" style={{ background: "linear-gradient(135deg, #4B68F5, #7B5CF0)" }}>
         {initials}
       </div>
 
@@ -304,7 +304,7 @@ export function HierarchyList({ contacts, onContactUpdate, onSelectContact }: Hi
         <DrawerContent className="max-h-[85vh]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
           <DrawerHeader className="pb-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/70 to-primary flex items-center justify-center text-primary-foreground font-bold text-xl shrink-0 shadow-lg shadow-primary/20">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-lg" style={{ background: "linear-gradient(135deg, #4B68F5, #7B5CF0)" }}>
                 {editingContact?.name?.charAt(0)?.toUpperCase() || "?"}
               </div>
               <div className="min-w-0 flex-1">

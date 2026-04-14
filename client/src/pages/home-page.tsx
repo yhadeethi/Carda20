@@ -612,10 +612,10 @@ export default function HomePage() {
           </svg>
 
           {/* Left Pill: Scoreboard | Network */}
-          <div className="pointer-events-auto relative inline-flex items-center h-[50px] rounded-full bg-white/[0.18] dark:bg-white/[0.06] backdrop-blur-[60px] saturate-[2] shadow-[0_0_0_0.5px_rgba(255,255,255,0.55),0_2px_20px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.65)] dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.12),0_2px_20px_rgba(0,0,0,0.32),inset_0_0.5px_0_rgba(255,255,255,0.16)] p-1">
+          <div className="pointer-events-auto relative inline-flex items-center h-[50px] rounded-full bg-white/10 dark:bg-white/[0.06] backdrop-blur-2xl saturate-200 shadow-[0_0_0_0.5px_rgba(255,255,255,0.55),0_2px_20px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.65)] dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.12),0_2px_20px_rgba(0,0,0,0.32),inset_0_0.5px_0_rgba(255,255,255,0.16)] p-1">
             {/* Sliding bubble indicator */}
             <motion.div
-              className="absolute top-1 h-[42px] rounded-full bg-white/[0.38] dark:bg-white/[0.11] shadow-[0_0.5px_3px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.72)] dark:shadow-[0_0.5px_3px_rgba(0,0,0,0.22),inset_0_0.5px_0_rgba(255,255,255,0.18)] pointer-events-none z-0"
+              className="absolute top-1 h-[42px] rounded-full bg-white/60 dark:bg-white/[0.11] shadow-[0_0.5px_3px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.72)] dark:shadow-[0_0.5px_3px_rgba(0,0,0,0.22),inset_0_0.5px_0_rgba(255,255,255,0.18)] pointer-events-none z-0"
               animate={{
                 x: activeTab === "home" ? 0 : "100%",
               }}
@@ -683,11 +683,7 @@ export default function HomePage() {
           {/* Right Circle: Capture */}
           <button
             onClick={handleCaptureToggle}
-            className={`pointer-events-auto h-[50px] w-[50px] rounded-full backdrop-blur-[60px] saturate-[2] transition-all duration-300 flex items-center justify-center active:scale-[0.9] active:opacity-70 ${
-              captureMenuOpen
-                ? "bg-white/[0.32] dark:bg-white/[0.10] shadow-[0_0_0_0.5px_rgba(255,255,255,0.55),0_2px_20px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.65)] dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.12),0_2px_20px_rgba(0,0,0,0.32),inset_0_0.5px_0_rgba(255,255,255,0.16)]"
-                : "bg-white/[0.18] dark:bg-white/[0.06] shadow-[0_0_0_0.5px_rgba(255,255,255,0.55),0_2px_20px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.65)] dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.12),0_2px_20px_rgba(0,0,0,0.32),inset_0_0.5px_0_rgba(255,255,255,0.16)]"
-            }`}
+            className="pointer-events-auto h-[50px] w-[50px] rounded-full bg-gradient-to-br from-[#4B68F5] to-[#7B5CF0] transition-all duration-300 flex items-center justify-center active:scale-[0.9] active:opacity-70 shadow-[0_2px_20px_rgba(75,104,245,0.4),0_0_0_0.5px_rgba(255,255,255,0.3)]"
             style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
             aria-label="Capture"
             data-testid="nav-capture"

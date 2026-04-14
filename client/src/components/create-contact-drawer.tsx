@@ -279,7 +279,8 @@ export function CreateContactDrawer({ open, onOpenChange, onContactCreated }: Cr
           <DrawerFooter>
             <Button
               onClick={handleSave}
-              className="w-full rounded-xl bg-blue-600 hover:bg-blue-700"
+              variant="gradient"
+              className="w-full rounded-xl"
             >
               Save Contact
             </Button>

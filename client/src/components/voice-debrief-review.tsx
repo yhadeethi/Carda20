@@ -637,7 +637,7 @@ export function VoiceDebriefReviewSheet({ transcript, onComplete, onCancel, preS
             <div className="space-y-2">
               {orgRelationships.map((rel, i) => (
                 <div key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-muted/40">
-                  <GitBranch className="w-4 h-4 text-[#4B68F5] mt-0.5 flex-shrink-0" />
+                  <GitBranch className="w-4 h-4 text-[#7B5CF0] mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground">
                       <span className="font-semibold">{rel.personName}</span>

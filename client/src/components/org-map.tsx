@@ -643,26 +643,16 @@ export function OrgMap({
                     <p style={{ fontSize: 12, color: "#6C6C70", lineHeight: 1.5, marginBottom: 12 }}>
                       Scan or add more contacts from {displayName} to map their reporting structure over time.
                     </p>
-                    <button
-                      type="button"
+                    <Button
+                      variant="gradient"
+                      className="w-full rounded-xl"
                       onClick={() => {
                         setShowDiagram(false);
                         onAddContact?.(companyName ?? "");
                       }}
-                      style={{
-                        width: "100%",
-                        background: "#007AFF",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 12,
-                        padding: "9px 20px",
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
                     >
                       + Add Contact from {displayName}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

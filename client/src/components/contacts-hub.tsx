@@ -270,13 +270,7 @@ export function ContactsHub({
 
       {/* Company Delete Confirmation */}
       <AlertDialog open={!!deleteCompanyConfirmId} onOpenChange={(open) => !open && setDeleteCompanyConfirmId(null)}>
-        <AlertDialogContent
-          className="backdrop-blur-2xl bg-background/90 border border-border/50 shadow-2xl"
-          style={{
-            backdropFilter: "blur(40px) saturate(180%)",
-            WebkitBackdropFilter: "blur(40px) saturate(180%)",
-          }}
-        >
+        <AlertDialogContent className="rounded-2xl bg-card border border-card-border shadow-lg">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-lg font-semibold">Delete company?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
@@ -292,17 +286,17 @@ export function ContactsHub({
               <span className="block mt-2">This action cannot be undone.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2">
+          <AlertDialogFooter className="flex flex-row gap-2">
             <AlertDialogCancel
               data-testid="button-cancel-delete-company"
-              className="rounded-xl transition-all duration-200 hover:scale-105"
+              className="flex-1 rounded-xl"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteCompany}
               data-testid="button-confirm-delete-company"
-              className="rounded-xl bg-destructive hover:bg-destructive/90 transition-all duration-200 hover:scale-105"
+              className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
             >
               Delete Company
             </AlertDialogAction>
