@@ -1,0 +1,29 @@
+Task 1 — Bar chart gradient (HomeScoreboard.tsx:279-287)
+Inside <BarChart>, add <defs><linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#4B68F5"/><stop offset="100%" stopColor="#7B5CF0"/></linearGradient></defs>. Change <Bar fill="hsl(var(--primary))"> to <Bar fill="url(#barGradient)">.
+
+
+Task 2 — Org avatar gradient (hierarchy-list.tsx)
+Find the avatar div with bg-gradient-to-br from-primary/70 to-primary. Replace with style={{ background: "linear-gradient(135deg, #4B68F5, #7B5CF0)" }} and remove the Tailwind gradient classes. Also check org-chart-canvas.tsx — the COLOUR_CONFIG avatars already use avatarA/avatarB as two colours; confirm the render site uses linear-gradient(135deg, colour.avatarA, colour.avatarB) not just colour.avatarA alone.
+
+
+Task 3 — FAB gradient (home-page.tsx)
+Find the capture + button. Replace its conditional glass background classes with bg-gradient-to-br from-[#4B68F5] to-[#7B5CF0]. Keep the shadow. Keep all other classes (size, rounded-full, transition, active states).
+
+
+Task 4 — Gradient button variant (button.tsx, create-contact-drawer.tsx, HomeScoreboard.tsx)
+Add to buttonVariants: gradient: "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white border-0 hover:opacity-90 active:opacity-80". Apply variant="gradient" to: Save Contact button in create-contact-drawer.tsx (remove bg-blue-600); Scan a business card button in HomeScoreboard.tsx (remove hardcoded gradient classes since variant handles it now); empty-state CTA in org chart area.
+
+
+Task 5 — Delete company dialog (contacts-hub.tsx:272-311)
+AlertDialogContent: add rounded-2xl bg-card border border-card-border shadow-lg, remove any backdrop-blur or bg-background classes. AlertDialogFooter: add flex-row gap-2. AlertDialogAction: set className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl". AlertDialogCancel: set className="flex-1 rounded-xl".
+
+
+Task 6 — Bottom nav pill (home-page.tsx)
+Left pill: bg-white/[0.18] → bg-white/10, backdrop-blur-[60px] → backdrop-blur-2xl, saturate-[2] → saturate-200. Inner sliding bubble: bg-white/[0.38] → bg-white/60.
+
+
+Task 7 (addition) — Stray #4B68F5 in voice-debrief-review.tsx
+Find text-[#4B68F5] on the GitBranch icon in the org relationships section. Change to text-[#7B5CF0].
+
+
+Do not modify any layout, routing, animation logic, or component structure. Colour and class values only.
