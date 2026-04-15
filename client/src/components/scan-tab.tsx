@@ -4,12 +4,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { motion, useReducedMotion } from "framer-motion";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,19 +31,14 @@ import {
   resolveCompanyIdForContact,
 } from "@/lib/companiesStorage";
 
-import { Camera, FileText, Loader2, Upload, X, Download, Check, Layers, Calendar } from "lucide-react";
+import { Camera, FileText, Loader2, Upload, X, Check } from "lucide-react";
 import { SiHubspot } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
-import { BatchScanMode } from "@/components/batch-scan-mode";
-import { BatchReview } from "@/components/batch-review";
 import { ContactDetailView } from "@/components/contact";
-import { QueuedScan, getAllQueueItems, clearBatchSession } from "@/lib/batchScanStorage";
-import { processBatchQueue } from "@/lib/batchProcessor";
 import { addTimelineEvent } from "@/lib/contacts/storage";
 
 type ScanMode = "scan" | "paste";
-type BatchState = "idle" | "capturing" | "processing" | "reviewing";
 
 interface ParsedContact {
   fullName?: string;
@@ -70,10 +62,6 @@ interface ScanTabProps {
   viewingContact?: StoredContact;
   onBackToContacts?: () => void;
   onDeleteContact?: (id: string) => void;
-  eventModeEnabled: boolean;
-  currentEventName: string | null;
-  onEventModeChange: (enabled: boolean) => void;
-  onEventNameChange: (name: string | null) => void;
   onContactSaved?: (contact?: StoredContact) => void;
   onContactUpdated?: (contactId: string) => void;
   onViewInOrgMap?: (companyId: string) => void;
@@ -184,10 +172,6 @@ export function ScanTab({
   viewingContact,
   onBackToContacts,
   onDeleteContact,
-  eventModeEnabled,
-  currentEventName,
-  onEventModeChange,
-  onEventNameChange,
   onContactSaved,
   onContactUpdated,
   onViewInOrgMap,
@@ -207,34 +191,13 @@ export function ScanTab({
   const [pastedText, setPastedText] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
   const [rawText, setRawText] = useState<string | null>(null);
-
-  // Local “scanned contact” that we show via ContactDetailView immediately
   const [scannedStoredContact, setScannedStoredContact] = useState<StoredContact | null>(null);
-
   const [isCompressing, setIsCompressing] = useState(false);
-
-  const [tempEventName, setTempEventName] = useState("");
-  const [pendingEventName, setPendingEventName] = useState<string | null>(null);
-  const [isEditingEventName, setIsEditingEventName] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
   const [contactV2, setContactV2] = useState<ContactV2 | null>(null);
   const [v2RefreshKey, setV2RefreshKey] = useState(0);
 
-  // Batch scan state
-  const [batchState, setBatchState] = useState<BatchState>("idle");
-  const [batchItems, setBatchItems] = useState<QueuedScan[]>([]);
-
-  const effectiveEventName = currentEventName || pendingEventName;
-
-  // Clear pending when parent event name arrives
-  useEffect(() => {
-    if (currentEventName && pendingEventName) setPendingEventName(null);
-  }, [currentEventName, pendingEventName]);
-
-  // When navigating in from Relationships (hub)
   useEffect(() => {
     if (viewingContact) {
       setScannedStoredContact(null);
@@ -266,8 +229,6 @@ export function ScanTab({
     setRawText(null);
     setPastedText("");
     clearImage();
-    setBatchState("idle");
-    setBatchItems([]);
   };
 
   const saveContactToStorage = (parsedContact: ParsedContact): StoredContact | null => {
@@ -283,10 +244,6 @@ export function ScanTab({
         address: parsedContact.address || "",
       };
 
-      const eventNameToUse = eventModeEnabled ? effectiveEventName : null;
-
-      // Fuzzy company name deduplication: if incoming company name closely matches
-      // an existing one, reuse the canonical name to prevent split company records.
       if (contactData.company) {
         const existingContacts = loadContactsV2();
         const canonicalCompany = findFuzzyCompanyMatch(contactData.company, existingContacts);
@@ -295,7 +252,7 @@ export function ScanTab({
         }
       }
 
-      const savedContact = saveContact(contactData, eventNameToUse);
+      const savedContact = saveContact(contactData, null);
       if (!savedContact) return null;
 
       const existingV2Contacts = loadContactsV2();
@@ -348,7 +305,6 @@ export function ScanTab({
       upsertContactV2(v2Contact);
       setContactV2(v2Contact);
 
-      // Persist companyId: auto-generate companies first, then resolve and link
       autoGenerateCompaniesFromContacts(loadContacts());
       const resolvedCompanyId = resolveCompanyIdForContact({
         companyId: savedContact.companyId,
@@ -399,9 +355,7 @@ export function ScanTab({
         toast({ title: "OCR Warning", description: data.error, variant: "destructive" });
         return;
       }
-
       setRawText(data.rawText);
-
       const saved = saveContactToStorage(data.contact);
       if (saved) {
         setScannedStoredContact(saved);
@@ -426,7 +380,6 @@ export function ScanTab({
     },
     onSuccess: (data) => {
       setRawText(data.rawText);
-
       const saved = saveContactToStorage(data.contact);
       if (saved) {
         setScannedStoredContact(saved);
@@ -442,18 +395,15 @@ export function ScanTab({
 
   const handleScanCard = async () => {
     if (!selectedFile) return;
-
     try {
       setIsCompressing(true);
       const result = await compressImageForOCR(selectedFile);
-
       if (result.wasCompressed) {
         toast({
           title: "Image optimized",
           description: `Compressed from ${formatFileSize(result.originalSize)} to ${formatFileSize(result.compressedSize)}`,
         });
       }
-
       scanCardMutation.mutate(result.file);
     } catch (error) {
       if (error instanceof CompressionError) {
@@ -478,99 +428,15 @@ export function ScanTab({
     if (pastedText.trim()) parseTextMutation.mutate(pastedText);
   };
 
-  // Event mode: compact “iOS-like” input bar
-  const shouldShowEventInput = eventModeEnabled && (isEditingEventName || !effectiveEventName);
-
-  const handleEventModeToggle = (enabled: boolean) => {
-    if (enabled) {
-      onEventModeChange(true);
-
-      // If already have an event, jump straight into batch capture
-      if (effectiveEventName) {
-        setBatchState("capturing");
-        return;
-      }
-
-      // Otherwise show the input bar
-      setTempEventName("");
-      setIsEditingEventName(true);
-      return;
-    }
-
-    // OFF: clear everything
-    onEventModeChange(false);
-    onEventNameChange(null);
-    setPendingEventName(null);
-    setTempEventName("");
-    setIsEditingEventName(false);
-    setBatchState("idle");
-    clearBatchSession();
-  };
-
-  const handleEventNameSubmit = () => {
-    const name = tempEventName.trim();
-    if (!name) return;
-
-    // Set pending to avoid state lag while parent updates
-    setPendingEventName(name);
-    onEventNameChange(name);
-    onEventModeChange(true);
-    setIsEditingEventName(false);
-
-    // Immediately activate batch scan
-    setBatchState("capturing");
-  };
-
-  const handleChangeEvent = () => {
-    setTempEventName(effectiveEventName || "");
-    setIsEditingEventName(true);
-  };
-
-  // Batch scan handlers
-  const handleStartBatchMode = () => setBatchState("capturing");
-
-  const handleExitBatchMode = () => {
-    setBatchState("idle");
-    clearBatchSession();
-  };
-
-  const handleBatchProcess = async (items: QueuedScan[]) => {
-    setBatchState("processing");
-    setBatchItems(items);
-
-    await processBatchQueue({
-      onComplete: ({ successful, failed }) => {
-        const updatedItems = getAllQueueItems();
-        setBatchItems(updatedItems);
-        setBatchState("reviewing");
-        toast({
-          title: "Processing complete",
-          description: `${successful} successful, ${failed} failed`,
-        });
-      },
-    });
-  };
-
-  const handleBatchComplete = () => {
-    setBatchState("idle");
-    setBatchItems([]);
-    onContactSaved?.();
-  };
-
-  const handleBatchBack = () => setBatchState("capturing");
-
   const isProcessing = isCompressing || scanCardMutation.isPending || parseTextMutation.isPending;
 
-  // Helper to find company ID for org map
   const getCompanyIdForStoredContact = (c?: StoredContact | null): string | null => {
     const companyName = c?.company;
     const email = c?.email;
-
     if (companyName) {
       const byName = findCompanyByName(companyName);
       if (byName) return byName.id;
     }
-
     if (email) {
       const domain = extractDomainFromEmail(email);
       if (domain) {
@@ -578,24 +444,21 @@ export function ScanTab({
         if (byDomain) return byDomain.id;
       }
     }
-
     return null;
   };
 
   const activeStoredContact = viewingContact || scannedStoredContact;
   const isViewingFromHub = !!viewingContact;
 
-  // Notify parent when showing/hiding a contact (for hiding bottom nav)
   useEffect(() => {
     onShowingContactChange?.(!!activeStoredContact);
     return () => onShowingContactChange?.(false);
   }, [activeStoredContact, onShowingContactChange]);
 
   const companyIdForContact = getCompanyIdForStoredContact(activeStoredContact);
-  const companyContactCount = companyIdForContact ? getContactCountForCompany(companyIdForContact, loadContacts()) : 0;
 
   return (
-    <div className="p-4 space-y-6 max-w-2xl mx-auto">
+    <div className="px-4 pb-6 pt-2 space-y-5 max-w-2xl mx-auto">
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -621,21 +484,6 @@ export function ScanTab({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Batch Scan Mode */}
-      {batchState === "capturing" && effectiveEventName && (
-        <BatchScanMode eventName={effectiveEventName} onProcess={handleBatchProcess} onExit={handleExitBatchMode} />
-      )}
-
-      {/* Batch Processing / Review */}
-      {(batchState === "processing" || batchState === "reviewing") && effectiveEventName && (
-        <BatchReview
-          items={batchItems}
-          eventName={effectiveEventName}
-          onComplete={handleBatchComplete}
-          onBack={handleBatchBack}
-        />
-      )}
-
       {/* Contact detail view */}
       {activeStoredContact && (
         <div className="space-y-4">
@@ -649,231 +497,149 @@ export function ScanTab({
             onDelete={onDeleteContact}
             onUpdate={() => setV2RefreshKey((k) => k + 1)}
             onContactUpdated={onContactUpdated}
-            onDownloadVCard={() => {
-              // kept as-is in your earlier versions; if you want vCard handler re-added here, say so
-            }}
+            onDownloadVCard={() => {}}
             onViewInOrgMap={onViewInOrgMap}
             companyId={companyIdForContact || undefined}
           />
         </div>
       )}
 
-      {/* Normal Scan UI */}
-      {!activeStoredContact && batchState === "idle" && (
-        <Card className="glass">
-          <CardContent className="space-y-4 pt-4">
-            {/* Small subheader (like Contacts Hub) */}
-            <p className="text-sm text-muted-foreground">
-              Scan a business card or paste a signature to extract a contact in seconds.
-            </p>
+      {/* Capture UI */}
+      {!activeStoredContact && (
+        <div className="space-y-5">
+          {/* Subheader */}
+          <p className="text-sm text-muted-foreground px-0.5">
+            Scan a business card or paste a signature to capture a contact in seconds.
+          </p>
 
-            <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
-              {/* Pills identical to Contacts Hub */}
-              <TabsList className="relative flex h-14 w-full rounded-full bg-muted p-1 ring-1 ring-border/50">
-                <motion.span
-                  className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-background shadow-sm"
-                  animate={{ x: scanMode === "scan" ? "0%" : "100%" }}
-                  transition={
-                    reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
-                  }
-                />
+          {/* Segmented control — matches People / Companies toggle */}
+          <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
+            <TabsList className="relative flex h-11 w-full rounded-full bg-muted/60 p-1 ring-1 ring-border/40">
+              <motion.span
+                className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm"
+                animate={{ x: scanMode === "scan" ? "0%" : "100%" }}
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
+                }
+              />
+              <TabsTrigger
+                value="scan"
+                className="relative flex-1 h-9 rounded-full text-sm font-medium transition-colors focus-visible:outline-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                data-testid="mode-scan"
+              >
+                <span className="relative z-10">Scan Card</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="paste"
+                className="relative flex-1 h-9 rounded-full text-sm font-medium transition-colors focus-visible:outline-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
+                data-testid="mode-paste"
+              >
+                <span className="relative z-10">Paste Text</span>
+              </TabsTrigger>
+            </TabsList>
 
-                <TabsTrigger
-                  value="scan"
-                  className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-                  data-testid="mode-scan"
+            {/* ── Scan Card tab ── */}
+            <TabsContent value="scan" className="mt-4 space-y-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+                data-testid="input-file-upload"
+              />
+
+              {!previewImage ? (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-44 bg-muted/40 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all active:scale-[0.99] hover:bg-muted/60"
+                  data-testid="button-upload-zone"
                 >
-                  <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
-                    <span className="min-w-0 truncate">Scan Card</span>
-                  </span>
-                </TabsTrigger>
-
-                <TabsTrigger
-                  value="paste"
-                  className="relative flex-1 min-w-0 h-12 rounded-full px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
-                  data-testid="mode-paste"
-                >
-                  <span className="relative z-10 flex w-full min-w-0 items-center justify-center">
-                    <span className="min-w-0 truncate">Paste Text</span>
-                  </span>
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="scan" className="mt-4 space-y-4">
-                {/* Event Mode (only in Scan mode, under tabs) */}
-                <div className="rounded-2xl border bg-muted/30 p-3" data-testid="event-mode-row">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <Switch
-                        checked={eventModeEnabled}
-                        onCheckedChange={handleEventModeToggle}
-                        data-testid="switch-event-mode"
-                      />
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="w-4 h-4" />
-                        <span>Event mode</span>
-                      </div>
-                    </div>
-
-                    {eventModeEnabled && effectiveEventName && (
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-sm bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium"
-                          data-testid="current-event-name"
-                        >
-                          {effectiveEventName}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-9 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={handleChangeEvent}
-                          data-testid="button-change-event"
-                        >
-                          Change
-                        </Button>
-                      </div>
-                    )}
+                  <div className="w-12 h-12 rounded-2xl bg-[#4B68F5]/10 flex items-center justify-center">
+                    <Upload className="w-5 h-5 text-[#4B68F5]" />
                   </div>
-
-                  {/* Apple-like event input bar (no X; toggle OFF exits) */}
-                  {shouldShowEventInput && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <Input
-                        placeholder="e.g. All-Energy 2025"
-                        value={tempEventName}
-                        onChange={(e) => setTempEventName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleEventNameSubmit()}
-                        autoFocus
-                        className="h-11 rounded-full flex-1"
-                        data-testid="input-event-name"
-                      />
-                      <Button
-                        onClick={handleEventNameSubmit}
-                        disabled={!tempEventName.trim()}
-                        className="h-11 rounded-full px-4"
-                        data-testid="button-save-event"
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* If user exits batch and wants to restart without toggling */}
-                  {eventModeEnabled && effectiveEventName && batchState === "idle" && (
-                    <Button
-                      variant="outline"
-                      className="w-full mt-3 gap-2 rounded-full h-11"
-                      onClick={handleStartBatchMode}
-                      data-testid="button-batch-scan"
-                    >
-                      <Layers className="w-4 h-4" />
-                      Batch Scan
-                    </Button>
-                  )}
-                </div>
-
-                {/* One-tap native iOS sheet */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                  data-testid="input-file-upload"
-                />
-
-                {!previewImage ? (
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-foreground">Upload business card photo</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Tap to choose camera, library, or files</p>
+                  </div>
+                </button>
+              ) : (
+                <div className="relative">
+                  <img
+                    src={previewImage}
+                    alt="Card preview"
+                    className="w-full h-44 object-contain rounded-2xl bg-muted/40"
+                    data-testid="image-preview"
+                  />
                   <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-2xl flex flex-col items-center justify-center gap-3 hover-elevate transition-smooth"
-                    data-testid="button-upload-zone"
+                    onClick={clearImage}
+                    className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white"
+                    data-testid="button-clear-image"
                   >
-                    <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Upload className="w-6 h-6 text-primary" />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-medium">Upload business card photo</p>
-                      <p className="text-sm text-muted-foreground">Tap to choose camera, library, or files</p>
-                    </div>
+                    <X className="w-4 h-4" />
                   </button>
+                </div>
+              )}
+
+              <button
+                onClick={handleScanCard}
+                disabled={!selectedFile || isProcessing}
+                className="w-full h-12 rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed"
+                data-testid="button-scan"
+              >
+                {isCompressing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Optimizing image…
+                  </>
+                ) : scanCardMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Scanning with AI…
+                  </>
                 ) : (
-                  <div className="relative">
-                    <img
-                      src={previewImage}
-                      alt="Card preview"
-                      className="w-full h-48 object-contain rounded-2xl bg-muted"
-                      data-testid="image-preview"
-                    />
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className="absolute top-2 right-2 rounded-full"
-                      onClick={clearImage}
-                      data-testid="button-clear-image"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  <>
+                    <Camera className="w-4 h-4" />
+                    Scan Card
+                  </>
                 )}
+              </button>
+            </TabsContent>
 
-                <Button
-                  className="w-full"
-                  onClick={handleScanCard}
-                  disabled={!selectedFile || isProcessing}
-                  data-testid="button-scan"
-                >
-                  {isCompressing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Optimizing image...
-                    </>
-                  ) : scanCardMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Scanning with AI...
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="mr-2 h-4 w-4" />
-                      Scan Card
-                    </>
-                  )}
-                </Button>
-              </TabsContent>
+            {/* ── Paste Text tab ── */}
+            <TabsContent value="paste" className="mt-4 space-y-3">
+              <textarea
+                placeholder={"Paste email signature or business card text here…\n\nExample:\nJohn Smith\nVP of Sales, Acme Corp\njohn@acme.com\n+1 555-0123"}
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                rows={6}
+                className="w-full bg-muted/40 rounded-2xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#4B68F5]/30 text-foreground placeholder:text-muted-foreground border-0"
+                data-testid="input-paste-text"
+              />
 
-              <TabsContent value="paste" className="mt-4 space-y-4">
-                <Textarea
-                  placeholder={
-                    "Paste email signature or business card text here...\n\nExample:\nJohn Smith\nVP of Sales, Acme Corp\njohn@acme.com\n+1 555-0123"
-                  }
-                  value={pastedText}
-                  onChange={(e) => setPastedText(e.target.value)}
-                  className="min-h-[150px] resize-none rounded-2xl"
-                  data-testid="input-paste-text"
-                />
-                <Button
-                  className="w-full"
-                  onClick={handleParseText}
-                  disabled={!pastedText.trim() || isProcessing}
-                  data-testid="button-extract"
-                >
-                  {parseTextMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Extracting with AI...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="mr-2 h-4 w-4" />
-                      Extract Contact
-                    </>
-                  )}
-                </Button>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+              <button
+                onClick={handleParseText}
+                disabled={!pastedText.trim() || isProcessing}
+                className="w-full h-12 rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed"
+                data-testid="button-extract"
+              >
+                {parseTextMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Extracting with AI…
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    Extract Contact
+                  </>
+                )}
+              </button>
+            </TabsContent>
+          </Tabs>
+        </div>
       )}
     </div>
   );

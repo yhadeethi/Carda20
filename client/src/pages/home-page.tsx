@@ -792,10 +792,6 @@ export default function HomePage() {
               <ScanTab
                 onBackToContacts={handleCaptureSheetClose}
                 onDeleteContact={handleDeleteContact}
-                eventModeEnabled={eventModeEnabled}
-                currentEventName={currentEventName}
-                onEventModeChange={setEventModeEnabled}
-                onEventNameChange={setCurrentEventName}
                 onContactSaved={(contact) => {
                   handleCaptureSheetClose();
                   if (contact) handleSelectContact(contact);

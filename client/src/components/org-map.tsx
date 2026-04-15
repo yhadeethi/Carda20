@@ -447,11 +447,11 @@ export function OrgMap({
                     <div
                       className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full"
                       style={{
-                        background: "rgba(0,122,255,0.1)",
-                        border: "0.5px solid rgba(0,122,255,0.2)",
+                        background: "rgba(75,104,245,0.1)",
+                        border: "0.5px solid rgba(75,104,245,0.2)",
                         fontSize: 11,
                         fontWeight: 500,
-                        color: "#007AFF",
+                        color: "#4B68F5",
                       }}
                     >
                       ⊕ Focused on {effectiveFocusContact.name || "contact"}
@@ -489,7 +489,7 @@ export function OrgMap({
                     style={{
                       width: 20,
                       height: 20,
-                      background: "linear-gradient(135deg, #007AFF, #5856D6)",
+                      background: "linear-gradient(135deg, #4B68F5, #7B5CF0)",
                       fontSize: 8,
                       fontWeight: 700,
                     }}
@@ -517,7 +517,7 @@ export function OrgMap({
                     type="button"
                     className="flex items-center gap-1 px-3 py-1.5 rounded-full transition-all"
                     style={{
-                      background: focusMode ? "#007AFF" : "rgba(255,255,255,0.72)",
+                      background: focusMode ? "#4B68F5" : "rgba(255,255,255,0.72)",
                       backdropFilter: "blur(12px)",
                       WebkitBackdropFilter: "blur(12px)",
                       border: focusMode ? "none" : "0.5px solid rgba(0,0,0,0.08)",
