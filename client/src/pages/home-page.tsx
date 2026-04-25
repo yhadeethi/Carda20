@@ -28,7 +28,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CreditCard, Moon, Sun, Home, Camera, Users, Calendar, LogOut, User, UserPlus, RefreshCw, Settings, AlertTriangle, Plus, Mic, CheckCircle2 } from "lucide-react";
+import {
+  CreditCard,
+  Moon,
+  Sun,
+  Home,
+  Camera,
+  Users,
+  LogOut,
+  User,
+  UserPlus,
+  RefreshCw,
+  AlertTriangle,
+  Plus,
+  Mic,
+  CheckCircle2,
+  QrCode,
+} from "lucide-react";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { SiHubspot, SiSalesforce } from "react-icons/si";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
@@ -86,7 +102,6 @@ export default function HomePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("home");
 
   const [scanShowingContact, setScanShowingContact] = useState(false);
-  // Bottom nav now shows on contact-detail since the floating Save to Phone button was removed.
   const showBottomNav = viewMode !== "event-detail" && !scanShowingContact;
   const [selectedContact, setSelectedContact] = useState<StoredContact | null>(null);
   const [contactInitialAction, setContactInitialAction] = useState<"followup" | null>(null);
@@ -107,6 +122,7 @@ export default function HomePage() {
   const [debriefTranscript, setDebriefTranscript] = useState("");
   const [debriefSavedContactId, setDebriefSavedContactId] = useState<string | null>(null);
   const [debriefPreSelectedContactId, setDebriefPreSelectedContactId] = useState<string | null>(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -310,7 +326,7 @@ export default function HomePage() {
 
   const handleCaptureToggle = () => setCaptureMenuOpen(prev => !prev);
 
-  const handleCaptureOption = (option: "scan" | "paste" | "debrief") => {
+  const handleCaptureOption = (option: "scan" | "paste" | "debrief" | "qr") => {
     setCaptureMenuOpen(false);
     if (option === "scan" || option === "paste") {
       setCaptureSheetMode(option);
@@ -320,6 +336,8 @@ export default function HomePage() {
       setDebriefSavedContactId(null);
       setDebriefPreSelectedContactId(null);
       setDebriefSheetOpen(true);
+    } else if (option === "qr") {
+      setQrModalOpen(true);
     }
   };
 
@@ -362,7 +380,6 @@ export default function HomePage() {
 
   const handleCaptureSheetClose = () => setCaptureSheetMode(null);
 
-  // Called from CompanyDetail's sparse state CTA — opens scan sheet directly
   const handleScanForCompany = useCallback((_companyName: string) => {
     setShowCreateContactDrawer(true);
   }, []);
@@ -380,7 +397,9 @@ export default function HomePage() {
           </div>
           <span className="font-semibold text-lg">Carda</span>
         </button>
+
         <div className="flex items-center gap-1">
+          {/* Sync failure badge */}
           {failedCount > 0 && (
             <Button
               size="icon"
@@ -398,19 +417,8 @@ export default function HomePage() {
               </span>
             </Button>
           )}
-          <MyQRModal />
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={toggleTheme}
-            data-testid="button-theme-toggle"
-          >
-            {theme === "dark" ? (
-              <Sun className="w-4 h-4" />
-            ) : (
-              <Moon className="w-4 h-4" />
-            )}
-          </Button>
+
+          {/* Profile / user menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
@@ -423,6 +431,7 @@ export default function HomePage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              {/* User identity */}
               <div className="px-2 py-1.5">
                 <p className="text-sm font-medium" data-testid="text-user-name">
                   {user?.firstName || user?.fullName || 'User'}
@@ -434,6 +443,28 @@ export default function HomePage() {
                 )}
               </div>
               <DropdownMenuSeparator />
+
+              {/* Dark mode toggle — fixed: reads live theme state */}
+              <DropdownMenuItem
+                onClick={toggleTheme}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid="button-theme-toggle"
+              >
+                {theme === "dark" ? (
+                  <>
+                    <Sun className="w-4 h-4" />
+                    <span>Light mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-4 h-4" />
+                    <span>Dark mode</span>
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+
+              {/* Recent accounts */}
               {otherAccounts.length > 0 && (
                 <>
                   <div className="px-2 py-1">
@@ -453,20 +484,36 @@ export default function HomePage() {
                   <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem onClick={handleAddAccount} className="flex items-center gap-2 cursor-pointer" data-testid="button-add-account">
+
+              <DropdownMenuItem
+                onClick={handleAddAccount}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid="button-add-account"
+              >
                 <UserPlus className="w-4 h-4" />
                 Add Account
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setShowHubSpotProfile(true)} className="flex items-center gap-2 cursor-pointer" data-testid="button-hubspot-menu">
+
+              {/* CRM integrations */}
+              <DropdownMenuItem
+                onClick={() => setShowHubSpotProfile(true)}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid="button-hubspot-menu"
+              >
                 <SiHubspot className="w-4 h-4 text-[#FF7A59]" />
                 HubSpot
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowSalesforceProfile(true)} className="flex items-center gap-2 cursor-pointer" data-testid="button-salesforce-menu">
+              <DropdownMenuItem
+                onClick={() => setShowSalesforceProfile(true)}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid="button-salesforce-menu"
+              >
                 <SiSalesforce className="w-4 h-4 text-[#00A1E0]" />
                 Salesforce
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+
               <DropdownMenuItem asChild>
                 <a href="/api/logout" className="flex items-center gap-2 cursor-pointer" data-testid="button-logout">
                   <LogOut className="w-4 h-4" />
@@ -497,6 +544,7 @@ export default function HomePage() {
                 onSelectContact={handleSelectUnifiedContact}
                 onSelectCompany={handleSelectCompany}
                 onRefresh={refreshContacts}
+                onStartDebrief={handleStartDebriefForContact}
               />
             </motion.div>
           )}
@@ -601,7 +649,6 @@ export default function HomePage() {
           style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
           data-testid="nav-bottom"
         >
-          {/* SVG gradient definition — referenced by active nav icons */}
           <svg className="absolute w-0 h-0 overflow-hidden" aria-hidden="true">
             <defs>
               <linearGradient id="brand-nav-gradient" x1="0" y1="0" x2="1" y2="0">
@@ -613,25 +660,13 @@ export default function HomePage() {
 
           {/* Left Pill: Scoreboard | Network */}
           <div className="pointer-events-auto relative inline-flex items-center h-[50px] rounded-full bg-white/10 dark:bg-white/[0.06] backdrop-blur-2xl saturate-200 shadow-[0_0_0_0.5px_rgba(255,255,255,0.55),0_2px_20px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.65)] dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.12),0_2px_20px_rgba(0,0,0,0.32),inset_0_0.5px_0_rgba(255,255,255,0.16)] p-1">
-            {/* Sliding bubble indicator */}
             <motion.div
               className="absolute top-1 h-[42px] rounded-full bg-white/60 dark:bg-white/[0.11] shadow-[0_0.5px_3px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.72)] dark:shadow-[0_0.5px_3px_rgba(0,0,0,0.22),inset_0_0.5px_0_rgba(255,255,255,0.18)] pointer-events-none z-0"
-              animate={{
-                x: activeTab === "home" ? 0 : "100%",
-              }}
-              transition={{
-                type: "spring",
-                stiffness: 380,
-                damping: 30,
-                mass: 0.8,
-              }}
-              style={{
-                left: 4,
-                width: "calc(50% - 4px)",
-              }}
+              animate={{ x: activeTab === "home" ? 0 : "100%" }}
+              transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.8 }}
+              style={{ left: 4, width: "calc(50% - 4px)" }}
             />
 
-            {/* Scoreboard tab */}
             <button
               onClick={() => handleTabChange("home")}
               className="relative z-[1] flex-1 flex flex-col items-center justify-center gap-[1px] h-[42px] min-w-[76px] px-4 rounded-full active:scale-[0.92] active:opacity-70 transition-transform duration-150"
@@ -652,7 +687,6 @@ export default function HomePage() {
               </span>
             </button>
 
-            {/* Network tab */}
             <button
               onClick={() => handleTabChange("contacts")}
               className="relative z-[1] flex-1 flex flex-col items-center justify-center gap-[1px] h-[42px] min-w-[76px] px-4 rounded-full active:scale-[0.92] active:opacity-70 transition-transform duration-150"
@@ -680,7 +714,7 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* Right Circle: Capture */}
+          {/* Right Circle: Capture FAB */}
           <button
             onClick={handleCaptureToggle}
             className="pointer-events-auto h-[50px] w-[50px] rounded-full bg-gradient-to-br from-[#4B68F5] to-[#7B5CF0] transition-all duration-300 flex items-center justify-center active:scale-[0.9] active:opacity-70 shadow-[0_2px_20px_rgba(75,104,245,0.4),0_0_0_0.5px_rgba(255,255,255,0.3)]"
@@ -689,9 +723,7 @@ export default function HomePage() {
             data-testid="nav-capture"
           >
             <Plus className={`w-[22px] h-[22px] transition-all duration-300 ${
-              captureMenuOpen
-                ? "rotate-45 text-white/70"
-                : "text-white"
+              captureMenuOpen ? "rotate-45 text-white/70" : "text-white"
             }`} />
           </button>
         </nav>
@@ -717,6 +749,25 @@ export default function HomePage() {
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
             >
               <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 dark:border-slate-700/50 overflow-hidden">
+
+                {/* 1. Voice Debrief — elevated as primary action */}
+                <button
+                  onClick={() => handleCaptureOption("debrief")}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  data-testid="capture-debrief"
+                >
+                  <div className="w-10 h-10 rounded-full bg-violet-500/15 flex items-center justify-center text-violet-600 dark:text-violet-400">
+                    <Mic className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-foreground">Voice Debrief</p>
+                    <p className="text-[11px] text-muted-foreground">After a meeting</p>
+                  </div>
+                </button>
+
+                <div className="border-t border-border/50" />
+
+                {/* 2. Scan Card */}
                 <button
                   onClick={() => handleCaptureOption("scan")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -733,6 +784,7 @@ export default function HomePage() {
 
                 <div className="border-t border-border/50" />
 
+                {/* 3. Paste Signature */}
                 <button
                   onClick={() => handleCaptureOption("paste")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -749,19 +801,21 @@ export default function HomePage() {
 
                 <div className="border-t border-border/50" />
 
+                {/* 4. Share My QR */}
                 <button
-                  onClick={() => handleCaptureOption("debrief")}
+                  onClick={() => handleCaptureOption("qr")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                  data-testid="capture-debrief"
+                  data-testid="capture-qr"
                 >
-                  <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-600 dark:text-violet-400">
-                    <Mic className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <QrCode className="w-5 h-5" />
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-semibold text-foreground">Voice Debrief</p>
-                    <p className="text-[11px] text-muted-foreground">Record meeting notes</p>
+                    <p className="text-sm font-semibold text-foreground">Share My QR</p>
+                    <p className="text-[11px] text-muted-foreground">Let them scan your card</p>
                   </div>
                 </button>
+
               </div>
             </motion.div>
           </>
@@ -869,6 +923,13 @@ export default function HomePage() {
           </>
         )}
       </AnimatePresence>
+
+      {/* QR Modal — triggered from capture menu */}
+      <MyQRModal
+        trigger={<span className="hidden" />}
+        open={qrModalOpen}
+        onOpenChange={setQrModalOpen}
+      />
 
       {/* Create Contact Drawer */}
       <CreateContactDrawer

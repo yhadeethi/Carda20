@@ -5,25 +5,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { QrCode, User, Save, Check, Building2, Phone, Mail, MapPin, Globe, Briefcase, X } from "lucide-react";
+import { QrCode, User, Save, Check, Building2, Phone, Mail, MapPin, Globe, Briefcase } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { useMyProfile, generateVCardFromProfile, MyProfile } from "@/hooks/use-my-profile";
 import { useToast } from "@/hooks/use-toast";
 
 interface MyQRModalProps {
   trigger?: React.ReactNode;
+  /** Controlled mode — pass both or neither */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function MyQRModal({ trigger }: MyQRModalProps) {
+export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: controlledOnOpenChange }: MyQRModalProps) {
   const { profile, setProfile, hasProfile, isLoaded } = useMyProfile();
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"qr" | "edit">("qr");
   const [formData, setFormData] = useState<MyProfile>(profile);
   const [saved, setSaved] = useState(false);
 
+  // Support both controlled and uncontrolled usage
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+
   const handleOpenChange = (newOpen: boolean) => {
-    setOpen(newOpen);
+    if (isControlled) {
+      controlledOnOpenChange?.(newOpen);
+    } else {
+      setInternalOpen(newOpen);
+    }
     if (newOpen) {
       setFormData(profile);
       setActiveTab(hasProfile ? "qr" : "edit");
@@ -50,9 +61,9 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
   const vcard = generateVCardFromProfile(profile);
 
   const defaultTrigger = (
-    <Button 
-      size="icon" 
-      variant="ghost" 
+    <Button
+      size="icon"
+      variant="ghost"
       data-testid="button-my-qr"
       aria-label="Show My QR"
     >
@@ -69,7 +80,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
       </DialogTrigger>
       <DialogContent className="max-w-lg w-full p-0 gap-0">
         <div className="flex flex-col max-h-[90vh]">
-          {/* Header with title and close button */}
+          {/* Header */}
           <header className="shrink-0 px-4 pt-4 pb-2 border-b flex items-center justify-between">
             <h2 className="font-semibold text-base flex items-center gap-2">
               <QrCode className="w-5 h-5" />
@@ -77,7 +88,7 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
             </h2>
           </header>
 
-          {/* Tabs row */}
+          {/* Tabs */}
           <div className="shrink-0 px-4 pt-3 pb-2 flex gap-2">
             <button
               type="button"
@@ -153,7 +164,6 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
 
             {activeTab === "edit" && (
               <div className="grid gap-3 py-2">
-                {/* Full Name */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
                     <User className="w-3 h-3" /> Full Name
@@ -166,7 +176,6 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
-                {/* Job Title + Company */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs flex items-center gap-1">
@@ -192,7 +201,6 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   </div>
                 </div>
 
-                {/* Phone + Email */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs flex items-center gap-1">
@@ -220,7 +228,6 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   </div>
                 </div>
 
-                {/* Website */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
                     <Globe className="w-3 h-3" /> Website
@@ -234,7 +241,6 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
-                {/* LinkedIn */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
                     <SiLinkedin className="w-3 h-3 text-[#0A66C2]" /> LinkedIn
@@ -252,7 +258,6 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   </div>
                 </div>
 
-                {/* Address line 1 */}
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1">
                     <MapPin className="w-3 h-3" /> Address
@@ -265,7 +270,6 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
-                {/* City / State / Postcode */}
                 <div className="grid grid-cols-3 gap-2">
                   <Input
                     value={formData.city}
@@ -287,7 +291,6 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
                   />
                 </div>
 
-                {/* Country - LAST field */}
                 <Input
                   value={formData.country}
                   onChange={(e) => handleInputChange("country", e.target.value)}
@@ -298,9 +301,9 @@ export function MyQRModal({ trigger }: MyQRModalProps) {
             )}
           </div>
 
-          {/* Footer with Save button – ONLY when Edit tab is active */}
+          {/* Footer — edit tab only */}
           {activeTab === "edit" && (
-            <footer 
+            <footer
               className="shrink-0 border-t px-4 py-3 bg-white dark:bg-slate-900"
               style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
             >
