@@ -12,12 +12,12 @@ import { useToast } from "@/hooks/use-toast";
 
 interface MyQRModalProps {
   trigger?: React.ReactNode;
-  /** Controlled mode — pass both or neither */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  initialTab?: "qr" | "edit";
 }
 
-export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: controlledOnOpenChange }: MyQRModalProps) {
+export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: controlledOnOpenChange, initialTab }: MyQRModalProps) {
   const { profile, setProfile, hasProfile, isLoaded } = useMyProfile();
   const { toast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -37,7 +37,7 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
     }
     if (newOpen) {
       setFormData(profile);
-      setActiveTab(hasProfile ? "qr" : "edit");
+      setActiveTab(initialTab ?? (hasProfile ? "qr" : "edit"));
     }
   };
 

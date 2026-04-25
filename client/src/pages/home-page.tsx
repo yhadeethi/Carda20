@@ -37,7 +37,6 @@ import {
   Users,
   LogOut,
   User,
-  UserPlus,
   RefreshCw,
   AlertTriangle,
   Plus,
@@ -122,7 +121,10 @@ export default function HomePage() {
   const [debriefTranscript, setDebriefTranscript] = useState("");
   const [debriefSavedContactId, setDebriefSavedContactId] = useState<string | null>(null);
   const [debriefPreSelectedContactId, setDebriefPreSelectedContactId] = useState<string | null>(null);
+  // QR modal — capture menu entry point (shows QR + edit tabs)
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  // Profile modal — profile menu entry point (lands directly on edit tab)
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -136,9 +138,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const email = user?.email;
-    if (email) {
-      saveRecentAccount(email);
-    }
+    if (email) saveRecentAccount(email);
   }, [user]);
 
   useEffect(() => {
@@ -165,16 +165,7 @@ export default function HomePage() {
   }, [toast]);
 
   const handleSwitchAccount = (email: string) => {
-    try {
-      localStorage.setItem("carda_switch_to_email", email);
-    } catch {}
-    window.location.href = "/api/logout";
-  };
-
-  const handleAddAccount = () => {
-    try {
-      localStorage.setItem("carda_add_account", "1");
-    } catch {}
+    try { localStorage.setItem("carda_switch_to_email", email); } catch {}
     window.location.href = "/api/logout";
   };
 
@@ -195,8 +186,7 @@ export default function HomePage() {
       setViewMode("contacts");
       setSelectedContact(null);
       setSelectedCompanyId(null);
-    }
-    else if (tab === "events") setViewMode("events");
+    } else if (tab === "events") setViewMode("events");
     setContactInitialAction(null);
   };
 
@@ -281,9 +271,7 @@ export default function HomePage() {
 
   const handleContactUpdated = useCallback((contactId: string) => {
     const freshContact = loadContacts().find(c => c.id === contactId);
-    if (freshContact) {
-      setSelectedContact(freshContact);
-    }
+    if (freshContact) setSelectedContact(freshContact);
     refreshContacts();
   }, [refreshContacts]);
 
@@ -359,9 +347,7 @@ export default function HomePage() {
     if (debriefSavedContactId) {
       const contacts = loadContacts();
       const saved = contacts.find((c) => c.id === debriefSavedContactId);
-      if (saved) {
-        handleSelectContact(saved);
-      }
+      if (saved) handleSelectContact(saved);
     }
   };
 
@@ -383,6 +369,8 @@ export default function HomePage() {
   const handleScanForCompany = useCallback((_companyName: string) => {
     setShowCreateContactDrawer(true);
   }, []);
+
+  const userInitial = (user?.firstName?.[0] || user?.fullName?.[0] || "U").toUpperCase();
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -418,84 +406,80 @@ export default function HomePage() {
             </Button>
           )}
 
-          {/* Profile / user menu */}
+          {/* Profile / user menu — avatar only in header */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
                 <Avatar className="w-8 h-8">
                   <AvatarImage src={user?.profileImageUrl ?? undefined} alt="Profile" />
-                  <AvatarFallback>
-                    <User className="w-4 h-4" />
+                  <AvatarFallback className="text-xs font-semibold bg-gradient-to-br from-[#4B68F5]/20 to-[#7B5CF0]/20 text-[#4B68F5]">
+                    {userInitial}
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {/* User identity */}
-              <div className="px-2 py-1.5">
-                <p className="text-sm font-medium" data-testid="text-user-name">
-                  {user?.firstName || user?.fullName || 'User'}
-                </p>
-                {user?.email && (
-                  <p className="text-xs text-muted-foreground" data-testid="text-user-email">
-                    {user?.email}
+
+            <DropdownMenuContent align="end" className="w-60">
+
+              {/* ── Identity block — not tappable ── */}
+              <div className="px-3 py-2.5 flex items-center gap-3">
+                <Avatar className="w-9 h-9 shrink-0">
+                  <AvatarImage src={user?.profileImageUrl ?? undefined} alt="Profile" />
+                  <AvatarFallback className="text-xs font-semibold bg-gradient-to-br from-[#4B68F5]/20 to-[#7B5CF0]/20 text-[#4B68F5]">
+                    {userInitial}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate" data-testid="text-user-name">
+                    {user?.firstName || user?.fullName || "User"}
                   </p>
-                )}
+                  {user?.email && (
+                    <p className="text-xs text-muted-foreground truncate" data-testid="text-user-email">
+                      {user?.email}
+                    </p>
+                  )}
+                </div>
               </div>
+
               <DropdownMenuSeparator />
 
-              {/* Dark mode toggle — fixed: reads live theme state */}
+              {/* ── My Profile → opens edit tab directly ── */}
+              <DropdownMenuItem
+                onClick={() => setProfileSheetOpen(true)}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid="button-my-profile"
+              >
+                <User className="w-4 h-4" />
+                My profile
+              </DropdownMenuItem>
+
+              {/* ── Dark mode — live toggle pill ── */}
               <DropdownMenuItem
                 onClick={toggleTheme}
-                className="flex items-center gap-2 cursor-pointer"
+                className="flex items-center justify-between cursor-pointer"
                 data-testid="button-theme-toggle"
               >
-                {theme === "dark" ? (
-                  <>
-                    <Sun className="w-4 h-4" />
-                    <span>Light mode</span>
-                  </>
-                ) : (
-                  <>
-                    <Moon className="w-4 h-4" />
-                    <span>Dark mode</span>
-                  </>
-                )}
+                <div className="flex items-center gap-2">
+                  {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+                </div>
+                <div className={`w-8 h-[18px] rounded-full flex items-center px-0.5 transition-colors duration-200 ${
+                  theme === "dark" ? "bg-[#4B68F5]" : "bg-muted"
+                }`}>
+                  <div className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    theme === "dark" ? "translate-x-[14px]" : "translate-x-0"
+                  }`} />
+                </div>
               </DropdownMenuItem>
+
               <DropdownMenuSeparator />
 
-              {/* Recent accounts */}
-              {otherAccounts.length > 0 && (
-                <>
-                  <div className="px-2 py-1">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Recent Accounts</p>
-                  </div>
-                  {otherAccounts.slice(0, 3).map((account) => (
-                    <DropdownMenuItem
-                      key={account.email}
-                      onClick={() => handleSwitchAccount(account.email)}
-                      className="flex items-center gap-2 cursor-pointer"
-                      data-testid={`button-switch-account-${account.email}`}
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span className="truncate text-sm">{account.email}</span>
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                </>
-              )}
-
-              <DropdownMenuItem
-                onClick={handleAddAccount}
-                className="flex items-center gap-2 cursor-pointer"
-                data-testid="button-add-account"
-              >
-                <UserPlus className="w-4 h-4" />
-                Add Account
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-
-              {/* CRM integrations */}
+              {/* ── Integrations ── */}
+              <div className="px-2 py-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Integrations
+                </p>
+              </div>
               <DropdownMenuItem
                 onClick={() => setShowHubSpotProfile(true)}
                 className="flex items-center gap-2 cursor-pointer"
@@ -512,14 +496,39 @@ export default function HomePage() {
                 <SiSalesforce className="w-4 h-4 text-[#00A1E0]" />
                 Salesforce
               </DropdownMenuItem>
+
               <DropdownMenuSeparator />
 
+              {/* ── Switch account — conditional ── */}
+              {otherAccounts.length > 0 && (
+                <>
+                  {otherAccounts.slice(0, 3).map((account) => (
+                    <DropdownMenuItem
+                      key={account.email}
+                      onClick={() => handleSwitchAccount(account.email)}
+                      className="flex items-center gap-2 cursor-pointer"
+                      data-testid={`button-switch-account-${account.email}`}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span className="truncate text-sm">{account.email}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                </>
+              )}
+
+              {/* ── Sign out ── */}
               <DropdownMenuItem asChild>
-                <a href="/api/logout" className="flex items-center gap-2 cursor-pointer" data-testid="button-logout">
+                <a
+                  href="/api/logout"
+                  className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+                  data-testid="button-logout"
+                >
                   <LogOut className="w-4 h-4" />
-                  Sign Out
+                  Sign out
                 </a>
               </DropdownMenuItem>
+
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -642,7 +651,7 @@ export default function HomePage() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation Bar — Liquid Glass */}
+      {/* Bottom Navigation Bar — Liquid Glass — do not modify */}
       {showBottomNav && (
         <nav
           className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between px-5 pointer-events-none"
@@ -658,7 +667,6 @@ export default function HomePage() {
             </defs>
           </svg>
 
-          {/* Left Pill: Scoreboard | Network */}
           <div className="pointer-events-auto relative inline-flex items-center h-[50px] rounded-full bg-white/10 dark:bg-white/[0.06] backdrop-blur-2xl saturate-200 shadow-[0_0_0_0.5px_rgba(255,255,255,0.55),0_2px_20px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.65)] dark:shadow-[0_0_0_0.5px_rgba(255,255,255,0.12),0_2px_20px_rgba(0,0,0,0.32),inset_0_0.5px_0_rgba(255,255,255,0.16)] p-1">
             <motion.div
               className="absolute top-1 h-[42px] rounded-full bg-white/60 dark:bg-white/[0.11] shadow-[0_0.5px_3px_rgba(0,0,0,0.07),inset_0_0.5px_0_rgba(255,255,255,0.72)] dark:shadow-[0_0.5px_3px_rgba(0,0,0,0.22),inset_0_0.5px_0_rgba(255,255,255,0.18)] pointer-events-none z-0"
@@ -666,7 +674,6 @@ export default function HomePage() {
               transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.8 }}
               style={{ left: 4, width: "calc(50% - 4px)" }}
             />
-
             <button
               onClick={() => handleTabChange("home")}
               className="relative z-[1] flex-1 flex flex-col items-center justify-center gap-[1px] h-[42px] min-w-[76px] px-4 rounded-full active:scale-[0.92] active:opacity-70 transition-transform duration-150"
@@ -686,7 +693,6 @@ export default function HomePage() {
                 Scoreboard
               </span>
             </button>
-
             <button
               onClick={() => handleTabChange("contacts")}
               className="relative z-[1] flex-1 flex flex-col items-center justify-center gap-[1px] h-[42px] min-w-[76px] px-4 rounded-full active:scale-[0.92] active:opacity-70 transition-transform duration-150"
@@ -714,7 +720,6 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* Right Circle: Capture FAB */}
           <button
             onClick={handleCaptureToggle}
             className="pointer-events-auto h-[50px] w-[50px] rounded-full bg-gradient-to-br from-[#4B68F5] to-[#7B5CF0] transition-all duration-300 flex items-center justify-center active:scale-[0.9] active:opacity-70 shadow-[0_2px_20px_rgba(75,104,245,0.4),0_0_0_0.5px_rgba(255,255,255,0.3)]"
@@ -750,7 +755,7 @@ export default function HomePage() {
             >
               <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 dark:border-slate-700/50 overflow-hidden">
 
-                {/* 1. Voice Debrief — elevated as primary action */}
+                {/* 1. Voice Debrief — primary */}
                 <button
                   onClick={() => handleCaptureOption("debrief")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -924,11 +929,19 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* QR Modal — triggered from capture menu */}
+      {/* QR Modal — capture menu, lands on QR tab */}
       <MyQRModal
         trigger={<span className="hidden" />}
         open={qrModalOpen}
         onOpenChange={setQrModalOpen}
+      />
+
+      {/* Profile Modal — profile menu, lands on edit tab */}
+      <MyQRModal
+        trigger={<span className="hidden" />}
+        open={profileSheetOpen}
+        onOpenChange={setProfileSheetOpen}
+        initialTab="edit"
       />
 
       {/* Create Contact Drawer */}
