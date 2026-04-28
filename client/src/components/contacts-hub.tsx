@@ -123,7 +123,6 @@ export function ContactsHub({
     const updatedCompanies = autoGenerateCompaniesFromContacts(loadedContacts);
     setCompanies(updatedCompanies);
 
-    // Repair pass: link any contacts that are missing a companyId
     const unlinked = loadedContacts.filter((c) => !c.companyId);
     if (unlinked.length > 0) {
       let anyUpdated = false;
@@ -139,13 +138,10 @@ export function ContactsHub({
           anyUpdated = true;
         }
       });
-      if (anyUpdated) {
-        setContacts(loadContacts());
-      }
+      if (anyUpdated) setContacts(loadContacts());
     }
   }, [refreshKey]);
 
-  // Sync activeTab with initialTab when it changes
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
@@ -154,28 +150,25 @@ export function ContactsHub({
 
   const filteredContacts = useMemo(() => {
     let result = [...contacts];
-
-    if (eventFilter !== "all") {
-      result = result.filter((c) => c.eventName === eventFilter);
-    }
-
+    if (eventFilter !== "all") result = result.filter((c) => c.eventName === eventFilter);
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter((c) => c.name?.toLowerCase().includes(query) || c.company?.toLowerCase().includes(query));
+      result = result.filter(
+        (c) => c.name?.toLowerCase().includes(query) || c.company?.toLowerCase().includes(query)
+      );
     }
-
     result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return result;
   }, [contacts, searchQuery, eventFilter]);
 
   const filteredCompanies = useMemo(() => {
     let result = [...companies];
-
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter((c) => c.name?.toLowerCase().includes(query) || c.domain?.toLowerCase().includes(query));
+      result = result.filter(
+        (c) => c.name?.toLowerCase().includes(query) || c.domain?.toLowerCase().includes(query)
+      );
     }
-
     result.sort((a, b) => {
       const countA = getContactCountForCompany(a.id, contacts);
       const countB = getContactCountForCompany(b.id, contacts);
@@ -183,22 +176,16 @@ export function ContactsHub({
       return a.name.localeCompare(b.name);
     });
 
-    // Deduplicate by normalised name — keep entry with most contacts (display-only, does not mutate storage)
     const seen = new Map<string, Company>();
     for (const c of result) {
       const key = c.name.trim().toLowerCase();
-      if (!seen.has(key)) {
-        seen.set(key, c);
-        continue;
-      }
+      if (!seen.has(key)) { seen.set(key, c); continue; }
       const existing = seen.get(key)!;
       if (getContactCountForCompany(c.id, contacts) > getContactCountForCompany(existing.id, contacts)) {
         seen.set(key, c);
       }
     }
-    result = Array.from(seen.values());
-
-    return result;
+    return Array.from(seen.values());
   }, [companies, searchQuery, contacts]);
 
   const confirmDelete = () => {
@@ -220,7 +207,6 @@ export function ContactsHub({
 
   const handleAddCompany = () => {
     if (!newCompanyName.trim()) return;
-
     const company = createCompany({
       name: newCompanyName.trim(),
       domain: newCompanyDomain.trim() || null,
@@ -229,7 +215,6 @@ export function ContactsHub({
       country: newCompanyCountry.trim() || null,
       notes: newCompanyNotes.trim() || null,
     });
-
     upsertCompany(company);
     setCompanies(getCompanies());
     resetAddCompanyForm();
@@ -261,9 +246,7 @@ export function ContactsHub({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} data-testid="button-confirm-delete">
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} data-testid="button-confirm-delete">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -287,10 +270,7 @@ export function ContactsHub({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex flex-row gap-2">
-            <AlertDialogCancel
-              data-testid="button-cancel-delete-company"
-              className="flex-1 rounded-xl"
-            >
+            <AlertDialogCancel data-testid="button-cancel-delete-company" className="flex-1 rounded-xl">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -310,105 +290,41 @@ export function ContactsHub({
           <DrawerHeader className="border-b pb-4">
             <DrawerTitle className="text-xl font-semibold">Add Company</DrawerTitle>
           </DrawerHeader>
-
           <ScrollArea className="flex-1 overflow-y-auto">
             <div className="p-4 pb-[env(safe-area-inset-bottom)] space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="company-name" className="text-sm font-medium">
-                  Company Name *
-                </Label>
-                <Input
-                  id="company-name"
-                  placeholder="Acme Corp"
-                  value={newCompanyName}
-                  onChange={(e) => setNewCompanyName(e.target.value)}
-                  className="h-12 rounded-2xl"
-                  data-testid="input-new-company-name"
-                />
+                <Label htmlFor="company-name" className="text-sm font-medium">Company Name *</Label>
+                <Input id="company-name" placeholder="Acme Corp" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} className="h-12 rounded-2xl" data-testid="input-new-company-name" />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="company-domain" className="text-sm font-medium">
-                  Domain
-                </Label>
-                <Input
-                  id="company-domain"
-                  placeholder="acme.com"
-                  value={newCompanyDomain}
-                  onChange={(e) => setNewCompanyDomain(e.target.value)}
-                  className="h-12 rounded-2xl"
-                  data-testid="input-new-company-domain"
-                />
+                <Label htmlFor="company-domain" className="text-sm font-medium">Domain</Label>
+                <Input id="company-domain" placeholder="acme.com" value={newCompanyDomain} onChange={(e) => setNewCompanyDomain(e.target.value)} className="h-12 rounded-2xl" data-testid="input-new-company-domain" />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="company-city" className="text-sm font-medium">
-                    City
-                  </Label>
-                  <Input
-                    id="company-city"
-                    placeholder="Sydney"
-                    value={newCompanyCity}
-                    onChange={(e) => setNewCompanyCity(e.target.value)}
-                    className="h-12 rounded-2xl"
-                  />
+                  <Label htmlFor="company-city" className="text-sm font-medium">City</Label>
+                  <Input id="company-city" placeholder="Sydney" value={newCompanyCity} onChange={(e) => setNewCompanyCity(e.target.value)} className="h-12 rounded-2xl" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="company-state" className="text-sm font-medium">
-                    State
-                  </Label>
-                  <Input
-                    id="company-state"
-                    placeholder="NSW"
-                    value={newCompanyState}
-                    onChange={(e) => setNewCompanyState(e.target.value)}
-                    className="h-12 rounded-2xl"
-                  />
+                  <Label htmlFor="company-state" className="text-sm font-medium">State</Label>
+                  <Input id="company-state" placeholder="NSW" value={newCompanyState} onChange={(e) => setNewCompanyState(e.target.value)} className="h-12 rounded-2xl" />
                 </div>
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="company-country" className="text-sm font-medium">
-                  Country
-                </Label>
-                <Input
-                  id="company-country"
-                  placeholder="Australia"
-                  value={newCompanyCountry}
-                  onChange={(e) => setNewCompanyCountry(e.target.value)}
-                  className="h-12 rounded-2xl"
-                />
+                <Label htmlFor="company-country" className="text-sm font-medium">Country</Label>
+                <Input id="company-country" placeholder="Australia" value={newCompanyCountry} onChange={(e) => setNewCompanyCountry(e.target.value)} className="h-12 rounded-2xl" />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="company-notes" className="text-sm font-medium">
-                  Notes
-                </Label>
-                <Textarea
-                  id="company-notes"
-                  placeholder="Notes about this company..."
-                  value={newCompanyNotes}
-                  onChange={(e) => setNewCompanyNotes(e.target.value)}
-                  rows={4}
-                  className="resize-none rounded-2xl"
-                />
+                <Label htmlFor="company-notes" className="text-sm font-medium">Notes</Label>
+                <Textarea id="company-notes" placeholder="Notes about this company..." value={newCompanyNotes} onChange={(e) => setNewCompanyNotes(e.target.value)} rows={4} className="resize-none rounded-2xl" />
               </div>
             </div>
           </ScrollArea>
-
           <DrawerFooter className="border-t pt-4 flex-row gap-3">
             <DrawerClose asChild>
-              <Button variant="outline" onClick={resetAddCompanyForm} className="flex-1 rounded-2xl">
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={resetAddCompanyForm} className="flex-1 rounded-2xl">Cancel</Button>
             </DrawerClose>
-            <Button
-              onClick={handleAddCompany}
-              disabled={!newCompanyName.trim()}
-              className="flex-1 rounded-2xl"
-              data-testid="button-save-company"
-            >
+            <Button onClick={handleAddCompany} disabled={!newCompanyName.trim()} className="flex-1 rounded-2xl" data-testid="button-save-company">
               Save Company
             </Button>
           </DrawerFooter>
@@ -424,13 +340,13 @@ export function ContactsHub({
         </p>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabMode)}>
-          {/* Unified header card — full width, no extra margin */}
-          <div className="bg-white rounded-2xl border border-black/10 shadow-sm overflow-hidden mb-4">
+          {/* Unified header card — dark mode aware */}
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden mb-4">
 
-            {/* Tab switcher — taller, bigger text, no count badges */}
-            <TabsList className="relative flex h-16 w-full rounded-none bg-[#F2F2F7] p-1.5 gap-0">
+            {/* Tab switcher */}
+            <TabsList className="relative flex h-16 w-full rounded-none bg-muted/60 p-1.5 gap-0">
               <motion.span
-                className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-0.1875rem)] rounded-xl bg-white shadow-sm"
+                className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-0.1875rem)] rounded-xl bg-card shadow-sm"
                 animate={{ x: activeTab === "people" ? "0%" : "100%" }}
                 transition={
                   reduceMotion
@@ -445,7 +361,6 @@ export function ContactsHub({
               >
                 <span className="relative z-10">People</span>
               </TabsTrigger>
-
               <TabsTrigger
                 value="companies"
                 className="relative flex-1 min-w-0 h-full rounded-xl text-[15px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground/60"
@@ -456,7 +371,7 @@ export function ContactsHub({
             </TabsList>
 
             {/* Search input */}
-            <div className="border-t border-black/[0.08] relative">
+            <div className="border-t border-border/60 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
               <Input
                 placeholder={activeTab === "people" ? "Search by name or company..." : "Search companies..."}
@@ -467,14 +382,14 @@ export function ContactsHub({
               />
             </div>
 
-            {/* Filter chips — People tab only, bigger and properly spaced */}
+            {/* Filter chips — People tab only */}
             {activeTab === "people" && (
-              <div className="border-t border-black/[0.08] px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide">
+              <div className="border-t border-border/60 px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide">
                 <button
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "all"
                       ? "bg-[#4B68F5] border-[#4B68F5] text-white"
-                      : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
+                      : "bg-muted border-border text-muted-foreground"
                   }`}
                   onClick={() => setPeopleSubView("all")}
                   data-testid="filter-all"
@@ -482,12 +397,11 @@ export function ContactsHub({
                   <Users className="w-3.5 h-3.5" />
                   All
                 </button>
-
                 <button
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "upcoming"
                       ? "bg-[#4B68F5] border-[#4B68F5] text-white"
-                      : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
+                      : "bg-muted border-border text-muted-foreground"
                   }`}
                   onClick={() => setPeopleSubView("upcoming")}
                   data-testid="filter-upcoming"
@@ -495,12 +409,11 @@ export function ContactsHub({
                   <Bell className="w-3.5 h-3.5" />
                   Upcoming
                 </button>
-
                 <button
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-bold border whitespace-nowrap transition-colors ${
                     peopleSubView === "duplicates"
                       ? "bg-[#4B68F5] border-[#4B68F5] text-white"
-                      : "bg-[#F2F2F7] border-black/10 text-muted-foreground"
+                      : "bg-muted border-border text-muted-foreground"
                   }`}
                   onClick={() => setPeopleSubView("duplicates")}
                   data-testid="filter-duplicates"
@@ -541,9 +454,7 @@ export function ContactsHub({
                     <SelectContent>
                       <SelectItem value="all">All events</SelectItem>
                       {eventNames.map((event) => (
-                        <SelectItem key={event} value={event}>
-                          {event}
-                        </SelectItem>
+                        <SelectItem key={event} value={event}>{event}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -591,11 +502,10 @@ export function ContactsHub({
             )}
           </TabsContent>
 
-          {/* Companies Tab Content — always vertical list, no grid */}
+          {/* Companies Tab Content */}
           <TabsContent value="companies" className="mt-0" data-testid="companies-list">
             {filteredCompanies.length === 0 && !searchQuery.trim() ? (
-              /* Empty state — no companies */
-              <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-8 text-center">
+              <div className="bg-card rounded-2xl border border-border shadow-sm p-8 text-center">
                 <div className="w-12 h-12 rounded-xl bg-[#4B68F5]/10 flex items-center justify-center mx-auto mb-3">
                   <Plus className="w-6 h-6 text-[#4B68F5]" />
                 </div>
@@ -613,15 +523,13 @@ export function ContactsHub({
                 </Button>
               </div>
             ) : filteredCompanies.length === 0 && searchQuery.trim() ? (
-              /* Empty state — no search results */
-              <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-8 text-center">
+              <div className="bg-card rounded-2xl border border-border shadow-sm p-8 text-center">
                 <div className="text-[15px] font-bold text-foreground">No matching companies</div>
                 <p className="text-[13px] font-medium text-muted-foreground/70 mt-1 max-w-xs mx-auto">
                   Try a shorter name or the domain.
                 </p>
               </div>
             ) : (
-              /* Company list — always vertical rows */
               <div className="space-y-2">
                 {filteredCompanies.map((company) => (
                   <CompanyTile
@@ -638,9 +546,8 @@ export function ContactsHub({
                   />
                 ))}
 
-                {/* Inline Add Company row */}
                 <button
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-black/15 bg-transparent text-[14px] font-semibold text-muted-foreground hover:bg-white hover:border-[#4B68F5]/30 hover:text-[#4B68F5] transition-all active:opacity-70"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border text-[14px] font-semibold text-muted-foreground hover:bg-card hover:border-[#4B68F5]/30 hover:text-[#4B68F5] transition-all active:opacity-70"
                   onClick={() => setShowAddCompany(true)}
                   data-testid="button-add-company"
                   style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}

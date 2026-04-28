@@ -1,31 +1,38 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import { QrCode, User, Save, Check, Building2, Phone, Mail, MapPin, Globe, Briefcase } from "lucide-react";
+import { QrCode, User, Save, Check, Building2, Phone, Mail, MapPin, Globe, Briefcase, ChevronLeft } from "lucide-react";
 import { SiLinkedin } from "react-icons/si";
 import { useMyProfile, generateVCardFromProfile, MyProfile } from "@/hooks/use-my-profile";
 import { useToast } from "@/hooks/use-toast";
 
 interface MyQRModalProps {
   trigger?: React.ReactNode;
+  /** Controlled open state */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * "edit"  → profile menu entry: shows edit form only, no QR tab
+   * "qr"    → capture menu entry: shows QR with link to edit form
+   */
   initialTab?: "qr" | "edit";
 }
 
-export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: controlledOnOpenChange, initialTab }: MyQRModalProps) {
+export function MyQRModal({
+  trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  initialTab = "qr",
+}: MyQRModalProps) {
   const { profile, setProfile, hasProfile, isLoaded } = useMyProfile();
   const { toast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"qr" | "edit">("qr");
+  const [activeTab, setActiveTab] = useState<"qr" | "edit">(initialTab);
   const [formData, setFormData] = useState<MyProfile>(profile);
   const [saved, setSaved] = useState(false);
 
-  // Support both controlled and uncontrolled usage
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
 
@@ -37,7 +44,7 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
     }
     if (newOpen) {
       setFormData(profile);
-      setActiveTab(initialTab ?? (hasProfile ? "qr" : "edit"));
+      setActiveTab(initialTab);
     }
   };
 
@@ -48,154 +55,168 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
   const handleSave = () => {
     setProfile(formData);
     setSaved(true);
-    toast({
-      title: "Profile saved",
-      description: "Your card details have been saved",
-    });
+    toast({ title: "Profile saved", description: "Your card details have been saved" });
     setTimeout(() => {
       setSaved(false);
-      setActiveTab("qr");
+      // After saving from profile menu stay on edit; from QR menu go back to QR
+      if (initialTab === "qr") setActiveTab("qr");
     }, 1000);
   };
 
   const vcard = generateVCardFromProfile(profile);
 
-  const defaultTrigger = (
-    <Button
-      size="icon"
-      variant="ghost"
-      data-testid="button-my-qr"
-      aria-label="Show My QR"
-    >
-      <QrCode className="w-4 h-4" />
-    </Button>
-  );
-
   if (!isLoaded) return null;
 
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger || defaultTrigger}
-      </DialogTrigger>
-      <DialogContent className="max-w-lg w-full p-0 gap-0">
-        <div className="flex flex-col max-h-[90vh]">
-          {/* Header */}
-          <header className="shrink-0 px-4 pt-4 pb-2 border-b flex items-center justify-between">
-            <h2 className="font-semibold text-base flex items-center gap-2">
-              <QrCode className="w-5 h-5" />
-              My QR Code
-            </h2>
-          </header>
+  // Uncontrolled trigger support
+  const handleTriggerClick = () => {
+    if (!isControlled) setInternalOpen(true);
+  };
 
-          {/* Tabs */}
-          <div className="shrink-0 px-4 pt-3 pb-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab("qr")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === "qr"
-                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-              }`}
-              data-testid="tab-my-qr"
-            >
-              <QrCode className="w-4 h-4" />
-              My QR
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("edit")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === "edit"
-                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-              }`}
-              data-testid="tab-edit-profile"
-            >
-              <User className="w-4 h-4" />
-              Edit Card
-            </button>
+  return (
+    <>
+      {trigger && (
+        <span onClick={handleTriggerClick} style={{ display: "contents" }}>
+          {trigger}
+        </span>
+      )}
+
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetContent
+          side="bottom"
+          className="p-0 rounded-t-3xl max-h-[92vh] flex flex-col"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1 shrink-0">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
           </div>
 
-          {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto px-4 pt-2 pb-24">
-            {activeTab === "qr" && (
-              <>
+          {/* ── QR view ── */}
+          {activeTab === "qr" && (
+            <>
+              {/* Header */}
+              <div className="shrink-0 px-5 pt-1 pb-3 border-b border-border/40">
+                <h2 className="text-base font-semibold text-foreground">Share my QR</h2>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 py-6">
                 {hasProfile ? (
-                  <div className="flex flex-col items-center gap-4 py-4">
-                    <Card className="p-4 bg-white">
+                  <div className="flex flex-col items-center gap-5">
+                    {/* QR code */}
+                    <div className="p-4 bg-white rounded-2xl shadow-sm border border-black/10">
                       <QRCodeSVG
                         value={vcard}
-                        size={200}
+                        size={180}
                         level="M"
                         includeMargin
                         data-testid="qr-code-display"
                       />
-                    </Card>
+                    </div>
+
+                    {/* Identity */}
                     <div className="text-center">
-                      <p className="font-medium" data-testid="text-qr-name">{profile.fullName || "Your Name"}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-base font-semibold text-foreground" data-testid="text-qr-name">
+                        {profile.fullName || "Your Name"}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-0.5">
                         {profile.jobTitle && profile.companyName
-                          ? `${profile.jobTitle} at ${profile.companyName}`
+                          ? `${profile.jobTitle} · ${profile.companyName}`
                           : profile.jobTitle || profile.companyName || ""}
                       </p>
                     </div>
-                    <p className="text-xs text-muted-foreground text-center px-4">
+
+                    <p className="text-xs text-muted-foreground text-center max-w-xs">
                       Ask them to scan this to save your contact details.
                     </p>
+
+                    {/* Edit link */}
+                    <button
+                      onClick={() => setActiveTab("edit")}
+                      className="text-sm font-medium text-primary flex items-center gap-1"
+                    >
+                      Edit my card details
+                      <ChevronLeft className="w-3.5 h-3.5 rotate-180" />
+                    </button>
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center mb-4">
+                  <div className="flex flex-col items-center gap-4 py-8">
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                       <User className="w-8 h-8 text-muted-foreground" />
                     </div>
-                    <p className="font-medium">No profile yet</p>
-                    <p className="text-sm text-muted-foreground mt-1 mb-4">
-                      Add your details to generate a QR code
-                    </p>
-                    <Button onClick={() => setActiveTab("edit")} data-testid="button-add-profile">
-                      Add My Details
-                    </Button>
+                    <div className="text-center">
+                      <p className="font-semibold text-foreground">No profile yet</p>
+                      <p className="text-sm text-muted-foreground mt-1">Add your details to generate a QR code</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab("edit")}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white text-sm font-semibold"
+                      data-testid="button-add-profile"
+                    >
+                      Add my details
+                    </button>
                   </div>
                 )}
-              </>
-            )}
+              </div>
+            </>
+          )}
 
-            {activeTab === "edit" && (
-              <div className="grid gap-3 py-2">
+          {/* ── Edit / Profile view ── */}
+          {activeTab === "edit" && (
+            <>
+              {/* Header — back arrow only when coming from QR */}
+              <div className="shrink-0 px-5 pt-1 pb-3 border-b border-border/40 flex items-center gap-3">
+                {initialTab === "qr" && (
+                  <button
+                    onClick={() => setActiveTab("qr")}
+                    className="text-primary"
+                    aria-label="Back to QR"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                )}
+                <h2 className="text-base font-semibold text-foreground">
+                  {initialTab === "qr" ? "Edit my card" : "My profile"}
+                </h2>
+              </div>
+
+              {/* Scrollable form */}
+              <div className="flex-1 overflow-y-auto px-5 pt-4 pb-6 space-y-3">
+
                 <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    <User className="w-3 h-3" /> Full Name
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <User className="w-3 h-3" /> Full name
                   </Label>
                   <Input
                     value={formData.fullName}
                     onChange={(e) => handleInputChange("fullName", e.target.value)}
                     placeholder="John Doe"
+                    className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                     data-testid="input-my-name"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs flex items-center gap-1">
-                      <Briefcase className="w-3 h-3" /> Job Title
+                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      <Briefcase className="w-3 h-3" /> Job title
                     </Label>
                     <Input
                       value={formData.jobTitle}
                       onChange={(e) => handleInputChange("jobTitle", e.target.value)}
                       placeholder="VP of Sales"
+                      className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                       data-testid="input-my-title"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs flex items-center gap-1">
+                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                       <Building2 className="w-3 h-3" /> Company
                     </Label>
                     <Input
                       value={formData.companyName}
                       onChange={(e) => handleInputChange("companyName", e.target.value)}
                       placeholder="Acme Corp"
+                      className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                       data-testid="input-my-company"
                     />
                   </div>
@@ -203,19 +224,20 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs flex items-center gap-1">
+                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                       <Phone className="w-3 h-3" /> Phone
                     </Label>
                     <Input
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => handleInputChange("phone", e.target.value)}
-                      placeholder="+1 555-0123"
+                      placeholder="+61 4xx xxx xxx"
+                      className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                       data-testid="input-my-phone"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs flex items-center gap-1">
+                    <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                       <Mail className="w-3 h-3" /> Email
                     </Label>
                     <Input
@@ -223,13 +245,14 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
                       value={formData.email}
                       onChange={(e) => handleInputChange("email", e.target.value)}
                       placeholder="john@acme.com"
+                      className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                       data-testid="input-my-email"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <Globe className="w-3 h-3" /> Website
                   </Label>
                   <Input
@@ -237,12 +260,13 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
                     value={formData.website}
                     onChange={(e) => handleInputChange("website", e.target.value)}
                     placeholder="https://example.com"
+                    className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                     data-testid="input-my-website"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <SiLinkedin className="w-3 h-3 text-[#0A66C2]" /> LinkedIn
                   </Label>
                   <div className="relative">
@@ -251,21 +275,22 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
                       type="url"
                       value={formData.linkedinUrl}
                       onChange={(e) => handleInputChange("linkedinUrl", e.target.value)}
-                      placeholder="https://www.linkedin.com/in/username"
-                      className="pl-10"
+                      placeholder="linkedin.com/in/username"
+                      className="h-11 rounded-xl bg-muted/40 border-0 pl-10 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                       data-testid="input-my-linkedin"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <MapPin className="w-3 h-3" /> Address
                   </Label>
                   <Input
                     value={formData.street}
                     onChange={(e) => handleInputChange("street", e.target.value)}
                     placeholder="123 Main Street"
+                    className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                     data-testid="input-my-street"
                   />
                 </div>
@@ -275,18 +300,21 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
                     value={formData.city}
                     onChange={(e) => handleInputChange("city", e.target.value)}
                     placeholder="City"
+                    className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                     data-testid="input-my-city"
                   />
                   <Input
                     value={formData.state}
                     onChange={(e) => handleInputChange("state", e.target.value)}
                     placeholder="State"
+                    className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                     data-testid="input-my-state"
                   />
                   <Input
                     value={formData.postcode}
                     onChange={(e) => handleInputChange("postcode", e.target.value)}
                     placeholder="Postcode"
+                    className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                     data-testid="input-my-postcode"
                   />
                 </div>
@@ -295,41 +323,37 @@ export function MyQRModal({ trigger, open: controlledOpen, onOpenChange: control
                   value={formData.country}
                   onChange={(e) => handleInputChange("country", e.target.value)}
                   placeholder="Country"
+                  className="h-11 rounded-xl bg-muted/40 border-0 focus-visible:ring-2 focus-visible:ring-[#4B68F5]/30"
                   data-testid="input-my-country"
                 />
               </div>
-            )}
-          </div>
 
-          {/* Footer — edit tab only */}
-          {activeTab === "edit" && (
-            <footer
-              className="shrink-0 border-t px-4 py-3 bg-white dark:bg-slate-900"
-              style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
-            >
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!formData.fullName && !formData.email && !formData.phone}
-                className="w-full rounded-xl py-3 text-base font-medium bg-slate-900 text-white dark:bg-white dark:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="button-save-my-card"
-              >
-                {saved ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Check className="h-4 w-4" />
-                    Saved!
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <Save className="h-4 w-4" />
-                    Save My Card
-                  </span>
-                )}
-              </button>
-            </footer>
+              {/* Sticky save button */}
+              <div className="shrink-0 px-5 pt-3 pb-4 border-t border-border/40 bg-background">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!formData.fullName && !formData.email && !formData.phone}
+                  className="w-full h-12 rounded-2xl text-sm font-semibold text-white bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-transform"
+                  data-testid="button-save-my-card"
+                >
+                  {saved ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Saved!
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save profile
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
