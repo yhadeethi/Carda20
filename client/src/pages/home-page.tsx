@@ -17,6 +17,7 @@ import { HomeScoreboard } from "@/components/home/HomeScoreboard";
 import { CreateContactDrawer } from "@/components/create-contact-drawer";
 import { VoiceDebriefRecorder } from "@/components/voice-debrief-recorder";
 import { VoiceDebriefReviewSheet } from "@/components/voice-debrief-review";
+import { ImportVCFReviewSheet } from "@/components/import-vcf-review";
 import { HubSpotProfile } from "@/components/hubspot/HubSpotProfile";
 import { SalesforceProfile } from "@/components/salesforce/SalesforceProfile";
 import { Button } from "@/components/ui/button";
@@ -43,12 +44,14 @@ import {
   Mic,
   CheckCircle2,
   QrCode,
+  Upload,
 } from "lucide-react";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { SiHubspot, SiSalesforce } from "react-icons/si";
 import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorage";
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 import { motion, AnimatePresence } from "framer-motion";
+import { parseVCFFile, type VCFImportResult } from "@/lib/contacts/importVCF";
 
 type TabMode = "home" | "contacts" | "events";
 type ViewMode = "home" | "contacts" | "contact-detail" | "company-detail" | "events" | "event-detail";
@@ -125,6 +128,73 @@ export default function HomePage() {
   const [qrModalOpen, setQrModalOpen] = useState(false);
   // Profile modal — profile menu entry point (lands directly on edit tab)
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
+
+  // ── VCF Import state ──────────────────────────────────────────────────────
+  const vcfInputRef = useRef<HTMLInputElement>(null);
+  const [vcfImportResult, setVcfImportResult] = useState<VCFImportResult | null>(null);
+  const [vcfReviewOpen, setVcfReviewOpen] = useState(false);
+
+  const handleImportContactsTrigger = () => {
+    vcfInputRef.current?.click();
+  };
+
+  const handleVCFFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so the same file can be re-selected if needed
+    e.target.value = "";
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = ev.target?.result as string;
+        if (!raw) throw new Error("Empty file");
+
+        // Build set of existing emails for deduplication
+        const existingContacts = loadContacts();
+        const existingEmails = new Set(
+          existingContacts
+            .map((c) => c.email?.toLowerCase())
+            .filter(Boolean) as string[]
+        );
+
+        const result = parseVCFFile(raw, existingEmails);
+        setVcfImportResult(result);
+        setVcfReviewOpen(true);
+      } catch {
+        toast({
+          title: "Couldn't read file",
+          description: "Make sure you're uploading a valid .vcf file from your contacts app.",
+          variant: "destructive",
+        });
+      }
+    };
+    reader.onerror = () => {
+      toast({
+        title: "File read error",
+        description: "Something went wrong reading the file. Please try again.",
+        variant: "destructive",
+      });
+    };
+    reader.readAsText(file);
+  };
+
+  const handleVCFImportConfirmed = (importedCount: number) => {
+    setVcfReviewOpen(false);
+    setVcfImportResult(null);
+    refreshContacts();
+    toast({
+      title: `${importedCount} contact${importedCount !== 1 ? "s" : ""} imported`,
+      description: "Your contacts are now in Carda.",
+    });
+  };
+
+  const handleVCFImportCancelled = () => {
+    setVcfReviewOpen(false);
+    setVcfImportResult(null);
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -374,6 +444,16 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      {/* Hidden VCF file input — triggered programmatically from profile menu */}
+      <input
+        ref={vcfInputRef}
+        type="file"
+        accept=".vcf,text/vcard"
+        className="hidden"
+        onChange={handleVCFFileSelected}
+        aria-hidden="true"
+      />
+
       <header className="h-14 border-b flex items-center justify-between px-4 bg-card shrink-0">
         <button
           className="flex items-center gap-2 hover-elevate rounded-lg px-2 py-1 -ml-2"
@@ -495,6 +575,18 @@ export default function HomePage() {
               >
                 <SiSalesforce className="w-4 h-4 text-[#00A1E0]" />
                 Salesforce
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* ── Import contacts ── */}
+              <DropdownMenuItem
+                onClick={handleImportContactsTrigger}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid="button-import-contacts"
+              >
+                <Upload className="w-4 h-4" />
+                Import contacts (.vcf)
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
@@ -928,6 +1020,14 @@ export default function HomePage() {
           </>
         )}
       </AnimatePresence>
+
+      {/* VCF Import Review Sheet */}
+      <ImportVCFReviewSheet
+        open={vcfReviewOpen}
+        result={vcfImportResult}
+        onConfirm={handleVCFImportConfirmed}
+        onCancel={handleVCFImportCancelled}
+      />
 
       {/* QR Modal — capture menu, lands on QR tab */}
       <MyQRModal
