@@ -37,7 +37,7 @@ import {
 import {
   Bell,
   Briefcase,
-  Calendar,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -47,6 +47,7 @@ import {
   Flag,
   Globe,
   Linkedin,
+  List,
   Mail,
   Mic,
   MoreHorizontal,
@@ -62,7 +63,8 @@ import {
 import { SiHubspot, SiLinkedin, SiSalesforce } from "react-icons/si";
 
 import { CompanyIntelV2Card } from "@/components/company-intel-v2";
-import { TimelineFeed, TimelineItem, TimelineEventType } from "./TimelineFeed";
+import { TimelineFeed, TimelineItem, TimelineEventType, ActivityFilter } from "./TimelineFeed";
+import { ContactActivityCalendar } from "./ContactActivityCalendar";
 
 import { StoredContact, RelationshipStrength } from "@/lib/contactsStorage";
 import {
@@ -221,7 +223,8 @@ export function ContactDetailView({
   const [cardExpanded, setCardExpanded] = useState(false);
   const [showLogStrip, setShowLogStrip] = useState(false);
   const [briefExpanded, setBriefExpanded] = useState(false);
-  const [timelineFilter, setTimelineFilter] = useState<"all" | "calls" | "emails" | "meetings" | "notes">("all");
+  const [timelineFilter, setTimelineFilter] = useState<ActivityFilter>("all");
+  const [activityView, setActivityView] = useState<"list" | "calendar">("list");
 
   // ── Edit form ─────────────────────────────────────────────────────────────
   const [editedFields, setEditedFields] = useState({
@@ -311,7 +314,6 @@ export function ContactDetailView({
     return Math.round((Date.now() - new Date(contactV2.lastTouchedAt).getTime()) / 86400000);
   }, [contactV2?.lastTouchedAt]);
 
-  // Staleness level for the strip under hero card
   const stalenessLevel = useMemo<"fresh" | "warm" | "cold">(() => {
     if (daysSinceLastTouch === null) return "cold";
     if (daysSinceLastTouch <= 7) return "fresh";
@@ -372,22 +374,23 @@ export function ContactDetailView({
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   }, [contactV2]);
 
+  // filteredTimelineItems — only used for non-tasks/reminders filters
+  // Tasks and reminders filters are handled inside TimelineFeed directly
   const filteredTimelineItems = useMemo(() => {
-    if (timelineFilter === "all") return timelineItems;
-    if (timelineFilter === "calls") return timelineItems.filter((t) => t.type === "call_logged");
-    if (timelineFilter === "emails") return timelineItems.filter((t) => t.type === "followup_sent");
-    if (timelineFilter === "meetings") return timelineItems.filter((t) => t.type === "meeting_scheduled" || t.type === "event_attended");
-    if (timelineFilter === "notes") return timelineItems.filter((t) => t.type === "voice_debrief" || t.type === "note_added");
+    if (timelineFilter === "all")       return timelineItems;
+    if (timelineFilter === "tasks")     return []; // handled in TimelineFeed
+    if (timelineFilter === "reminders") return []; // handled in TimelineFeed
+    if (timelineFilter === "calls")     return timelineItems.filter((t) => t.type === "call_logged");
+    if (timelineFilter === "emails")    return timelineItems.filter((t) => t.type === "followup_sent");
+    if (timelineFilter === "meetings")  return timelineItems.filter((t) => t.type === "meeting_scheduled" || t.type === "event_attended");
+    if (timelineFilter === "notes")     return timelineItems.filter((t) => t.type === "voice_debrief" || t.type === "note_added");
     return timelineItems;
   }, [timelineItems, timelineFilter]);
 
-  // ── Context Brief placeholder ─────────────────────────────────────────────
+  // ── Context Brief ─────────────────────────────────────────────────────────
   const contextBriefText = useMemo(() => {
-    // Build a simple brief from available timeline data
     const debriefs = timelineItems.filter((t) => t.type === "voice_debrief");
-    if (debriefs.length > 0) {
-      return debriefs[0].title; // Most recent debrief summary
-    }
+    if (debriefs.length > 0) return debriefs[0].title;
     if (timelineItems.length > 0) {
       return `${timelineItems.length} interaction${timelineItems.length !== 1 ? "s" : ""} logged. Add a voice debrief for a richer context summary.`;
     }
@@ -491,7 +494,7 @@ export function ContactDetailView({
     }
   };
 
-  const handleCall = () => { if (contact.phone) window.location.href = `tel:${contact.phone}`; };
+  const handleCall  = () => { if (contact.phone) window.location.href = `tel:${contact.phone}`; };
   const handleEmail = () => { if (contact.email) window.location.href = `mailto:${contact.email}`; };
   const handleOpenWebsite = () => {
     if (!contact.website) return;
@@ -724,18 +727,20 @@ export function ContactDetailView({
 
   // ── Warmth config ─────────────────────────────────────────────────────────
   const warmthConfig: { value: RelationshipStrength; label: string; active: string; inactive: string }[] = [
-    { value: "CASUAL", label: "Casual", active: "bg-white text-foreground border-black/10 shadow-sm", inactive: "bg-transparent text-muted-foreground border-black/10" },
-    { value: "NORMAL", label: "Normal", active: "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white border-transparent",           inactive: "bg-transparent text-muted-foreground border-black/10" },
-    { value: "CLOSE",  label: "Close",  active: "bg-red-500 text-white border-red-500",               inactive: "bg-transparent text-muted-foreground border-black/10" },
+    { value: "CASUAL", label: "Casual", active: "bg-white text-foreground border-black/10 shadow-sm",                                          inactive: "bg-transparent text-muted-foreground border-black/10" },
+    { value: "NORMAL", label: "Normal", active: "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white border-transparent",                  inactive: "bg-transparent text-muted-foreground border-black/10" },
+    { value: "CLOSE",  label: "Close",  active: "bg-red-500 text-white border-red-500",                                                         inactive: "bg-transparent text-muted-foreground border-black/10" },
   ];
 
-  // ── Timeline filter config ────────────────────────────────────────────────
-  const tlFilters: { value: typeof timelineFilter; label: string }[] = [
-    { value: "all",      label: "All" },
-    { value: "calls",    label: "Calls" },
-    { value: "emails",   label: "Emails" },
-    { value: "meetings", label: "Meetings" },
-    { value: "notes",    label: "Notes" },
+  // ── Activity filter config ────────────────────────────────────────────────
+  const tlFilters: { value: ActivityFilter; label: string }[] = [
+    { value: "all",       label: "All" },
+    { value: "meetings",  label: "Meetings" },
+    { value: "calls",     label: "Calls" },
+    { value: "emails",    label: "Emails" },
+    { value: "notes",     label: "Notes" },
+    { value: "tasks",     label: "Tasks" },
+    { value: "reminders", label: "Reminders" },
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -939,20 +944,14 @@ export function ContactDetailView({
                   </span>
                 )}
                 <ChevronDown
-                  className={`w-4 h-4 text-muted-foreground/50 shrink-0 transition-transform duration-200 ${
-                    briefExpanded ? "rotate-180" : ""
-                  }`}
+                  className={`w-4 h-4 text-muted-foreground/50 shrink-0 transition-transform duration-200 ${briefExpanded ? "rotate-180" : ""}`}
                 />
               </button>
               {briefExpanded && (
                 <div className="px-3 pb-3 pt-0">
-                  <p className="text-[14px] leading-relaxed text-foreground">
-                    {contextBriefText}
-                  </p>
+                  <p className="text-[14px] leading-relaxed text-foreground">{contextBriefText}</p>
                   {contextBriefMeta && (
-                    <p className="text-[11px] font-semibold text-muted-foreground/60 mt-2">
-                      {contextBriefMeta}
-                    </p>
+                    <p className="text-[11px] font-semibold text-muted-foreground/60 mt-2">{contextBriefMeta}</p>
                   )}
                 </div>
               )}
@@ -997,7 +996,7 @@ export function ContactDetailView({
               </div>
             </button>
 
-            {/* Tier 2: Log + Email — frequent actions */}
+            {/* Tier 2: Log + Email */}
             <div className="flex gap-2">
               <button
                 onClick={() => setShowLogStrip(!showLogStrip)}
@@ -1030,7 +1029,7 @@ export function ContactDetailView({
               </button>
             </div>
 
-            {/* Tier 3: Save to Phone + Export to CRM — occasional actions */}
+            {/* Tier 3: Save to Phone + Export to CRM */}
             <div className="flex gap-2">
               <button
                 onClick={onDownloadVCard}
@@ -1086,7 +1085,7 @@ export function ContactDetailView({
             </div>
           )}
 
-          {/* ── Tasks ── */}
+          {/* ── Tasks (inline above activity — open tasks only) ── */}
           {contactTasks.length > 0 && (
             <div className="mb-5">
               <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-2">Tasks</p>
@@ -1147,13 +1146,13 @@ export function ContactDetailView({
                               {(() => {
                                 const d = new Date(task.dueAt);
                                 const now = new Date();
-                                const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                                const start  = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
                                 const target = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-                                const diff = Math.round((target - start) / 86400000);
-                                if (diff === 0) return "Today";
-                                if (diff === 1) return "Tomorrow";
+                                const diff   = Math.round((target - start) / 86400000);
+                                if (diff === 0)  return "Today";
+                                if (diff === 1)  return "Tomorrow";
                                 if (diff === -1) return "Yesterday";
-                                if (diff < 0) return `${Math.abs(diff)}d overdue`;
+                                if (diff < 0)    return `${Math.abs(diff)}d overdue`;
                                 return `In ${diff}d`;
                               })()}
                             </p>
@@ -1197,33 +1196,81 @@ export function ContactDetailView({
 
           {/* ── Activity ── */}
           <div className="mt-2">
-            <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px] mb-3">Activity</p>
 
-            {/* Filter chips */}
-            <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-hide">
-              {tlFilters.map((f) => (
+            {/* Header row: label + list/calendar toggle */}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-[0.6px]">
+                Activity
+              </p>
+              <div className="flex items-center gap-[2px] bg-[#F2F2F7] rounded-lg p-[2px] border border-black/[0.06]">
                 <button
-                  key={f.value}
-                  onClick={() => setTimelineFilter(f.value)}
+                  onClick={() => setActivityView("list")}
                   className={[
-                    "shrink-0 px-4 py-2 rounded-full border text-[13px] font-bold transition-colors whitespace-nowrap",
-                    timelineFilter === f.value
-                      ? "bg-[#4B68F5] text-white border-[#4B68F5]"
-                      : "bg-[#F2F2F7] text-muted-foreground border-black/10",
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-bold transition-all",
+                    activityView === "list"
+                      ? "bg-white text-foreground shadow-sm border border-black/[0.06]"
+                      : "text-muted-foreground",
                   ].join(" ")}
-                  style={{ touchAction: "manipulation" } as React.CSSProperties}
+                  style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                  aria-label="List view"
                 >
-                  {f.label}
+                  <List className="w-3.5 h-3.5" />
+                  List
                 </button>
-              ))}
+                <button
+                  onClick={() => setActivityView("calendar")}
+                  className={[
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-bold transition-all",
+                    activityView === "calendar"
+                      ? "bg-white text-foreground shadow-sm border border-black/[0.06]"
+                      : "text-muted-foreground",
+                  ].join(" ")}
+                  style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
+                  aria-label="Calendar view"
+                >
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  Calendar
+                </button>
+              </div>
             </div>
 
-            <TimelineFeed
-              items={filteredTimelineItems}
-              onAddNote={handleAddNote}
-              isAddingNote={isAddingNote}
-              onQuickLog={handleQuickLog}
-            />
+            {activityView === "calendar" ? (
+              /* ── Calendar view ── */
+              <ContactActivityCalendar contactV2={contactV2} />
+            ) : (
+              /* ── List view ── */
+              <>
+                {/* Filter chips */}
+                <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-hide">
+                  {tlFilters.map((f) => (
+                    <button
+                      key={f.value}
+                      onClick={() => setTimelineFilter(f.value)}
+                      className={[
+                        "shrink-0 px-4 py-2 rounded-full border text-[13px] font-bold transition-colors whitespace-nowrap",
+                        timelineFilter === f.value
+                          ? "bg-[#4B68F5] text-white border-[#4B68F5]"
+                          : "bg-[#F2F2F7] text-muted-foreground border-black/10",
+                      ].join(" ")}
+                      style={{ touchAction: "manipulation" } as React.CSSProperties}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                <TimelineFeed
+                  items={filteredTimelineItems}
+                  tasks={contactV2?.tasks ?? []}
+                  reminders={contactV2?.reminders ?? []}
+                  filter={timelineFilter}
+                  onAddNote={handleAddNote}
+                  isAddingNote={isAddingNote}
+                  onCompleteTask={handleCompleteTask}
+                  onQuickLog={handleQuickLog}
+                />
+              </>
+            )}
           </div>
         </>
       )}
