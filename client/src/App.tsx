@@ -5,10 +5,21 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffect } from "react";
 import HomePage from "@/pages/home-page";
-import LandingPage from "@/pages/landing-page";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
+
+function LoginRedirect() {
+  useEffect(() => {
+    window.location.href = "/api/login";
+  }, []);
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+}
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -24,7 +35,7 @@ function Router() {
   return (
     <Switch>
       {!isAuthenticated ? (
-        <Route path="/" component={LandingPage} />
+        <Route path="/" component={LoginRedirect} />
       ) : (
         <Route path="/" component={HomePage} />
       )}
