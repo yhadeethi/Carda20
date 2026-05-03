@@ -12,7 +12,7 @@ import { Loader2 } from "lucide-react";
 
 function LoginRedirect() {
   useEffect(() => {
-    window.location.href = "/api/login";
+    window.location.replace("/api/login");
   }, []);
   return (
     <div className="min-h-screen flex items-center justify-center">
