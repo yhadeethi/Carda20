@@ -115,22 +115,72 @@ OUTPUT:
 - Output ONLY the final JSON object.
 - Do not include any explanation, prose, comments, or extra text before or after the JSON.`;
 
+// ── Type-safe guard on raw AI output ─────────────────────────────────────────
+function validateAndNormalizeAIResult(raw: unknown): AIParseResult {
+  if (typeof raw !== "object" || raw === null) {
+    console.warn("[AI Parse] Unexpected non-object response — returning empty result");
+    return emptyResult();
+  }
+  const obj = raw as Record<string, unknown>;
+  return {
+    name:    typeof obj.name    === "string" ? obj.name    : "",
+    company: typeof obj.company === "string" ? obj.company : "",
+    title:   typeof obj.title   === "string" ? obj.title   : "",
+    email:   typeof obj.email   === "string" ? obj.email   : "",
+    phone:   typeof obj.phone   === "string" ? obj.phone   : "",
+    mobile:  typeof obj.mobile  === "string" ? obj.mobile  : "",
+    fax:     typeof obj.fax     === "string" ? obj.fax     : "",
+    address: typeof obj.address === "string" ? obj.address : "",
+    website: typeof obj.website === "string" ? obj.website : "",
+  };
+}
+
+// ── Post-processing helpers ───────────────────────────────────────────────────
+
+/** Strip non-standard characters from phone numbers while preserving international format. */
+function sanitizePhone(raw: string): string {
+  // Keep digits, +, (, ), -, ., space, x (for extensions)
+  return raw.replace(/[^\d+\-().x\s]/gi, "").trim();
+}
+
+/** Basic email shape validation — must be x@x.x */
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+}
+
+/** Website must contain a dot and not look like an email address. */
+function isValidWebsite(site: string): boolean {
+  return site.includes(".") && site.length > 4 && !site.includes("@");
+}
+
+/**
+ * Heuristic: a single all-uppercase word 2+ chars long is almost certainly a
+ * brand logo that slipped through the prompt (e.g. "EVE", "CATL", "BYD").
+ */
+function isLikelyLogoNotName(name: string): boolean {
+  const trimmed = name.trim();
+  const words = trimmed.split(/\s+/);
+  return words.length === 1 && trimmed === trimmed.toUpperCase() && trimmed.length >= 2;
+}
+
+// ── Main parse function ───────────────────────────────────────────────────────
+
 export async function parseContactWithAI(ocrText: string): Promise<AIParseResult> {
   try {
     console.log("[AI Parse] Starting AI parsing for text length:", ocrText.length);
-    
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: ocrText }
+        { role: "user", content: ocrText },
       ],
       temperature: 0,
       max_tokens: 1000,
     });
 
     const content = response.choices[0]?.message?.content?.trim();
-    
+
     if (!content) {
       console.error("[AI Parse] Empty response from OpenAI");
       return emptyResult();
@@ -144,19 +194,9 @@ export async function parseContactWithAI(ocrText: string): Promise<AIParseResult
       return emptyResult();
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as AIParseResult;
-    
-    return {
-      name: parsed.name || "",
-      company: parsed.company || "",
-      title: parsed.title || "",
-      email: parsed.email || "",
-      phone: parsed.phone || "",
-      mobile: parsed.mobile || "",
-      fax: parsed.fax || "",
-      address: parsed.address || "",
-      website: parsed.website || "",
-    };
+    // Validate shape before trusting the parsed object
+    const parsed = validateAndNormalizeAIResult(JSON.parse(jsonMatch[0]));
+    return parsed;
   } catch (error) {
     console.error("[AI Parse] Error:", error);
     return emptyResult();
@@ -164,38 +204,46 @@ export async function parseContactWithAI(ocrText: string): Promise<AIParseResult
 }
 
 function emptyResult(): AIParseResult {
-  return {
-    name: "",
-    company: "",
-    title: "",
-    email: "",
-    phone: "",
-    mobile: "",
-    fax: "",
-    address: "",
-    website: "",
-  };
+  return { name: "", company: "", title: "", email: "", phone: "", mobile: "", fax: "", address: "", website: "" };
 }
 
+// ── Result → contact shape conversion ────────────────────────────────────────
+
 export function convertAIResultToContact(aiResult: AIParseResult) {
-  const phone = aiResult.mobile || aiResult.phone;
-  
-  // Validate website - must contain a dot to be a real URL
-  let website = aiResult.website || "";
-  if (website && !website.includes(".")) {
-    console.log("[AI Parse] Rejecting invalid website (no dot):", website);
+  // Phone: prefer mobile, then office; sanitize whichever we use
+  const rawPhone = aiResult.mobile || aiResult.phone;
+  const phone = rawPhone ? sanitizePhone(rawPhone) : "";
+
+  // Website: must contain a dot and not be an email address
+  let website = aiResult.website?.trim() || "";
+  if (website && !isValidWebsite(website)) {
+    console.log("[AI Parse] Rejecting invalid website:", website);
     website = "";
   }
-  
+
+  // Email: must match basic x@x.x pattern
+  let email = aiResult.email?.trim() || "";
+  if (email && !isValidEmail(email)) {
+    console.log("[AI Parse] Rejecting invalid email:", email);
+    email = "";
+  }
+
+  // Name: reject single all-caps words (brand logos that slipped through)
+  let name = aiResult.name?.trim() || "";
+  if (name && isLikelyLogoNotName(name)) {
+    console.log("[AI Parse] Rejecting logo-like name:", name);
+    name = "";
+  }
+
   return {
-    fullName: aiResult.name || undefined,
-    jobTitle: aiResult.title || undefined,
-    companyName: aiResult.company || undefined,
-    email: aiResult.email || undefined,
-    phone: phone || undefined,
-    website: website || undefined,
-    address: aiResult.address || undefined,
-    mobile: aiResult.mobile || undefined,
-    fax: aiResult.fax || undefined,
+    fullName:    name || undefined,
+    jobTitle:    aiResult.title?.trim()   || undefined,
+    companyName: aiResult.company?.trim() || undefined,
+    email:       email                    || undefined,
+    phone:       phone                    || undefined,
+    website:     website                  || undefined,
+    address:     aiResult.address?.trim() || undefined,
+    mobile:      aiResult.mobile?.trim()  || undefined,
+    fax:         aiResult.fax?.trim()     || undefined,
   };
 }

@@ -45,6 +45,9 @@ import {
   CheckCircle2,
   QrCode,
   Upload,
+  FileText,
+  Loader2,
+  X,
 } from "lucide-react";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { SiHubspot, SiSalesforce } from "react-icons/si";
@@ -52,6 +55,8 @@ import { StoredContact, loadContacts, deleteContact } from "@/lib/contactsStorag
 import { useUnifiedContacts, type UnifiedContact } from "@/hooks/useUnifiedContacts";
 import { motion, AnimatePresence } from "framer-motion";
 import { parseVCFFile, type VCFImportResult } from "@/lib/contacts/importVCF";
+import { saveContactFromParsed } from "@/lib/contacts/captureUtils";
+import { compressImageForOCR, CompressionError } from "@/lib/imageUtils";
 
 type TabMode = "home" | "contacts" | "events";
 type ViewMode = "home" | "contacts" | "contact-detail" | "company-detail" | "events" | "event-detail";
@@ -124,15 +129,22 @@ export default function HomePage() {
   const [debriefTranscript, setDebriefTranscript] = useState("");
   const [debriefSavedContactId, setDebriefSavedContactId] = useState<string | null>(null);
   const [debriefPreSelectedContactId, setDebriefPreSelectedContactId] = useState<string | null>(null);
-  // QR modal — capture menu entry point (shows QR + edit tabs)
   const [qrModalOpen, setQrModalOpen] = useState(false);
-  // Profile modal — profile menu entry point (lands directly on edit tab)
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
 
-  // ── VCF Import state ──────────────────────────────────────────────────────
+  // ── VCF Import ─────────────────────────────────────────────────────────────
   const vcfInputRef = useRef<HTMLInputElement>(null);
   const [vcfImportResult, setVcfImportResult] = useState<VCFImportResult | null>(null);
   const [vcfReviewOpen, setVcfReviewOpen] = useState(false);
+
+  // ── Direct scan — bypasses bottom sheet from capture menu ─────────────────
+  const scanFileInputRef = useRef<HTMLInputElement>(null);
+  const [scanProcessing, setScanProcessing] = useState(false);
+
+  // ── Paste signature modal ──────────────────────────────────────────────────
+  const [pasteModalOpen, setPasteModalOpen] = useState(false);
+  const [pasteModalText, setPasteModalText] = useState("");
+  const [pasteProcessing, setPasteProcessing] = useState(false);
 
   const handleImportContactsTrigger = () => {
     vcfInputRef.current?.click();
@@ -141,24 +153,16 @@ export default function HomePage() {
   const handleVCFFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Reset input so the same file can be re-selected if needed
     e.target.value = "";
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const raw = ev.target?.result as string;
         if (!raw) throw new Error("Empty file");
-
-        // Build set of existing emails for deduplication
         const existingContacts = loadContacts();
         const existingEmails = new Set(
-          existingContacts
-            .map((c) => c.email?.toLowerCase())
-            .filter(Boolean) as string[]
+          existingContacts.map((c) => c.email?.toLowerCase()).filter(Boolean) as string[]
         );
-
         const result = parseVCFFile(raw, existingEmails);
         setVcfImportResult(result);
         setVcfReviewOpen(true);
@@ -194,7 +198,127 @@ export default function HomePage() {
     setVcfReviewOpen(false);
     setVcfImportResult(null);
   };
-  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Direct scan handler ────────────────────────────────────────────────────
+  const handleScanFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ""; // reset so same file can be re-selected next time
+    setScanProcessing(true);
+    try {
+      const compressed = await compressImageForOCR(file);
+
+      let data: { rawText: string; contact: ParsedContactShape; error?: string } | null = null;
+
+      // AI-first, deterministic fallback — mirrors scan-tab behaviour
+      try {
+        const fd = new FormData();
+        fd.append("image", compressed.file);
+        const aiRes = await fetch("/api/scan-ai", { method: "POST", body: fd, credentials: "include" });
+        if (aiRes.ok) data = await aiRes.json();
+      } catch {}
+
+      if (!data) {
+        const fd2 = new FormData();
+        fd2.append("image", compressed.file);
+        const res = await fetch("/api/scan", { method: "POST", body: fd2, credentials: "include" });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(
+            text.includes("maximum size limit")
+              ? "This photo is too large. Try cropping it first."
+              : "Failed to scan card"
+          );
+        }
+        data = await res.json();
+      }
+
+      if (data!.error) {
+        toast({ title: "Scan warning", description: data!.error, variant: "destructive" });
+        return;
+      }
+
+      const saved = saveContactFromParsed(data!.contact, "scan");
+      if (saved) {
+        refreshContacts();
+        handleSelectContact(saved);
+        toast({
+          title: "Contact saved",
+          description: `${saved.name || "Contact"} added to your network.`,
+        });
+      } else {
+        toast({ title: "Save failed", description: "Could not save this contact.", variant: "destructive" });
+      }
+    } catch (error) {
+      if (error instanceof CompressionError) {
+        toast({
+          title: error.type === "still_too_large" ? "Image too large" : "Processing failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Scan failed",
+          description: error instanceof Error ? error.message : "Something went wrong.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setScanProcessing(false);
+    }
+  };
+
+  // ── Paste extract handler ──────────────────────────────────────────────────
+  const handlePasteExtract = async () => {
+    if (!pasteModalText.trim()) return;
+    setPasteProcessing(true);
+    try {
+      let data: { contact: ParsedContactShape } | null = null;
+
+      try {
+        const aiRes = await fetch("/api/parse-ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ text: pasteModalText }),
+        });
+        if (aiRes.ok) data = await aiRes.json();
+      } catch {}
+
+      if (!data) {
+        const res = await fetch("/api/parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ text: pasteModalText }),
+        });
+        if (!res.ok) throw new Error("Extraction failed");
+        data = await res.json();
+      }
+
+      const saved = saveContactFromParsed(data!.contact, "paste");
+      if (saved) {
+        setPasteModalOpen(false);
+        setPasteModalText("");
+        refreshContacts();
+        handleSelectContact(saved);
+        toast({
+          title: "Contact saved",
+          description: `${saved.name || "Contact"} added to your network.`,
+        });
+      } else {
+        toast({ title: "Save failed", description: "Could not save this contact.", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({
+        title: "Extraction failed",
+        description: error instanceof Error ? error.message : "Something went wrong.",
+        variant: "destructive",
+      });
+    } finally {
+      setPasteProcessing(false);
+    }
+  };
 
   const refreshContacts = useCallback(() => {
     setContactsVersion((v) => v + 1);
@@ -222,7 +346,6 @@ export default function HomePage() {
       toast({ title: "HubSpot connection failed", description: "There was a problem connecting your HubSpot account. Please try again.", variant: "destructive" });
       window.history.replaceState({}, "", window.location.pathname);
     }
-
     const salesforceParam = params.get("salesforce");
     if (salesforceParam === "connected") {
       setShowSalesforceProfile(true);
@@ -304,9 +427,11 @@ export default function HomePage() {
     setActiveTab("contacts");
   };
 
-  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'brief' = 'contacts') => {
+  const handleSelectCompany = (companyId: string, initialTab: 'contacts' | 'orgmap' | 'brief' | 'notes' = 'contacts') => {
     setSelectedCompanyId(companyId);
-    setCompanyDetailTab(initialTab);
+    // HomeScoreboard passes 'notes'; CompanyDetail expects 'brief' — normalise here
+    const tab = initialTab === 'notes' ? 'brief' : initialTab as 'contacts' | 'orgmap' | 'brief';
+    setCompanyDetailTab(tab);
     setViewMode("company-detail");
     setActiveTab("contacts");
   };
@@ -386,8 +511,13 @@ export default function HomePage() {
 
   const handleCaptureOption = (option: "scan" | "paste" | "debrief" | "qr") => {
     setCaptureMenuOpen(false);
-    if (option === "scan" || option === "paste") {
-      setCaptureSheetMode(option);
+    if (option === "scan") {
+      // Direct camera — no sheet, no extra tap
+      scanFileInputRef.current?.click();
+    } else if (option === "paste") {
+      // Focused modal — no sheet
+      setPasteModalText("");
+      setPasteModalOpen(true);
     } else if (option === "debrief") {
       setDebriefPhase("record");
       setDebriefTranscript("");
@@ -444,13 +574,24 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Hidden VCF file input — triggered programmatically from profile menu */}
+
+      {/* Hidden VCF input */}
       <input
         ref={vcfInputRef}
         type="file"
         accept=".vcf,text/vcard"
         className="hidden"
         onChange={handleVCFFileSelected}
+        aria-hidden="true"
+      />
+
+      {/* Hidden scan input — direct camera trigger from capture menu */}
+      <input
+        ref={scanFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleScanFileSelected}
         aria-hidden="true"
       />
 
@@ -467,7 +608,6 @@ export default function HomePage() {
         </button>
 
         <div className="flex items-center gap-1">
-          {/* Sync failure badge */}
           {failedCount > 0 && (
             <Button
               size="icon"
@@ -486,7 +626,6 @@ export default function HomePage() {
             </Button>
           )}
 
-          {/* Profile / user menu — avatar only in header */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
@@ -500,8 +639,6 @@ export default function HomePage() {
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-60">
-
-              {/* ── Identity block — not tappable ── */}
               <div className="px-3 py-2.5 flex items-center gap-3">
                 <Avatar className="w-9 h-9 shrink-0">
                   <AvatarImage src={user?.profileImageUrl ?? undefined} alt="Profile" />
@@ -523,84 +660,48 @@ export default function HomePage() {
 
               <DropdownMenuSeparator />
 
-              {/* ── My Profile → opens edit tab directly ── */}
-              <DropdownMenuItem
-                onClick={() => setProfileSheetOpen(true)}
-                className="flex items-center gap-2 cursor-pointer"
-                data-testid="button-my-profile"
-              >
+              <DropdownMenuItem onClick={() => setProfileSheetOpen(true)} className="flex items-center gap-2 cursor-pointer" data-testid="button-my-profile">
                 <User className="w-4 h-4" />
                 My profile
               </DropdownMenuItem>
 
-              {/* ── Dark mode — live toggle pill ── */}
-              <DropdownMenuItem
-                onClick={toggleTheme}
-                className="flex items-center justify-between cursor-pointer"
-                data-testid="button-theme-toggle"
-              >
+              <DropdownMenuItem onClick={toggleTheme} className="flex items-center justify-between cursor-pointer" data-testid="button-theme-toggle">
                 <div className="flex items-center gap-2">
                   {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                   <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
                 </div>
-                <div className={`w-8 h-[18px] rounded-full flex items-center px-0.5 transition-colors duration-200 ${
-                  theme === "dark" ? "bg-[#4B68F5]" : "bg-muted"
-                }`}>
-                  <div className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                    theme === "dark" ? "translate-x-[14px]" : "translate-x-0"
-                  }`} />
+                <div className={`w-8 h-[18px] rounded-full flex items-center px-0.5 transition-colors duration-200 ${theme === "dark" ? "bg-[#4B68F5]" : "bg-muted"}`}>
+                  <div className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-200 ${theme === "dark" ? "translate-x-[14px]" : "translate-x-0"}`} />
                 </div>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
-              {/* ── Integrations ── */}
               <div className="px-2 py-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  Integrations
-                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Integrations</p>
               </div>
-              <DropdownMenuItem
-                onClick={() => setShowHubSpotProfile(true)}
-                className="flex items-center gap-2 cursor-pointer"
-                data-testid="button-hubspot-menu"
-              >
+              <DropdownMenuItem onClick={() => setShowHubSpotProfile(true)} className="flex items-center gap-2 cursor-pointer" data-testid="button-hubspot-menu">
                 <SiHubspot className="w-4 h-4 text-[#FF7A59]" />
                 HubSpot
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setShowSalesforceProfile(true)}
-                className="flex items-center gap-2 cursor-pointer"
-                data-testid="button-salesforce-menu"
-              >
+              <DropdownMenuItem onClick={() => setShowSalesforceProfile(true)} className="flex items-center gap-2 cursor-pointer" data-testid="button-salesforce-menu">
                 <SiSalesforce className="w-4 h-4 text-[#00A1E0]" />
                 Salesforce
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
-              {/* ── Import contacts ── */}
-              <DropdownMenuItem
-                onClick={handleImportContactsTrigger}
-                className="flex items-center gap-2 cursor-pointer"
-                data-testid="button-import-contacts"
-              >
+              <DropdownMenuItem onClick={handleImportContactsTrigger} className="flex items-center gap-2 cursor-pointer" data-testid="button-import-contacts">
                 <Upload className="w-4 h-4" />
                 Import contacts (.vcf)
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
-              {/* ── Switch account — conditional ── */}
               {otherAccounts.length > 0 && (
                 <>
                   {otherAccounts.slice(0, 3).map((account) => (
-                    <DropdownMenuItem
-                      key={account.email}
-                      onClick={() => handleSwitchAccount(account.email)}
-                      className="flex items-center gap-2 cursor-pointer"
-                      data-testid={`button-switch-account-${account.email}`}
-                    >
+                    <DropdownMenuItem key={account.email} onClick={() => handleSwitchAccount(account.email)} className="flex items-center gap-2 cursor-pointer" data-testid={`button-switch-account-${account.email}`}>
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span className="truncate text-sm">{account.email}</span>
                     </DropdownMenuItem>
@@ -609,18 +710,12 @@ export default function HomePage() {
                 </>
               )}
 
-              {/* ── Sign out ── */}
               <DropdownMenuItem asChild>
-                <a
-                  href="/api/logout"
-                  className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
-                  data-testid="button-logout"
-                >
+                <a href="/api/logout" className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive" data-testid="button-logout">
                   <LogOut className="w-4 h-4" />
                   Sign out
                 </a>
               </DropdownMenuItem>
-
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -629,13 +724,7 @@ export default function HomePage() {
       <main className="flex-1 overflow-y-auto pb-[calc(96px+env(safe-area-inset-bottom))]">
         <AnimatePresence mode="wait">
           {viewMode === "home" && (
-            <motion.div
-              key="home"
-              initial={{ x: 40, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -40, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <motion.div key="home" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -40, opacity: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
               <HomeScoreboard
                 refreshKey={contactsVersion}
                 onStartScan={() => setCaptureSheetMode("scan")}
@@ -651,13 +740,7 @@ export default function HomePage() {
           )}
 
           {viewMode === "contacts" && (
-            <motion.div
-              key="contacts"
-              initial={{ x: 40, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -40, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <motion.div key="contacts" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -40, opacity: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
               <div className="p-4 max-w-2xl mx-auto">
                 <ContactsHub
                   onSelectContact={handleSelectContact}
@@ -672,13 +755,7 @@ export default function HomePage() {
           )}
 
           {viewMode === "contact-detail" && selectedContact && (
-            <motion.div
-              key="contact-detail"
-              initial={{ x: 40, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -40, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <motion.div key="contact-detail" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -40, opacity: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
               <RelationshipDetailView
                 contact={selectedContact}
                 onBack={handleBackToContacts}
@@ -692,13 +769,7 @@ export default function HomePage() {
           )}
 
           {viewMode === "company-detail" && selectedCompanyId && (
-            <motion.div
-              key="company-detail"
-              initial={{ x: 40, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -40, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <motion.div key="company-detail" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -40, opacity: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
               <CompanyDetail
                 companyId={selectedCompanyId}
                 onBack={handleBackToCompanies}
@@ -710,28 +781,13 @@ export default function HomePage() {
           )}
 
           {viewMode === "events" && (
-            <motion.div
-              key="events"
-              initial={{ x: 40, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -40, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <EventsTab
-                onSelectEvent={handleSelectUserEvent}
-                onContinueEvent={handleSelectUserEvent}
-              />
+            <motion.div key="events" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -40, opacity: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+              <EventsTab onSelectEvent={handleSelectUserEvent} onContinueEvent={handleSelectUserEvent} />
             </motion.div>
           )}
 
           {viewMode === "event-detail" && currentEventId && (
-            <motion.div
-              key="event-detail"
-              initial={{ x: 40, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -40, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <motion.div key="event-detail" initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -40, opacity: 0 }} transition={{ duration: 0.2, ease: "easeOut" }}>
               <EventDetail
                 eventId={currentEventId}
                 onBack={handleBackToEvents}
@@ -777,11 +833,7 @@ export default function HomePage() {
                 className={`w-[21px] h-[21px] ${activeTab !== "home" ? "text-foreground/[0.45]" : ""}`}
                 style={activeTab === "home" ? { stroke: "url(#brand-nav-gradient) #4B68F5" } : undefined}
               />
-              <span className={`text-[10px] leading-tight font-semibold transition-all duration-250 ${
-                activeTab === "home"
-                  ? "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent"
-                  : "text-foreground/[0.45] font-medium"
-              }`}>
+              <span className={`text-[10px] leading-tight font-semibold transition-all duration-250 ${activeTab === "home" ? "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent" : "text-foreground/[0.45] font-medium"}`}>
                 Scoreboard
               </span>
             </button>
@@ -793,20 +845,10 @@ export default function HomePage() {
               data-testid="nav-tab-contacts"
             >
               <Users
-                className={`w-[21px] h-[21px] ${
-                  activeTab !== "contacts" && viewMode !== "company-detail" ? "text-foreground/[0.45]" : ""
-                }`}
-                style={
-                  activeTab === "contacts" || viewMode === "company-detail"
-                    ? { stroke: "url(#brand-nav-gradient) #4B68F5" }
-                    : undefined
-                }
+                className={`w-[21px] h-[21px] ${activeTab !== "contacts" && viewMode !== "company-detail" ? "text-foreground/[0.45]" : ""}`}
+                style={activeTab === "contacts" || viewMode === "company-detail" ? { stroke: "url(#brand-nav-gradient) #4B68F5" } : undefined}
               />
-              <span className={`text-[10px] leading-tight font-semibold transition-all duration-250 ${
-                activeTab === "contacts" || viewMode === "company-detail"
-                  ? "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent"
-                  : "text-foreground/[0.45] font-medium"
-              }`}>
+              <span className={`text-[10px] leading-tight font-semibold transition-all duration-250 ${activeTab === "contacts" || viewMode === "company-detail" ? "bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] bg-clip-text text-transparent" : "text-foreground/[0.45] font-medium"}`}>
                 Network
               </span>
             </button>
@@ -819,9 +861,7 @@ export default function HomePage() {
             aria-label="Capture"
             data-testid="nav-capture"
           >
-            <Plus className={`w-[22px] h-[22px] transition-all duration-300 ${
-              captureMenuOpen ? "rotate-45 text-white/70" : "text-white"
-            }`} />
+            <Plus className={`w-[22px] h-[22px] transition-all duration-300 ${captureMenuOpen ? "rotate-45 text-white/70" : "text-white"}`} />
           </button>
         </nav>
       )}
@@ -847,12 +887,7 @@ export default function HomePage() {
             >
               <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 dark:border-slate-700/50 overflow-hidden">
 
-                {/* 1. Voice Debrief — primary */}
-                <button
-                  onClick={() => handleCaptureOption("debrief")}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                  data-testid="capture-debrief"
-                >
+                <button onClick={() => handleCaptureOption("debrief")} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" data-testid="capture-debrief">
                   <div className="w-10 h-10 rounded-full bg-violet-500/15 flex items-center justify-center text-violet-600 dark:text-violet-400">
                     <Mic className="w-5 h-5" />
                   </div>
@@ -864,12 +899,7 @@ export default function HomePage() {
 
                 <div className="border-t border-border/50" />
 
-                {/* 2. Scan Card */}
-                <button
-                  onClick={() => handleCaptureOption("scan")}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                  data-testid="capture-scan"
-                >
+                <button onClick={() => handleCaptureOption("scan")} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" data-testid="capture-scan">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                     <Camera className="w-5 h-5" />
                   </div>
@@ -881,12 +911,7 @@ export default function HomePage() {
 
                 <div className="border-t border-border/50" />
 
-                {/* 3. Paste Signature */}
-                <button
-                  onClick={() => handleCaptureOption("paste")}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                  data-testid="capture-paste"
-                >
+                <button onClick={() => handleCaptureOption("paste")} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" data-testid="capture-paste">
                   <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                     <CreditCard className="w-5 h-5" />
                   </div>
@@ -898,12 +923,7 @@ export default function HomePage() {
 
                 <div className="border-t border-border/50" />
 
-                {/* 4. Share My QR */}
-                <button
-                  onClick={() => handleCaptureOption("qr")}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                  data-testid="capture-qr"
-                >
+                <button onClick={() => handleCaptureOption("qr")} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" data-testid="capture-qr">
                   <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
                     <QrCode className="w-5 h-5" />
                   </div>
@@ -919,7 +939,120 @@ export default function HomePage() {
         )}
       </AnimatePresence>
 
-      {/* Capture Bottom Sheet */}
+      {/* Scan Processing Banner — appears while camera scan is in flight */}
+      <AnimatePresence>
+        {scanProcessing && (
+          <motion.div
+            className="fixed inset-x-4 z-[35] max-w-sm mx-auto"
+            style={{ bottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}
+            initial={{ opacity: 0, y: 12, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          >
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 dark:border-slate-700/50 px-4 py-3.5 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#4B68F5]/10 flex items-center justify-center shrink-0">
+                <Loader2 className="w-5 h-5 text-[#4B68F5] animate-spin" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Scanning card…</p>
+                <p className="text-xs text-muted-foreground">AI is reading the contact info</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Paste Signature Modal */}
+      <AnimatePresence>
+        {pasteModalOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[60]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!pasteProcessing) {
+                  setPasteModalOpen(false);
+                  setPasteModalText("");
+                }
+              }}
+            />
+            <motion.div
+              className="fixed inset-x-4 z-[70] max-w-md mx-auto"
+              style={{ top: "20%" }}
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 28 }}
+            >
+              <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 dark:border-slate-700/50 overflow-hidden">
+
+                {/* Header */}
+                <div className="flex items-start justify-between px-5 pt-5 pb-3">
+                  <div>
+                    <h2 className="text-base font-bold text-foreground">Paste Signature</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Email signature or business card text</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!pasteProcessing) {
+                        setPasteModalOpen(false);
+                        setPasteModalText("");
+                      }
+                    }}
+                    disabled={pasteProcessing}
+                    className="w-8 h-8 rounded-full bg-muted/60 flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors shrink-0 ml-3 mt-0.5"
+                    aria-label="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Textarea */}
+                <div className="px-5 pb-3">
+                  <textarea
+                    placeholder={"John Smith\nVP of Sales, Acme Corp\njohn@acme.com\n+1 555-0123"}
+                    value={pasteModalText}
+                    onChange={(e) => setPasteModalText(e.target.value)}
+                    rows={6}
+                    autoFocus
+                    disabled={pasteProcessing}
+                    className="w-full bg-muted/40 rounded-2xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#4B68F5]/30 text-foreground placeholder:text-muted-foreground border-0 disabled:opacity-60"
+                    data-testid="input-paste-modal-text"
+                  />
+                </div>
+
+                {/* CTA */}
+                <div className="px-5 pb-5">
+                  <button
+                    onClick={handlePasteExtract}
+                    disabled={!pasteModalText.trim() || pasteProcessing}
+                    className="w-full h-12 rounded-2xl bg-gradient-to-r from-[#4B68F5] to-[#7B5CF0] text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                    data-testid="button-paste-modal-extract"
+                  >
+                    {pasteProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Extracting with AI…
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="w-4 h-4" />
+                        Extract Contact
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Capture Bottom Sheet — used by Scoreboard "Start Scan" only */}
       <AnimatePresence>
         {captureSheetMode && (
           <>
@@ -980,10 +1113,7 @@ export default function HomePage() {
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
               {debriefPhase === "record" && (
-                <VoiceDebriefRecorder
-                  onTranscriptReady={handleDebriefTranscriptReady}
-                  onCancel={handleDebriefCancel}
-                />
+                <VoiceDebriefRecorder onTranscriptReady={handleDebriefTranscriptReady} onCancel={handleDebriefCancel} />
               )}
               {debriefPhase === "review" && (
                 <VoiceDebriefReviewSheet
@@ -1002,15 +1132,9 @@ export default function HomePage() {
                     </div>
                     <div className="text-center">
                       <h2 className="text-lg font-bold text-foreground">Debrief Saved</h2>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Notes, tasks, and reminders have been added to the contact.
-                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">Notes, tasks, and reminders have been added to the contact.</p>
                     </div>
-                    <button
-                      onClick={handleDebriefClose}
-                      className="mt-2 text-sm font-semibold px-6 py-2.5 rounded-xl bg-primary text-primary-foreground"
-                      data-testid="button-view-contact-debrief"
-                    >
+                    <button onClick={handleDebriefClose} className="mt-2 text-sm font-semibold px-6 py-2.5 rounded-xl bg-primary text-primary-foreground" data-testid="button-view-contact-debrief">
                       View Contact
                     </button>
                   </div>
@@ -1030,38 +1154,31 @@ export default function HomePage() {
       />
 
       {/* QR Modal — capture menu, lands on QR tab */}
-      <MyQRModal
-        trigger={<span className="hidden" />}
-        open={qrModalOpen}
-        onOpenChange={setQrModalOpen}
-      />
+      <MyQRModal trigger={<span className="hidden" />} open={qrModalOpen} onOpenChange={setQrModalOpen} />
 
       {/* Profile Modal — profile menu, lands on edit tab */}
-      <MyQRModal
-        trigger={<span className="hidden" />}
-        open={profileSheetOpen}
-        onOpenChange={setProfileSheetOpen}
-        initialTab="edit"
-      />
+      <MyQRModal trigger={<span className="hidden" />} open={profileSheetOpen} onOpenChange={setProfileSheetOpen} initialTab="edit" />
 
       {/* Create Contact Drawer */}
-      <CreateContactDrawer
-        open={showCreateContactDrawer}
-        onOpenChange={setShowCreateContactDrawer}
-        onContactCreated={refreshContacts}
-      />
+      <CreateContactDrawer open={showCreateContactDrawer} onOpenChange={setShowCreateContactDrawer} onContactCreated={refreshContacts} />
 
       {/* HubSpot Integration */}
-      <HubSpotProfile
-        open={showHubSpotProfile}
-        onOpenChange={setShowHubSpotProfile}
-      />
+      <HubSpotProfile open={showHubSpotProfile} onOpenChange={setShowHubSpotProfile} />
 
       {/* Salesforce Integration */}
-      <SalesforceProfile
-        open={showSalesforceProfile}
-        onOpenChange={setShowSalesforceProfile}
-      />
+      <SalesforceProfile open={showSalesforceProfile} onOpenChange={setShowSalesforceProfile} />
     </div>
   );
+}
+
+// Local shape used only for API response typing in this file
+interface ParsedContactShape {
+  fullName?: string;
+  jobTitle?: string;
+  companyName?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  linkedinUrl?: string;
+  address?: string;
 }

@@ -5,7 +5,6 @@ import { useToast } from "@/hooks/use-toast";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -18,25 +17,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { StoredContact, saveContact, loadContacts, updateContact } from "@/lib/contactsStorage";
-import { loadContactsV2, ContactV2, upsertContact as upsertContactV2 } from "@/lib/contacts/storage";
-import { findFuzzyCompanyMatch } from "@/lib/contacts/dedupe";
-import { generateId as generateTimelineId } from "@/lib/contacts/ids";
-import {
-  getContactCountForCompany,
-  findCompanyByName,
-  extractDomainFromEmail,
-  findCompanyByDomain,
-  autoGenerateCompaniesFromContacts,
-  resolveCompanyIdForContact,
-} from "@/lib/companiesStorage";
+import { StoredContact } from "@/lib/contactsStorage";
+import { loadContactsV2, ContactV2 } from "@/lib/contacts/storage";
+import { findCompanyByName, extractDomainFromEmail, findCompanyByDomain } from "@/lib/companiesStorage";
+import { addTimelineEvent } from "@/lib/contacts/storage";
+import { saveContactFromParsed } from "@/lib/contacts/captureUtils";
 
 import { Camera, FileText, Loader2, Upload, X, Check } from "lucide-react";
 import { SiHubspot } from "react-icons/si";
 import { compressImageForOCR, formatFileSize, CompressionError } from "@/lib/imageUtils";
 
 import { ContactDetailView } from "@/components/contact";
-import { addTimelineEvent } from "@/lib/contacts/storage";
 
 type ScanMode = "scan" | "paste";
 
@@ -86,14 +77,9 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
 
   const handleSync = async () => {
     if (!contact.email) {
-      toast({
-        title: "Email required",
-        description: "Contact must have an email to sync with HubSpot",
-        variant: "destructive",
-      });
+      toast({ title: "Email required", description: "Contact must have an email to sync with HubSpot", variant: "destructive" });
       return;
     }
-
     setIsSyncing(true);
     try {
       const nameParts = (contact.fullName || "").split(" ");
@@ -119,28 +105,17 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
           title: result.action === "created" ? "Added to HubSpot" : "Updated in HubSpot",
           description: `Contact ${result.action} successfully`,
         });
-
         if (contactId) {
-          addTimelineEvent(contactId, "hubspot_synced", `Synced to HubSpot (${result.action})`, {
-            hubspotId: result.hubspotId,
-          });
+          addTimelineEvent(contactId, "hubspot_synced", `Synced to HubSpot (${result.action})`, { hubspotId: result.hubspotId });
           onSynced?.();
         }
       } else {
         setSyncStatus("error");
-        toast({
-          title: "Sync failed",
-          description: result.error || "Failed to sync with HubSpot",
-          variant: "destructive",
-        });
+        toast({ title: "Sync failed", description: result.error || "Failed to sync with HubSpot", variant: "destructive" });
       }
     } catch (error: any) {
       setSyncStatus("error");
-      toast({
-        title: "Sync failed",
-        description: error.message || "Failed to sync with HubSpot",
-        variant: "destructive",
-      });
+      toast({ title: "Sync failed", description: error.message || "Failed to sync with HubSpot", variant: "destructive" });
     } finally {
       setIsSyncing(false);
     }
@@ -156,13 +131,7 @@ function HubSpotSyncButton({ contact, contactId, onSynced }: HubSpotSyncButtonPr
       className="gap-1.5"
       data-testid="button-hubspot-sync"
     >
-      {isSyncing ? (
-        <Loader2 className="w-4 h-4 animate-spin" />
-      ) : syncStatus === "synced" ? (
-        <Check className="w-4 h-4" />
-      ) : (
-        <SiHubspot className="w-4 h-4 text-[#FF7A59]" />
-      )}
+      {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : syncStatus === "synced" ? <Check className="w-4 h-4" /> : <SiHubspot className="w-4 h-4 text-[#FF7A59]" />}
       {syncStatus === "synced" ? "Synced" : "HubSpot"}
     </Button>
   );
@@ -231,108 +200,10 @@ export function ScanTab({
     clearImage();
   };
 
-  const saveContactToStorage = (parsedContact: ParsedContact): StoredContact | null => {
-    try {
-      let contactData = {
-        name: parsedContact.fullName || "",
-        company: parsedContact.companyName || "",
-        title: parsedContact.jobTitle || "",
-        email: parsedContact.email || "",
-        phone: parsedContact.phone || "",
-        website: parsedContact.website || "",
-        linkedinUrl: parsedContact.linkedinUrl || "",
-        address: parsedContact.address || "",
-      };
-
-      if (contactData.company) {
-        const existingContacts = loadContactsV2();
-        const canonicalCompany = findFuzzyCompanyMatch(contactData.company, existingContacts);
-        if (canonicalCompany && canonicalCompany !== contactData.company) {
-          contactData = { ...contactData, company: canonicalCompany };
-        }
-      }
-
-      const savedContact = saveContact(contactData, null);
-      if (!savedContact) return null;
-
-      const existingV2Contacts = loadContactsV2();
-      const existingV2 = existingV2Contacts.find((c) => c.id === savedContact.id);
-
-      let v2Contact: ContactV2;
-
-      if (existingV2) {
-        v2Contact = {
-          ...existingV2,
-          name: savedContact.name,
-          company: savedContact.company,
-          title: savedContact.title,
-          email: savedContact.email,
-          phone: savedContact.phone,
-          website: savedContact.website,
-          linkedinUrl: savedContact.linkedinUrl,
-          address: savedContact.address,
-          eventName: savedContact.eventName,
-          companyId: savedContact.companyId,
-          timeline: [
-            ...existingV2.timeline,
-            {
-              id: generateTimelineId(),
-              type: "contact_updated" as const,
-              at: new Date().toISOString(),
-              summary: "Contact updated via scan",
-            },
-          ],
-          lastTouchedAt: new Date().toISOString(),
-        };
-      } else {
-        v2Contact = {
-          ...savedContact,
-          tasks: [],
-          reminders: [],
-          timeline: [
-            {
-              id: generateTimelineId(),
-              type: "scan_created" as const,
-              at: savedContact.createdAt || new Date().toISOString(),
-              summary: "Contact created via scan",
-            },
-          ],
-          lastTouchedAt: savedContact.createdAt,
-          notes: "",
-        };
-      }
-
-      upsertContactV2(v2Contact);
-      setContactV2(v2Contact);
-
-      autoGenerateCompaniesFromContacts(loadContacts());
-      const resolvedCompanyId = resolveCompanyIdForContact({
-        companyId: savedContact.companyId,
-        company: savedContact.company,
-        email: savedContact.email,
-        website: savedContact.website,
-      });
-      if (resolvedCompanyId && resolvedCompanyId !== savedContact.companyId) {
-        updateContact(savedContact.id, { companyId: resolvedCompanyId });
-        const linkedV2 = { ...v2Contact, companyId: resolvedCompanyId };
-        upsertContactV2(linkedV2);
-        setContactV2(linkedV2);
-        savedContact.companyId = resolvedCompanyId;
-      }
-
-      onContactSaved?.(savedContact);
-      return savedContact;
-    } catch (e) {
-      console.error("[ScanTab] Failed to save contact to storage:", e);
-      return null;
-    }
-  };
-
   const scanCardMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("image", file);
-
       try {
         const aiRes = await fetch("/api/scan-ai", { method: "POST", body: formData, credentials: "include" });
         if (aiRes.ok) return (await aiRes.json()) as ScanResult;
@@ -356,9 +227,13 @@ export function ScanTab({
         return;
       }
       setRawText(data.rawText);
-      const saved = saveContactToStorage(data.contact);
+      const saved = saveContactFromParsed(data.contact, "scan");
       if (saved) {
+        // Reload v2 contact from storage after save
+        const v2 = loadContactsV2().find((c) => c.id === saved.id);
+        setContactV2(v2 || null);
         setScannedStoredContact(saved);
+        onContactSaved?.(saved);
         toast({ title: "Saved", description: "Contact captured successfully" });
       } else {
         toast({ title: "Save failed", description: "Could not save this contact", variant: "destructive" });
@@ -380,9 +255,12 @@ export function ScanTab({
     },
     onSuccess: (data) => {
       setRawText(data.rawText);
-      const saved = saveContactToStorage(data.contact);
+      const saved = saveContactFromParsed(data.contact, "paste");
       if (saved) {
+        const v2 = loadContactsV2().find((c) => c.id === saved.id);
+        setContactV2(v2 || null);
         setScannedStoredContact(saved);
+        onContactSaved?.(saved);
         toast({ title: "Saved", description: "Contact captured successfully" });
       } else {
         toast({ title: "Save failed", description: "Could not save this contact", variant: "destructive" });
@@ -413,11 +291,7 @@ export function ScanTab({
           variant: "destructive",
         });
       } else {
-        toast({
-          title: "Something went wrong",
-          description: "Could not process this image. Try a different photo.",
-          variant: "destructive",
-        });
+        toast({ title: "Something went wrong", description: "Could not process this image. Try a different photo.", variant: "destructive" });
       }
     } finally {
       setIsCompressing(false);
@@ -507,22 +381,16 @@ export function ScanTab({
       {/* Capture UI */}
       {!activeStoredContact && (
         <div className="space-y-5">
-          {/* Subheader */}
           <p className="text-sm text-muted-foreground px-0.5">
             Scan a business card or paste a signature to capture a contact in seconds.
           </p>
 
-          {/* Segmented control — matches People / Companies toggle */}
           <Tabs value={scanMode} onValueChange={(v) => setScanMode(v as ScanMode)}>
             <TabsList className="relative flex h-11 w-full rounded-full bg-muted/60 p-1 ring-1 ring-border/40">
               <motion.span
                 className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm"
                 animate={{ x: scanMode === "scan" ? "0%" : "100%" }}
-                transition={
-                  reduceMotion
-                    ? { duration: 0 }
-                    : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }
-                }
+                transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.35 }}
               />
               <TabsTrigger
                 value="scan"
@@ -567,17 +435,8 @@ export function ScanTab({
                 </button>
               ) : (
                 <div className="relative">
-                  <img
-                    src={previewImage}
-                    alt="Card preview"
-                    className="w-full h-44 object-contain rounded-2xl bg-muted/40"
-                    data-testid="image-preview"
-                  />
-                  <button
-                    onClick={clearImage}
-                    className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white"
-                    data-testid="button-clear-image"
-                  >
+                  <img src={previewImage} alt="Card preview" className="w-full h-44 object-contain rounded-2xl bg-muted/40" data-testid="image-preview" />
+                  <button onClick={clearImage} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white" data-testid="button-clear-image">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -590,20 +449,11 @@ export function ScanTab({
                 data-testid="button-scan"
               >
                 {isCompressing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Optimizing image…
-                  </>
+                  <><Loader2 className="w-4 h-4 animate-spin" />Optimizing image…</>
                 ) : scanCardMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Scanning with AI…
-                  </>
+                  <><Loader2 className="w-4 h-4 animate-spin" />Scanning with AI…</>
                 ) : (
-                  <>
-                    <Camera className="w-4 h-4" />
-                    Scan Card
-                  </>
+                  <><Camera className="w-4 h-4" />Scan Card</>
                 )}
               </button>
             </TabsContent>
@@ -626,15 +476,9 @@ export function ScanTab({
                 data-testid="button-extract"
               >
                 {parseTextMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Extracting with AI…
-                  </>
+                  <><Loader2 className="w-4 h-4 animate-spin" />Extracting with AI…</>
                 ) : (
-                  <>
-                    <FileText className="w-4 h-4" />
-                    Extract Contact
-                  </>
+                  <><FileText className="w-4 h-4" />Extract Contact</>
                 )}
               </button>
             </TabsContent>
