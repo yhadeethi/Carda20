@@ -2,23 +2,20 @@ const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
 export interface Contact {
   id: number;
+  publicId?: string;
   userId?: number;
-  firstName?: string;
-  lastName?: string;
+  fullName?: string;
+  companyName?: string;
+  jobTitle?: string;
   email?: string;
   phone?: string;
-  company?: string;
-  title?: string;
-  linkedin?: string;
-  twitter?: string;
   website?: string;
+  linkedinUrl?: string;
+  rawText?: string;
+  companyDomain?: string;
+  companyId?: number;
   notes?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  country?: string;
   createdAt?: string;
-  updatedAt?: string;
 }
 
 export interface Company {
@@ -26,23 +23,33 @@ export interface Company {
   name: string;
   domain?: string;
   industry?: string;
-  size?: string;
-  description?: string;
+  sizeBand?: string;
+  hqCountry?: string;
+  hqCity?: string;
 }
 
 export interface UserEvent {
   id: number;
-  name: string;
-  location?: string;
-  startDate?: string;
-  endDate?: string;
-  isActive?: boolean;
+  title: string;
+  locationLabel?: string;
+  latitude?: number;
+  longitude?: number;
+  tags?: string[];
   notes?: string;
+  eventLink?: string;
+  isActive?: boolean;
+  startedAt?: string;
+  endedAt?: string;
   createdAt?: string;
 }
 
+export interface ScanResult {
+  rawText: string;
+  contact: Partial<Contact>;
+}
+
 export interface IntelResult {
-  company?: string;
+  companyName?: string;
   domain?: string;
   description?: string;
   industry?: string;
@@ -102,14 +109,14 @@ export const api = {
   deleteContact: (id: number): Promise<void> =>
     apiFetch(`/api/contacts/${id}`, { method: "DELETE" }),
 
-  scanCard: (formData: FormData): Promise<Partial<Contact>> =>
+  scanCard: (formData: FormData): Promise<ScanResult> =>
     apiFetch("/api/scan-ai", { method: "POST", body: formData }),
 
   getCompanies: (): Promise<Company[]> => apiFetch("/api/companies"),
 
-  getIntel: (company: string, domain?: string): Promise<IntelResult> =>
+  getIntel: (companyName: string, domain?: string): Promise<IntelResult> =>
     apiFetch(
-      `/api/intel-v2?company=${encodeURIComponent(company)}${
+      `/api/intel-v2?companyName=${encodeURIComponent(companyName)}${
         domain ? `&domain=${encodeURIComponent(domain)}` : ""
       }`
     ),
@@ -120,8 +127,8 @@ export const api = {
     apiFetch(`/api/user-events/${id}`),
 
   createUserEvent: (data: {
-    name: string;
-    location?: string;
+    title: string;
+    locationLabel?: string;
   }): Promise<UserEvent> =>
     apiFetch("/api/user-events", {
       method: "POST",

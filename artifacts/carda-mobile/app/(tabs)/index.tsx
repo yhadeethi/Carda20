@@ -35,7 +35,7 @@ export default function ContactsScreen() {
     const q = search.toLowerCase();
     return data.filter(
       (c) =>
-        [c.firstName, c.lastName, c.email, c.company, c.title]
+        [c.fullName, c.email, c.companyName, c.jobTitle]
           .filter(Boolean)
           .some((f) => f!.toLowerCase().includes(q))
     );

@@ -36,7 +36,7 @@ export default function CompaniesScreen() {
   const contactCountByCompany = useMemo(() => {
     const map: Record<string, number> = {};
     for (const c of contactsQ.data ?? []) {
-      if (c.company) map[c.company] = (map[c.company] ?? 0) + 1;
+      if (c.companyName) map[c.companyName] = (map[c.companyName] ?? 0) + 1;
     }
     return map;
   }, [contactsQ.data]);

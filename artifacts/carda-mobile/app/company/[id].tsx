@@ -5,7 +5,6 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Platform,
   ScrollView,
   StyleSheet,
@@ -41,7 +40,7 @@ export default function CompanyDetailScreen() {
 
   const company = companies?.find((c) => String(c.id) === id);
   const companyContacts = (contacts ?? []).filter(
-    (c) => c.company === company?.name
+    (c) => c.companyId === company?.id || c.companyName === company?.name
   );
 
   const fetchIntel = async () => {

@@ -58,7 +58,7 @@ export function EventCard({ event, onPress }: EventCardProps) {
             style={[styles.name, { color: colors.foreground }]}
             numberOfLines={1}
           >
-            {event.name}
+            {event.title}
           </Text>
           {event.isActive ? (
             <View
@@ -66,22 +66,22 @@ export function EventCard({ event, onPress }: EventCardProps) {
             />
           ) : null}
         </View>
-        {event.location ? (
+        {event.locationLabel ? (
           <View style={styles.row}>
             <Feather name="map-pin" size={11} color={colors.mutedForeground} />
             <Text
               style={[styles.meta, { color: colors.mutedForeground }]}
               numberOfLines={1}
             >
-              {event.location}
+              {event.locationLabel}
             </Text>
           </View>
         ) : null}
-        {event.startDate ? (
+        {event.startedAt ? (
           <View style={styles.row}>
             <Feather name="clock" size={11} color={colors.mutedForeground} />
             <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-              {formatDate(event.startDate)}
+              {formatDate(event.startedAt)}
             </Text>
           </View>
         ) : null}

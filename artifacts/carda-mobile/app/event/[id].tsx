@@ -5,7 +5,6 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Platform,
   ScrollView,
   StyleSheet,
@@ -97,7 +96,7 @@ export default function EventDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: event.name }} />
+      <Stack.Screen options={{ title: event.title }} />
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingBottom }}
@@ -123,7 +122,7 @@ export default function EventDetailScreen() {
             </View>
             <View style={styles.eventHeaderContent}>
               <Text style={[styles.eventName, { color: colors.foreground }]}>
-                {event.name}
+                {event.title}
               </Text>
               {event.isActive ? (
                 <View style={styles.activeBadge}>
@@ -141,20 +140,20 @@ export default function EventDetailScreen() {
             </View>
           </View>
 
-          {event.location ? (
+          {event.locationLabel ? (
             <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
               <Feather name="map-pin" size={14} color={colors.mutedForeground} />
               <Text style={[styles.metaText, { color: colors.foreground }]}>
-                {event.location}
+                {event.locationLabel}
               </Text>
             </View>
           ) : null}
 
-          {event.startDate ? (
+          {event.startedAt ? (
             <View style={[styles.metaRow, { borderTopColor: colors.border }]}>
               <Feather name="calendar" size={14} color={colors.mutedForeground} />
               <Text style={[styles.metaText, { color: colors.foreground }]}>
-                {formatDate(event.startDate)}
+                {formatDate(event.startedAt)}
               </Text>
             </View>
           ) : null}

@@ -12,10 +12,7 @@ interface ContactCardProps {
 
 export function ContactCard({ contact, onPress }: ContactCardProps) {
   const colors = useColors();
-  const fullName =
-    [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
-    contact.email ||
-    "No name";
+  const displayName = contact.fullName || contact.email || "No name";
 
   return (
     <TouchableOpacity
@@ -30,20 +27,20 @@ export function ContactCard({ contact, onPress }: ContactCardProps) {
         },
       ]}
     >
-      <Avatar name={fullName} size={46} />
+      <Avatar name={displayName} size={46} />
       <View style={styles.content}>
         <Text
           style={[styles.name, { color: colors.foreground }]}
           numberOfLines={1}
         >
-          {fullName}
+          {displayName}
         </Text>
-        {(contact.title || contact.company) ? (
+        {(contact.jobTitle || contact.companyName) ? (
           <Text
             style={[styles.subtitle, { color: colors.mutedForeground }]}
             numberOfLines={1}
           >
-            {[contact.title, contact.company].filter(Boolean).join(" · ")}
+            {[contact.jobTitle, contact.companyName].filter(Boolean).join(" · ")}
           </Text>
         ) : null}
         {contact.email ? (

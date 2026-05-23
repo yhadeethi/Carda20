@@ -124,19 +124,12 @@ export default function ContactDetailScreen() {
     ]);
   };
 
-  const fullName = contact
-    ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
-      contact.email ||
-      "Contact"
-    : "Contact";
-
+  const displayName = contact?.fullName || contact?.email || "Contact";
   const paddingBottom = Platform.OS === "web" ? 34 : insets.bottom + 20;
 
   if (isLoading) {
     return (
-      <View
-        style={[styles.centered, { backgroundColor: colors.background }]}
-      >
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
@@ -144,9 +137,7 @@ export default function ContactDetailScreen() {
 
   if (!contact) {
     return (
-      <View
-        style={[styles.centered, { backgroundColor: colors.background }]}
-      >
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <Text style={{ color: colors.mutedForeground }}>Contact not found</Text>
       </View>
     );
@@ -204,16 +195,13 @@ export default function ContactDetailScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <GlassCard>
-            {f("First Name", "firstName")}
-            {f("Last Name", "lastName")}
-            {f("Title", "title")}
-            {f("Company", "company")}
+            {f("Full Name", "fullName")}
+            {f("Job Title", "jobTitle")}
+            {f("Company", "companyName")}
             {f("Email", "email")}
             {f("Phone", "phone")}
-            {f("LinkedIn", "linkedin")}
+            {f("LinkedIn", "linkedinUrl")}
             {f("Website", "website")}
-            {f("Address", "address")}
-            {f("City", "city")}
             {f("Notes", "notes", true)}
           </GlassCard>
         </ScrollView>
@@ -225,7 +213,7 @@ export default function ContactDetailScreen() {
     <>
       <Stack.Screen
         options={{
-          title: fullName,
+          title: displayName,
           headerRight: () => (
             <TouchableOpacity onPress={handleEdit} style={{ marginRight: 4 }}>
               <Feather name="edit-2" size={18} color={colors.primary} />
@@ -243,13 +231,13 @@ export default function ContactDetailScreen() {
             { backgroundColor: colors.card, borderBottomColor: colors.border },
           ]}
         >
-          <Avatar name={fullName} size={72} />
+          <Avatar name={displayName} size={72} />
           <Text style={[styles.heroName, { color: colors.foreground }]}>
-            {fullName}
+            {displayName}
           </Text>
-          {(contact.title || contact.company) ? (
+          {(contact.jobTitle || contact.companyName) ? (
             <Text style={[styles.heroMeta, { color: colors.mutedForeground }]}>
-              {[contact.title, contact.company].filter(Boolean).join(" · ")}
+              {[contact.jobTitle, contact.companyName].filter(Boolean).join(" · ")}
             </Text>
           ) : null}
 
@@ -272,9 +260,13 @@ export default function ContactDetailScreen() {
                 <Text style={[styles.actionLabel, { color: colors.primary }]}>Call</Text>
               </TouchableOpacity>
             ) : null}
-            {contact.linkedin ? (
+            {contact.linkedinUrl ? (
               <TouchableOpacity
-                onPress={() => Linking.openURL(contact.linkedin!.startsWith("http") ? contact.linkedin! : `https://linkedin.com/in/${contact.linkedin}`)}
+                onPress={() => Linking.openURL(
+                  contact.linkedinUrl!.startsWith("http")
+                    ? contact.linkedinUrl!
+                    : `https://linkedin.com/in/${contact.linkedinUrl}`
+                )}
                 style={[styles.actionBtn, { backgroundColor: colors.primary + "1A", borderRadius: colors.radius }]}
               >
                 <Feather name="linkedin" size={18} color={colors.primary} />
@@ -287,14 +279,13 @@ export default function ContactDetailScreen() {
         <GlassCard style={{ margin: 16, padding: 0 }}>
           <InfoRow icon="mail" label="Email" value={contact.email} onPress={contact.email ? () => Linking.openURL(`mailto:${contact.email}`) : undefined} />
           <InfoRow icon="phone" label="Phone" value={contact.phone} onPress={contact.phone ? () => Linking.openURL(`tel:${contact.phone}`) : undefined} />
-          <InfoRow icon="briefcase" label="Title" value={contact.title} />
-          <InfoRow icon="building" label="Company" value={contact.company} />
+          <InfoRow icon="briefcase" label="Job Title" value={contact.jobTitle} />
+          <InfoRow icon="building" label="Company" value={contact.companyName} />
           <InfoRow icon="globe" label="Website" value={contact.website} onPress={contact.website ? () => Linking.openURL(contact.website!) : undefined} />
-          <InfoRow icon="map-pin" label="Location" value={[contact.city, contact.state, contact.country].filter(Boolean).join(", ")} />
           <InfoRow icon="file-text" label="Notes" value={contact.notes} />
         </GlassCard>
 
-        {contact.company ? (
+        {contact.companyId ? (
           <TouchableOpacity
             style={[
               styles.intelButton,
@@ -305,11 +296,11 @@ export default function ContactDetailScreen() {
                 borderRadius: colors.radius,
               },
             ]}
-            onPress={() => router.push(`/company/${contact.company}`)}
+            onPress={() => router.push(`/company/${contact.companyId}`)}
           >
             <Feather name="zap" size={16} color={colors.primary} />
             <Text style={[styles.intelButtonText, { color: colors.primary }]}>
-              View {contact.company} intelligence
+              View {contact.companyName || "company"} intelligence
             </Text>
             <Feather name="chevron-right" size={16} color={colors.primary} />
           </TouchableOpacity>

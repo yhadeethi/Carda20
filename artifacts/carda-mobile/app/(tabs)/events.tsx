@@ -28,7 +28,7 @@ export default function EventsScreen() {
   const qc = useQueryClient();
 
   const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
+  const [newTitle, setNewTitle] = useState("");
   const [newLocation, setNewLocation] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -38,17 +38,17 @@ export default function EventsScreen() {
   });
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    if (!newTitle.trim()) return;
     setCreating(true);
     try {
       await api.createUserEvent({
-        name: newName.trim(),
-        location: newLocation.trim() || undefined,
+        title: newTitle.trim(),
+        locationLabel: newLocation.trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: ["user-events"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCreate(false);
-      setNewName("");
+      setNewTitle("");
       setNewLocation("");
     } catch (err: any) {
       Alert.alert("Error", err?.message || "Failed to create event.");
@@ -165,8 +165,8 @@ export default function EventsScreen() {
             <TextInput
               placeholder="Event name (e.g. TechConf 2025)"
               placeholderTextColor={colors.mutedForeground}
-              value={newName}
-              onChangeText={setNewName}
+              value={newTitle}
+              onChangeText={setNewTitle}
               style={[
                 styles.modalInput,
                 {
@@ -195,12 +195,12 @@ export default function EventsScreen() {
 
             <TouchableOpacity
               onPress={handleCreate}
-              disabled={!newName.trim() || creating}
+              disabled={!newTitle.trim() || creating}
               style={[
                 styles.createButton,
                 {
                   backgroundColor:
-                    newName.trim() ? colors.primary : colors.muted,
+                    newTitle.trim() ? colors.primary : colors.muted,
                   borderRadius: colors.radius,
                 },
               ]}

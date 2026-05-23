@@ -31,7 +31,6 @@ export default function ScanScreen() {
 
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<Partial<Contact>>({});
   const [form, setForm] = useState<Partial<Contact>>({});
 
   const pickImage = async (useCamera: boolean) => {
@@ -75,8 +74,7 @@ export default function ScanScreen() {
         name: "card.jpg",
       } as any);
       const result = await api.scanCard(formData);
-      setParsed(result);
-      setForm(result);
+      setForm(result.contact);
       setScanState("review");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
@@ -103,7 +101,6 @@ export default function ScanScreen() {
   const reset = () => {
     setScanState("idle");
     setImageUri(null);
-    setParsed({});
     setForm({});
   };
 
@@ -167,9 +164,7 @@ export default function ScanScreen() {
           color={colors.primary}
           style={{ marginTop: 24 }}
         />
-        <Text
-          style={[styles.scanningText, { color: colors.foreground }]}
-        >
+        <Text style={[styles.scanningText, { color: colors.foreground }]}>
           Scanning card…
         </Text>
         <Text style={[styles.scanningSubtext, { color: colors.mutedForeground }]}>
@@ -238,13 +233,12 @@ export default function ScanScreen() {
               },
             ]}
           >
-            {field("First Name", "firstName", "user")}
-            {field("Last Name", "lastName", "user")}
-            {field("Title", "title", "briefcase")}
-            {field("Company", "company", "building")}
+            {field("Full Name", "fullName", "user")}
+            {field("Job Title", "jobTitle", "briefcase")}
+            {field("Company", "companyName", "building")}
             {field("Email", "email", "mail")}
             {field("Phone", "phone", "phone")}
-            {field("LinkedIn", "linkedin", "linkedin")}
+            {field("LinkedIn", "linkedinUrl", "linkedin")}
             {field("Website", "website", "globe")}
             {field("Notes", "notes", "file-text", true)}
           </View>
@@ -410,7 +404,7 @@ const styles = StyleSheet.create({
   scanAreaSubtext: { fontSize: 14, textAlign: "center" },
   buttonGroup: { gap: 12 },
   primaryButton: {
-    shadowColor: "#4B68F5",
+    shadowColor: "#3B82F6",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
