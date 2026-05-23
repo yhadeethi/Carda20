@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as WebBrowser from "expo-web-browser";
 import React from "react";
 import {
   ActivityIndicator,
@@ -18,6 +19,29 @@ import { GlassCard } from "@/components/GlassCard";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
+
+const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+
+async function openCrmConnect(crm: "hubspot" | "salesforce") {
+  const endpoint = crm === "hubspot" ? "/api/hubspot/connect" : "/api/salesforce/connect";
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const { url } = await res.json();
+  if (!url) throw new Error("No auth URL returned");
+  if (Platform.OS === "web") {
+    window.location.href = url;
+  } else {
+    await WebBrowser.openBrowserAsync(url, { showTitle: true });
+  }
+}
 
 function IntegrationRow({
   name,
@@ -98,6 +122,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const [syncing, setSyncing] = React.useState<string | null>(null);
+  const [connecting, setConnecting] = React.useState<string | null>(null);
 
   const hubspotQ = useQuery({
     queryKey: ["hubspot-status"],
@@ -116,12 +141,29 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const handleConnect = async (crm: "hubspot" | "salesforce") => {
+    setConnecting(crm);
+    try {
+      await openCrmConnect(crm);
+    } catch (err: any) {
+      Alert.alert(
+        "Connection failed",
+        err?.message || "Could not start OAuth flow. Try again."
+      );
+    } finally {
+      setConnecting(null);
+    }
+  };
+
   const handleSync = async (crm: "hubspot" | "salesforce") => {
     setSyncing(crm);
     try {
       if (crm === "hubspot") await api.syncHubSpot();
       else await api.syncSalesforce();
-      Alert.alert("Sync complete", `All contacts synced to ${crm === "hubspot" ? "HubSpot" : "Salesforce"}.`);
+      Alert.alert(
+        "Sync complete",
+        `All contacts synced to ${crm === "hubspot" ? "HubSpot" : "Salesforce"}.`
+      );
     } catch {
       Alert.alert("Sync failed", "Check your connection and try again.");
     } finally {
@@ -129,7 +171,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
   const fullName =
     [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
     user?.email ||
@@ -172,11 +213,11 @@ export default function ProfileScreen() {
         CRM Integrations
       </Text>
       <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
-        {syncing === "hubspot" || syncing === "salesforce" ? (
+        {(syncing || connecting) ? (
           <View style={styles.syncingOverlay}>
             <ActivityIndicator color={colors.primary} />
             <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 8 }}>
-              Syncing…
+              {connecting ? "Connecting…" : "Syncing…"}
             </Text>
           </View>
         ) : null}
@@ -184,20 +225,14 @@ export default function ProfileScreen() {
           name="HubSpot"
           icon="database"
           connected={hubspotQ.data?.connected ?? false}
-          onConnect={() => {
-            const Linking = require("expo-linking");
-            Linking.openURL(`${BASE_URL}/api/hubspot/connect`);
-          }}
+          onConnect={() => handleConnect("hubspot")}
           onSync={() => handleSync("hubspot")}
         />
         <IntegrationRow
           name="Salesforce"
           icon="cloud"
           connected={salesforceQ.data?.connected ?? false}
-          onConnect={() => {
-            const Linking = require("expo-linking");
-            Linking.openURL(`${BASE_URL}/api/salesforce/connect`);
-          }}
+          onConnect={() => handleConnect("salesforce")}
           onSync={() => handleSync("salesforce")}
         />
       </GlassCard>
@@ -227,9 +262,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </GlassCard>
 
-      <Text
-        style={[styles.footer, { color: colors.mutedForeground }]}
-      >
+      <Text style={[styles.footer, { color: colors.mutedForeground }]}>
         Carda 2.0 · Contact Intelligence
       </Text>
     </ScrollView>
@@ -261,6 +294,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginLeft: 20,
     marginBottom: 8,
+    marginTop: 20,
   },
   integrationRow: {
     flexDirection: "row",
@@ -294,7 +328,10 @@ const styles = StyleSheet.create({
   connectText: { color: "#fff", fontSize: 13, fontWeight: "600" as const },
   syncingOverlay: {
     position: "absolute",
-    inset: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,

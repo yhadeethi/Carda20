@@ -5,8 +5,9 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import { AppState, AppStateStatus } from "react-native";
+import { AppState, AppStateStatus, Platform } from "react-native";
 import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 
 export interface AuthUser {
   id: number;
@@ -20,7 +21,7 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  login: () => void;
+  login: () => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }
@@ -65,13 +66,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, [checkAuth]);
 
-  const login = () => {
-    Linking.openURL(`${BASE_URL}/api/login`);
+  const login = async () => {
+    const loginUrl = `${BASE_URL}/api/login`;
+
+    if (Platform.OS === "web") {
+      Linking.openURL(loginUrl);
+      return;
+    }
+
+    const redirectUrl = Linking.createURL("/");
+
+    const result = await WebBrowser.openAuthSessionAsync(
+      loginUrl,
+      redirectUrl,
+      {
+        showInRecents: true,
+        createTask: false,
+      }
+    );
+
+    if (
+      result.type === "success" ||
+      result.type === "dismiss"
+    ) {
+      await checkAuth();
+    }
   };
 
   const logout = async () => {
     try {
-      await fetch(`${BASE_URL}/api/logout`, { credentials: "include" });
+      await fetch(`${BASE_URL}/api/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
     } catch {
     } finally {
       setUser(null);
