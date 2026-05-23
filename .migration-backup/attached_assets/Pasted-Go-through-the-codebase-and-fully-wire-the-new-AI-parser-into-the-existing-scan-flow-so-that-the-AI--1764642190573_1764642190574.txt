@@ -1,0 +1,56 @@
+Go through the codebase and fully wire the new AI parser into the existing scan flow so that the AI result is what powers the “Contact Extracted” card.
+
+Do the following EXACTLY:
+
+1) Make AI the default scan endpoint
+- Find all places in the frontend where we call `/api/scan` for image-based scanning.
+  - This will likely be in something like:
+    - client/src/api/contactApi.ts
+    - client/src/hooks/useScanContact.ts
+    - or any function named `scanContact`, `scanAndParseContact`, `handleScanCompleted`, etc.
+- Change those calls to POST to `/api/scan-ai` instead of `/api/scan`.
+- Keep the request body format the same (image upload / form-data).
+- If `/api/scan-ai` fails for any reason, THEN gracefully fall back to `/api/scan`. But the primary path must be `/api/scan-ai`.
+
+2) Make AI the default for pasted text
+- Find where we call `/api/parse` for parsing manually pasted text.
+- Change those calls to POST to `/api/parse-ai` instead.
+- Same idea: AI first, legacy regex parser only as fallback on error.
+
+3) Ensure we actually use the AI JSON, not the legacy parser
+- Open `server/aiParseService.ts` and confirm:
+  - It uses GPT-4o (or a current model) with the detailed system prompt I provided earlier.
+  - It returns a JSON object with keys:
+    name, company, title, email, phone, mobile, fax, address, website
+- In the controller/route that handles `/api/scan-ai` and `/api/parse-ai`:
+  - Take the AI’s JSON and map it DIRECTLY into the `ParsedContact` interface used by the frontend.
+  - Do NOT run the old deterministic parsing logic again on top of the AI output.
+  - Do NOT overwrite AI fields with heuristic guesses (e.g., don’t re-guess the website).
+
+4) Add temporary debugging so I can verify what the AI returns
+- In the server route for `/api/scan-ai` and `/api/parse-ai`, after getting the AI response:
+  - `console.log("AI PARSE RAW:", aiResult);`
+- Also include the raw AI JSON in the HTTP response under a field like `debugAiRaw` (in addition to the normal `contact` field).
+- In the frontend, under the “Contact Extracted” card, add a small, collapsible debug section:
+  - Label: “AI debug (temporary)”
+  - Show the JSON.stringify of `debugAiRaw` if it exists.
+- This is just for debugging while I’m testing; keep it simple.
+
+5) Tighten website behaviour to stop the fake `www.Elina.Ling` URL
+- In `aiParseService.ts`, before returning the final JSON, enforce:
+  - If `website` does NOT contain a dot (`.`), set `website` to an empty string.
+- Also ensure that when mapping to `ParsedContact`, if `website` is empty, the frontend shows no website instead of fabricating one.
+
+6) Quick regression test using the EVE card
+- After wiring everything:
+  - Run the app, scan the same EVE / Elina Ling business card again.
+  - Verify that:
+    - `name` = "Elina Ling"
+    - `company` = "EVE Energy Storage Co., Ltd."
+    - `title` contains "Product Manager"
+    - `email` = "Elina.Ling@evebattery.com"
+    - `website` = "www.evebattery.com"
+    - `mobile` includes "13545277916"
+  - If the AI output is still wrong, adjust ONLY the system prompt in `aiParseService.ts` according to my rules, but don’t touch the frontend mapping.
+
+Once all this is done, reply with exactly what code changes you made (files + summary) and confirm that the scan flow now uses `/api/scan-ai` by default.

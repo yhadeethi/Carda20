@@ -1,0 +1,135 @@
+I need two fixes to the contact parsing / UI.
+
+1. Fix company detection so it doesn’t use the job title
+
+Right now, fixCompanyIfAddress sometimes sets contact.companyName to the job title, like:
+
+jobTitle = "EPC Project Manager Energy Projects"
+
+companyName ends up as "EPC Project Manager Energy Projects"
+
+This happens because:
+
+We check lower.includes(baseDomain) where
+baseDomain = "flowpower"
+but the actual company line is "Flow Power Pty Ltd" → "flow power pty ltd" (with a space).
+
+The baseDomain check fails, then the fallback picks the first “safe” non-address line, which is the job title.
+
+Please update fixCompanyIfAddress as follows:
+
+Normalise spaces when comparing with email domain
+
+Replace the simple:
+
+if (baseDomain && lower.includes(baseDomain)) { ... }
+
+
+with logic that ignores spaces:
+
+const normalizedLine = lower.replace(/\s+/g, "");
+if (baseDomain && normalizedLine.includes(baseDomain)) {
+  // this line is a strong company candidate
+}
+
+
+So "flow power pty ltd" will match "flowpower".
+
+Prefer company suffixes
+
+Before we ever fall back to “first safe line”, look for lines that contain common company suffixes:
+
+const hasCompanySuffix = /(pty ltd|pty\. ltd\.|plc|inc\.?|ltd\.?|gmbh|s\.a\.|s\.p\.a\.|bv|llc)/i;
+
+
+In fixCompanyIfAddress, after collecting candidate lines:
+
+First, try domain match (using the new space-insensitive check).
+
+If no domain match, look for the first line where hasCompanySuffix.test(line) is true and not an address → use that as company.
+
+Never use the job title as company
+
+We already have contact.jobTitle. In the loop where we consider candidate lines for company:
+
+if (contact.jobTitle) {
+  const jt = contact.jobTitle.trim().toLowerCase();
+  if (lower === jt) continue;
+}
+
+
+Also, if a line contains the entire job title text, skip it as a company candidate.
+
+Fallback
+
+Only if:
+
+contact.companyName is empty or looksLikeAddress, and
+
+There is no domain-based match and no suffix-based match,
+
+THEN you can use “first safe line” as a last resort.
+But domain and suffix matches must always be checked first.
+
+After this change, re-parse Socrates:
+
+companyName should end up as something like "Flow Power Pty Ltd", not the job title.
+
+2. Show the parsed address in the contact card UI
+
+The backend now successfully sets contact.address and the vCard ADR is correct, but the address is not shown in the contact card on the web.
+
+In the React component that renders the Contact Extracted card (the one that currently shows:
+
+Name
+
+Job title / company line
+
+w. flowpower.com.au
+
+Email
+
+Phone
+
+Website
+
+add a new row for the address.
+
+Implementation:
+
+Add a line right before the website row:
+
+{contact.address && (
+  <div className="contact-row">
+    <span className="contact-icon">📍</span>
+    <span className="contact-text address-text">
+      {contact.address}
+    </span>
+  </div>
+)}
+
+
+Basic CSS for address:
+
+.address-text {
+  font-size: 0.9rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+
+Keep it in the same width/rail as the other rows.
+
+After this:
+
+For Socrates:
+
+The briefcase line should show the true company (e.g. “Flow Power Pty Ltd”), not the job title.
+
+The address row with the 📍 icon should display the full postal address under the phone line.
+
+For Yaseen:
+
+The address row should show “45B/2 Park Street, Sydney NSW 2000 Australia” (or whatever the backend address string is).
+
+Please make these changes, then rebuild so I can re-test with the same cards.

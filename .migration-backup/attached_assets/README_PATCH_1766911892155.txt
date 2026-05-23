@@ -1,0 +1,13 @@
+Carda patch (UI regressions & broken quick actions)
+
+Files to replace in your Replit project:
+1) client/src/components/contact/ContactDetailView.tsx
+2) client/src/components/contact/ContactHeroCard.tsx
+3) client/src/pages/home-page.tsx
+
+What this fixes:
+- Address field restored + visible + editable
+- Long titles/names no longer disappear (wrap instead of truncating)
+- Contact bottom action bar no longer overlaps the global bottom nav (nav hidden on contact detail)
+- Quick Actions now actually do something (follow-up generator, meeting .ics invite, company brief intel drawer, note focus)
+- Company Brief now fetches Intel v2 and shows it in a drawer

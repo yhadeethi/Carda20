@@ -1,0 +1,226 @@
+You are editing my existing Carda app.
+The main flows are:
+
+Scan business card / paste signature → parse contact → show intel → allow “Download contact / vCard”
+
+My Profile + My QR (already working)
+
+I’m seeing two issues in the saved iOS contacts:
+
+For Socrates, iOS shows the company as: GROUND FLOOR, 109 BURWOOD ROAD HAWTHORN instead of “Flow Power”.
+
+For Yaseen, the contact has no address at all, even though the raw text clearly contains two addresses.
+
+Please apply the following fixes.
+
+1. Make sure AU address extraction always runs and feeds into vCard
+
+I already have (or you added) an extractBestAddress(rawText) helper that:
+
+Scans rawText for AU-style lines (NSW/VIC/... + 4-digit postcode)
+
+Prefers “office address” over “registered address”
+
+I want this function to be used consistently in ALL parse flows:
+
+In the scan (OCR) flow and
+
+In the paste-text/email signature flow
+
+Wherever we build the contact object from rawText:
+
+const bestAddress = extractBestAddress(rawText);
+if (bestAddress) {
+  contact.address = bestAddress;
+}
+
+
+Make sure this code actually runs in both:
+
+/api/scan (image OCR)
+
+/api/parse-text or whatever endpoint handles pasted signatures (if they’re separate).
+
+1.1 Split the address into components for vCard
+
+For scanned/pasted contacts, we also need to use the address in the vCard.
+Right now, Yaseen’s saved contact has no address section on iOS.
+
+Implement a small AU-aware helper:
+
+function splitAuAddress(address) {
+  if (!address) {
+    return { street: "", city: "", state: "", postcode: "", country: "" };
+  }
+
+  const trimmed = address.replace(/\s+/g, " ").trim();
+
+  // Try to match formats like:
+  // "45B/2 Park Street, Sydney NSW 2000 Australia"
+  // "Ground Floor, 109 Burwood Road Hawthorn VIC 3122"
+  let match = trimmed.match(
+    /(.*?),(?:\s*)([A-Za-z ]+)\s+(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+(\d{4})(?:\s+(Australia|AU|AUS))?/i
+  );
+
+  if (match) {
+    const [, street, city, state, postcode, countryRaw] = match;
+    return {
+      street: street.trim(),
+      city: city.trim(),
+      state: state.trim().toUpperCase(),
+      postcode: postcode.trim(),
+      country: (countryRaw || "Australia").trim(),
+    };
+  }
+
+  // Fallback: if no full match, treat entire string as street
+  return {
+    street: trimmed,
+    city: "",
+    state: "",
+    postcode: "",
+    country: "",
+  };
+}
+
+1.2 Use the address in the vCard generator for scanned contacts
+
+Wherever we generate a vCard for a scanned/pasted contact (not My QR):
+
+Take contact.address and pass it through splitAuAddress(contact.address).
+
+Use the result in the ADR field:
+
+const { street, city, state, postcode, country } = splitAuAddress(contact.address);
+
+const vcardLines = [
+  "BEGIN:VCARD",
+  "VERSION:3.0",
+  `FN:${contact.fullName || ""}`,
+  `ORG:${contact.companyName || ""}`,
+  contact.jobTitle ? `TITLE:${contact.jobTitle}` : "",
+  contact.phone ? `TEL;TYPE=CELL:${contact.phone}` : "",
+  contact.email ? `EMAIL:${contact.email}` : "",
+  (street || city || state || postcode || country)
+    ? `ADR;TYPE=WORK:;;${street};${city};${state};${postcode};${country}`
+    : "",
+  contact.website ? `URL:${contact.website}` : "",
+  "END:VCARD",
+].filter(Boolean).join("\n");
+
+
+Make sure the “Download contact / vCard” button for scanned contacts uses this updated vCard with ADR populated.
+
+After this, re-test:
+
+Scanning Yaseen’s card should produce a contact with a proper address on iOS.
+
+2. Stop mixing company and address (Socrates case)
+
+For Socrates, iOS shows:
+
+EPC PROJECT MANAGER ENERGY PROJECTS • GROUND FLOOR, 109 BURWOOD ROAD HAWTHORN
+
+In iOS, that top line is jobTitle • company.
+So currently:
+
+TITLE = "EPC Project Manager Energy Projects" (OK)
+
+ORG = "GROUND FLOOR, 109 BURWOOD ROAD HAWTHORN" (WRONG – that’s an address, not the company)
+
+We need to ensure:
+
+contact.companyName holds an actual company, not an address.
+
+Implement a small post-processing step after you build contact from rawText and extractBestAddress:
+
+function looksLikeAddress(text) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  // Heuristics: contains state or postcode or common address words
+  const hasState = /\b(nsw|vic|qld|wa|sa|tas|act|nt)\b/.test(t);
+  const hasPostcode = /\b\d{4}\b/.test(t);
+  const hasAddressWord = /(street|st\.|road|rd\.|ave|avenue|floor|lvl|level|drive|dr\.)/i.test(t);
+  return hasState || hasPostcode || hasAddressWord;
+}
+
+function fixCompanyUsingRawText(contact, rawText) {
+  // If company already looks okay, leave it
+  if (contact.companyName && !looksLikeAddress(contact.companyName)) {
+    return contact;
+  }
+
+  const lines = rawText
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  // Try to find a line that looks like the company:
+  // - Not an address
+  // - Not phone, email, or URL
+  // - Appears after the job title but before obvious address lines
+  const email = contact.email || "";
+  const domainMatch = email.match(/@([A-Za-z0-9.-]+)/);
+  const baseDomain = domainMatch ? domainMatch[1].split('.')[0] : null; // e.g. flowpower
+
+  let bestCompany = contact.companyName || "";
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    const isEmail = lower.includes("@");
+    const isUrl = lower.startsWith("http") || lower.includes("www.");
+    const isPhone = /[\d+\s()-]{6,}/.test(lower) && lower.includes("+");
+
+    if (isEmail || isUrl || isPhone) continue;
+    if (looksLikeAddress(line)) continue;
+
+    // If line contains the base domain as words (e.g. "Flow Power"), prefer it
+    if (baseDomain && lower.includes(baseDomain)) {
+      bestCompany = line;
+      break;
+    }
+
+    // Otherwise, first non-address, non-contact detail line after name/title is also a decent candidate
+    if (!bestCompany) {
+      bestCompany = line;
+    }
+  }
+
+  if (bestCompany) {
+    contact.companyName = bestCompany;
+  }
+
+  return contact;
+}
+
+
+In the backend, after you build contact and set contact.address with extractBestAddress, call:
+
+contact = fixCompanyUsingRawText(contact, rawText);
+
+
+Then make sure the vCard generator uses contact.companyName as ORG: (as shown in section 1.2).
+
+After this:
+
+Socrates’ contact should show something like:
+EPC PROJECT MANAGER ENERGY PROJECTS • Flow Power
+at the top in iOS, and the address should live in the address section from ADR.
+
+3. Quick regression checks
+
+After implementing all of the above, please:
+
+Scan Yaseen’s physical card again
+
+Confirm contact.address is populated server-side.
+
+Confirm the saved contact on iOS now includes a proper address block.
+
+Scan/paste Socrates’ details again
+
+Confirm companyName is a clean company name (“Flow Power” or similar).
+
+Confirm iOS shows jobTitle • company correctly, and that the address appears separately.
+
+Ensure none of this breaks the existing My QR profile vCard generation (which uses its own generateVCardFromProfile helper). That can stay as-is.

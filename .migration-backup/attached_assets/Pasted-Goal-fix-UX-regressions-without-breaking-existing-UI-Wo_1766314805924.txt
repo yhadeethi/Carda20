@@ -1,0 +1,64 @@
+Goal: fix UX regressions without breaking existing UI. Work in-place in current components (do not create duplicate screens/components that aren’t used).
+
+FIRST: locate the actual components used on these screens by searching the repo for:
+- "Network" heading
+- "Companies" tab label
+- "Scan Business Card"
+- "Event mode"
+- company card markup showing initials like "FP", "W", "WE"
+Confirm in your response the exact file paths you will modify before changing code.
+
+TASK A — Companies: show company logos + single-tap open
+1) Data:
+- Ensure each company has a resolvable domain.
+- Derive domain in this priority:
+  a) company.website (parse host)
+  b) if missing, use most common email domain among that company’s contacts
+- Store derived domain as company.domain (persist wherever companies are stored: localStorage/db/state).
+
+2) UI:
+- In Companies grid cards, replace initials-only avatar with:
+  - <img> using Google favicon endpoint:
+    src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
+  - onError fallback to initials badge.
+- Add loading style (subtle skeleton or opacity).
+- Make the entire card a single click target:
+  - Use <Link> wrapping the card OR onClick navigate.
+  - Remove nested clickable elements that steal the first tap.
+  - Add CSS: `touch-action: manipulation; -webkit-tap-highlight-color: transparent;`
+Acceptance: one tap opens company details 100% of the time.
+
+TASK B — Restore Follow-Up actions after scanning
+- Find contact detail screen (the one showing Download vCard / Generate Company Intel).
+- Re-add a "Follow Up" section above those buttons with 3 quick actions:
+  1) "Add Reminder" (existing reminders flow if present, otherwise simple local reminder modal)
+  2) "Draft Email" (opens mailto: with subject template)
+  3) "LinkedIn" (search link using name + company)
+- Ensure this section appears for all contacts (disable buttons gracefully if required fields missing).
+Acceptance: After scanning a new contact, when routed to contact detail, Follow Up section is present.
+
+TASK C — Event mode toggle smooth expand/collapse
+- Keep the event input row mounted; animate open/close with:
+  - transition for max-height, opacity, transform (translateY)
+  - closed state: max-height:0, opacity:0, translateY:-4px, pointer-events:none
+  - open state: max-height sufficient (e.g. 72px), opacity:1, translateY:0
+- Make toggle feel “native”: no layout jump.
+Acceptance: toggling does not snap; it eases in/out smoothly.
+
+TASK D — Bottom nav morph on scroll (iOS Photos style)
+- Implement scroll direction detection (useScrollDirection hook):
+  - when scrolling up → collapse nav (shorter height, labels fade out)
+  - when scrolling down or idle near bottom → expand nav (taller, labels show)
+- Animate with Framer Motion spring if already used; otherwise pure CSS transitions.
+- Respect safe area: padding-bottom: env(safe-area-inset-bottom).
+Acceptance: nav smoothly morphs, never jitters, and doesn’t cover content.
+
+FINISHING
+- Provide a list of changed files.
+- Provide before/after notes for each task.
+- Run the app and sanity check:
+  - Companies: logo renders for Flow Power / Wärtsilä (from domain).
+  - Single tap opens company.
+  - Scan → contact detail shows Follow Up.
+  - Event mode toggle animates smoothly.
+  - Bottom nav morph works on scroll.

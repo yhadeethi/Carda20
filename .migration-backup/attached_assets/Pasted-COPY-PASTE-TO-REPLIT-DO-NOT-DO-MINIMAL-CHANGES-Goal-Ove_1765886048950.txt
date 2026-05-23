@@ -1,0 +1,89 @@
+COPY/PASTE TO REPLIT (DO NOT DO MINIMAL CHANGES)
+
+Goal: Overhaul the Contacts > Companies experience to feel like iOS 26 (smooth, minimal, frictionless) while keeping core functionality:
+- Keep: Companies list, company details, people list, notes, and the ability to set reporting lines (who reports to who).
+- Remove completely: Influence feature (UI + data + routes + components). No blank tab. No influence chips.
+- Reduce options: fewer filters/tags, fewer toolbars, fewer nested tabs.
+- Fix: “Add Company” sheet must scroll and be keyboard-safe on iPhone.
+
+NON-NEGOTIABLE UX CHANGES
+1) Remove Influence everywhere
+- Delete the “Influence” segmented option in Org view and any “Influence Map” component.
+- Remove influence fields from data models/types/storage (e.g., influenceLevel, influence tags).
+- Remove influence chips in People list cards (“High Influence / Low Influence”).
+- Ensure build passes with no dead imports or unused code.
+
+2) Company Detail Layout (simple and iOS-like)
+- Keep the top segmented control: People | Org | Notes (this is fine).
+- Inside Org tab: NO second segmented control. Only one view.
+- Replace current Org canvas-first experience with a “Hierarchy-first” view:
+  a) Default = clean hierarchical list (collapsible tree)
+  b) Optional: a single “View Diagram” button (secondary) that opens the canvas diagram as a full-screen modal/sheet.
+  (If optional is too much, skip diagram and keep hierarchy list only. The priority is hierarchy.)
+
+3) Hierarchy View (core feature, smooth)
+- Show a vertical tree list:
+  - Each person row: avatar/initials, name, title (1 line), optional small department pill.
+  - Indentation indicates hierarchy.
+  - Collapse/expand for managers with direct reports.
+- Editing reporting lines:
+  - Tap a person -> opens an iOS-style bottom sheet (not a new page).
+  - Bottom sheet actions:
+    - “Reports to” selector (choose another contact in same company or “None”)
+    - “Direct reports” read-only list (optional)
+    - “Open Contact” button (go to contact detail page)
+  - Changes persist immediately.
+
+4) Diagram View (only if kept)
+If you keep the diagram:
+- Must look Apple-grade:
+  - Remove dotted/grid background.
+  - Softer cards, larger radius, subtle borders, minimal shadows.
+  - Thin, subtle connector lines.
+  - No desktop toolbar with + / - / expand icons.
+  - Use pinch-to-zoom + two buttons only: “Fit” and “Center”.
+- Must NEVER show blank. If no relationships, show empty-state: “No reporting lines yet. Tap a person to set ‘Reports to’.”
+
+5) Add Company = proper iOS sheet with scroll + keyboard safety
+- Replace current modal with a bottom sheet / full-screen sheet pattern:
+  - Content area MUST scroll on small screens.
+  - Use safe-area padding and ensure the last field + primary button are reachable.
+  - Keyboard must not hide inputs/buttons:
+    - Add bottom padding equal to safe-area-inset-bottom.
+    - Use overflow-y: auto and max-height: calc(100vh - topOffset).
+- Keep fields: Company Name (required), Domain, City, State, Country, Notes.
+- Add “Save” fixed at bottom (sticky) or placed in header (Done) iOS style.
+
+6) Reduce friction in People list
+- Remove the filter chip (“All”) if it’s not doing real filtering.
+- Remove influence chips.
+- Keep ONE small pill max (e.g., Department OR Category). Don’t show multiple tags by default.
+- Tapping a person should always open the contact detail (no extra tap state).
+
+IMPLEMENTATION GUIDANCE (DO THIS)
+- Search the repo for: “Influence”, “influence”, “InfluenceMap”, “High Influence”, “Low Influence”
+  and remove/refactor all references.
+- Refactor Org page into:
+  - HierarchyList component (default)
+  - PersonEditSheet component (bottom sheet)
+  - (Optional) OrgDiagramModal component (full-screen sheet)
+- Ensure state/data model includes reporting line field (reportsToId / managerId).
+- Ensure data migration doesn’t break existing saved contacts:
+  - If influence fields exist in storage, ignore/remove gracefully.
+
+VISUAL / MOTION (iOS 26 feel)
+- Use larger corner radius, softer separators, less contrast.
+- Add micro-animations:
+  - Sheet opens/closes smoothly.
+  - Expand/collapse tree uses height/opacity transition.
+  - Press states on rows (subtle scale/opacity).
+- Keep everything fast: avoid re-rendering whole tree when editing one node (use memoization).
+
+ACCEPTANCE CHECKLIST
+- Influence tab is gone everywhere (no blank view possible).
+- Add Company screen scrolls and works with keyboard on iPhone.
+- Org view is clean, minimal, and immediately useful (hierarchy visible).
+- Setting “Reports to” takes < 5 seconds with no confusion.
+- The org experience no longer looks like a desktop diagram tool.
+
+Do the refactor fully, not cosmetic tweaks. If needed, replace the Org view implementation entirely.

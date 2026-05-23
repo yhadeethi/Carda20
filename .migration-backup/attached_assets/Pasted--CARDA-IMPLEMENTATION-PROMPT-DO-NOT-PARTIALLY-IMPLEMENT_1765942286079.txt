@@ -1,0 +1,279 @@
+[CARDA IMPLEMENTATION PROMPT — DO NOT PARTIALLY IMPLEMENT]
+
+Goal: Implement 3 features in Carda WITHOUT breaking existing UI/flows:
+A) Smart Follow-Up + Reminders + per-contact tasks
+B) Contact Timeline + Dedup/Merge (fuzzy matching + merge UI)
+C) Calendar integration (ICS now for Apple/Google/Microsoft; optional connectors stubs for Google + M365)
+
+Hard rules:
+- Do NOT redesign the app or change existing navigation/layout unexpectedly.
+- Add features as new tabs/sections inside the existing Contact Detail UI and Contacts Hub pages.
+- Use TypeScript, keep code clean, and keep data in localStorage for now (v1). Make it migration-safe.
+- No backend required for v1. If an AI endpoint already exists, reuse it; otherwise implement “template mode” fallback.
+
+----------------------------------------------------------------------
+1) DATA MODEL CHANGES (localStorage, migration-safe)
+----------------------------------------------------------------------
+
+Create/Update these types in: client/src/lib/contacts/types.ts
+
+type ContactId = string;
+
+export type Contact = {
+  id: ContactId;
+  fullName: string;
+  title?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  linkedinUrl?: string;
+  notes?: string;
+
+  createdAt: string;   // ISO
+  updatedAt: string;   // ISO
+  lastTouchedAt?: string; // ISO (any meaningful interaction)
+
+  // NEW:
+  tasks: ContactTask[];
+  reminders: ContactReminder[];
+  timeline: TimelineEvent[];
+  mergeMeta?: {
+    mergedFromIds?: ContactId[];
+    mergedAt?: string;
+  };
+};
+
+export type ContactTask = {
+  id: string;
+  title: string;
+  done: boolean;
+  createdAt: string;
+  completedAt?: string;
+  dueAt?: string; // ISO optional
+};
+
+export type ContactReminder = {
+  id: string;
+  label: string;
+  remindAt: string; // ISO
+  done: boolean;
+  doneAt?: string;
+  createdAt: string;
+};
+
+export type TimelineEventType =
+  | "scan_created"
+  | "note_added"
+  | "followup_generated"
+  | "reminder_set"
+  | "reminder_done"
+  | "task_added"
+  | "task_done"
+  | "meeting_scheduled"
+  | "event_attended"
+  | "contact_merged"
+  | "contact_updated";
+
+export type TimelineEvent = {
+  id: string;
+  type: TimelineEventType;
+  at: string; // ISO
+  summary: string;
+  meta?: Record<string, any>;
+};
+
+Storage:
+- Create client/src/lib/contacts/storage.ts
+- Use localStorage key: carda_contacts_v2
+- Add migrateFromV1() that safely upgrades old contacts into the new structure:
+  - If tasks/reminders/timeline missing → initialize to []
+  - createdAt/updatedAt fallback to now if missing
+- Provide CRUD helpers:
+  - getContacts(), saveContacts()
+  - upsertContact(contact)
+  - addTimelineEvent(contactId, event)
+  - markLastTouched(contactId)
+
+Also create client/src/lib/contacts/ids.ts for nanoid/uuid helpers (simple random string is fine).
+
+----------------------------------------------------------------------
+2) FEATURE A — SMART FOLLOW-UP + REMINDERS + TASKS
+----------------------------------------------------------------------
+
+2.1 Follow-Up Generator (AI optional, templates mandatory)
+Create: client/src/lib/followup/followup.ts
+
+Follow-up modes:
+- "email_followup"
+- "linkedin_message"
+- "meeting_intro"
+
+UI controls:
+- Tone: ["friendly", "direct", "warm", "formal"]
+- Goal: free text (e.g., “book a 15-min call next week”)
+- Context: optional (last meeting notes / event / what you discussed)
+- Length: ["short", "medium"]
+
+Implementation:
+- If an AI service already exists in the app, call it.
+- Otherwise: generate a high-quality message using templates + contact fields + user inputs.
+- Always output:
+  - subject (for email)
+  - body (message text)
+  - bullets (key points)
+- Add a “Copy” button and “Save to Timeline” button.
+
+On generate:
+- Add timeline event:
+  type: "followup_generated"
+  summary: e.g. “Generated Email Follow-Up (direct tone)”
+  meta: { mode, tone, goal, length, subject, bodyPreview }
+
+2.2 Reminders + Tasks per contact
+In Contact Detail view add a new section/tab: “Actions”
+Include:
+- Quick Actions:
+  - Generate Follow-Up
+  - Add Reminder (chips: Tomorrow, 3 days, 1 week, 2 weeks + custom date picker)
+  - Add Task (input + add)
+- Reminders list:
+  - show upcoming first
+  - mark done
+  - when due soon: show subtle indicator
+- Tasks list:
+  - checkbox to complete
+  - optional due date
+  - simple reorder not required for v1
+
+Timeline events:
+- On reminder create: "reminder_set"
+- On reminder done: "reminder_done"
+- On task add: "task_added"
+- On task done: "task_done"
+Also update lastTouchedAt when any of these actions happen.
+
+2.3 Global “Upcoming” view (minimal, very useful)
+In Contacts Hub add a small filter/secondary view:
+- “Upcoming” shows next 20 reminders across all contacts (sorted by remindAt).
+Clicking takes you to that contact.
+
+----------------------------------------------------------------------
+3) FEATURE B — CONTACT TIMELINE + DEDUP/MERGE
+----------------------------------------------------------------------
+
+3.1 Timeline UI
+In Contact Detail add a “Timeline” tab:
+- Reverse chronological list
+- Filter chips by event type (All, Follow-ups, Reminders, Tasks, Notes, Meetings)
+- Allow adding a note:
+  - Adds timeline event "note_added" with the note text in meta (and summary)
+  - Also updates contact.notes optionally (keep both: notes as current summary, timeline as history)
+
+3.2 Duplicate detection engine (local, fast)
+Create: client/src/lib/contacts/dedupe.ts
+
+Normalization helpers:
+- normalizeEmail(email): lower + trim
+- normalizePhone(phone): digits only (keep leading + if present)
+- normalizeName(name): lower, collapse spaces
+- normalizeCompany(company): lower
+
+Matching rules produce a confidence score 0–100:
+- Email exact match → 100
+- Phone exact match → 95
+- LinkedIn URL exact match → 95
+- Name + company fuzzy → 60–90
+- Name fuzzy + email domain matches company-ish → 55–80
+
+Fuzzy method:
+- Implement a simple string similarity (Jaro-Winkler or Levenshtein). Keep it local and lightweight.
+- Don’t overdo: we need predictable results, not “AI magic”.
+
+Expose:
+- findDuplicateGroups(contacts): returns groups of contact IDs + score + reasons
+- suggestMerges(contacts): returns top suggestions
+
+3.3 Dedupe UI + Merge flow
+Add a new sub-view in Contacts Hub: “Duplicates”
+- Show groups with top reason + score (e.g., “Email match”, “Phone match”, “Name+Company similarity 86”)
+- Tap group → merge screen
+
+Merge screen:
+- Side-by-side contact cards
+- For each field (name/title/company/email/phone/linkedin/notes):
+  - auto-pick the more complete value
+  - allow user to toggle “use left” / “use right”
+- Merge results:
+  - Keep ONE contact ID (the “primary”)
+  - Merge arrays: tasks/reminders/timeline (dedupe items by id)
+  - Add timeline event "contact_merged" with meta listing mergedFromIds
+  - Mark merged contacts as deleted via soft-delete flag OR remove them but keep a mergeHistory entry to support undo.
+
+Add “Undo last merge” (simple):
+- Store mergeHistory in localStorage: carda_merges_v1
+- Undo restores previous contact snapshots.
+
+----------------------------------------------------------------------
+4) FEATURE C — CALENDAR INTEGRATION (Google + M365 + Apple)
+----------------------------------------------------------------------
+
+V1 (ship now): ICS event generation (works across Apple/Google/Microsoft via .ics import)
+Create: client/src/lib/calendar/ics.ts
+
+Implement:
+- buildIcsEvent({ title, description, location, startIso, endIso, attendeesEmails? })
+- Output RFC5545-compliant VCALENDAR/VEVENT text.
+- Provide “Create meeting” button on contact:
+  - Default: 15 or 30 min
+  - Title: “Catch up — {FullName} ({Company})”
+  - Description auto-includes:
+    - contact details
+    - link to Carda contact deep link if exists
+    - suggested agenda bullets
+- UX:
+  - After selecting time, user clicks “Add to Calendar” → downloads .ics
+  - Add timeline event "meeting_scheduled"
+
+Add quick time chips:
+- Today 4pm, Tomorrow 10am, Next Monday 10am (use local timezone), plus custom picker.
+
+V2 stubs (don’t fully implement OAuth unless already set up):
+- Create connectors scaffolding:
+  - client/src/lib/calendar/connectors/google.ts (stub createEvent())
+  - client/src/lib/calendar/connectors/microsoft.ts (stub createEvent())
+- Add a Settings section “Calendar Connections” with disabled placeholders:
+  - “Connect Google Calendar (coming next)”
+  - “Connect Microsoft 365 (coming next)”
+Goal is to prepare structure for later real API calls.
+
+Important: ICS must be correct. Follow RFC5545 formatting rules (DTSTART/DTEND in UTC or with TZID; for v1 use UTC “Z” to avoid timezone bugs). Include UID and DTSTAMP.
+
+----------------------------------------------------------------------
+5) UI INTEGRATION POINTS (minimal change)
+----------------------------------------------------------------------
+
+- Contact Detail page:
+  Add top tabs (or segmented control) for:
+    - Overview (existing)
+    - Actions (NEW: follow-up + reminders + tasks + meeting)
+    - Timeline (NEW)
+- Contacts Hub:
+  Add a small toggle or secondary tabs:
+    - All
+    - Upcoming (NEW)
+    - Duplicates (NEW)
+
+Keep styling consistent with existing Carda aesthetic (Apple-like clean, glass if already used). No big redesign.
+
+----------------------------------------------------------------------
+6) ACCEPTANCE CRITERIA
+----------------------------------------------------------------------
+
+- Create reminder/task on a contact → shows in Actions + Timeline + Upcoming.
+- Generate follow-up → copy works, timeline entry created.
+- Timeline shows all history events and filters work.
+- Duplicate groups appear for obvious duplicates; merge combines data correctly; undo restores.
+- “Create meeting” downloads a valid .ics and creates a timeline entry.
+- No regressions in existing scanning/contact creation flows.
+
+Implement now.

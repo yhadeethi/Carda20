@@ -1,0 +1,120 @@
+You are working on the Carda web app (React + TypeScript). The current “Sales Brief / Company Intel” section is bloated and often inaccurate. Redesign it into a facts-first, source-backed, visually premium “Intel v2” with charts and better navigation.
+
+GOALS
+1) Accuracy-first: any factual claim must be backed by a source URL. If we can’t verify it, show “Unknown” or omit.
+2) Reduce bloat: default view must be short, scannable, and useful in 10 seconds.
+3) Visual: add small charts/cards for stock price sparkline, headcount range, HQ location.
+4) UX: add quick shortcuts on the Contact card to jump to Details/Actions/Timeline without scrolling.
+
+HIGH-LEVEL UI RESTRUCTURE (Intel v2)
+Replace the current long accordion list with a 2-tab layout inside the Sales Brief card:
+- Tab 1 (default): “Verified Intel”
+- Tab 2: “Coaching” (inferred)
+
+Verified Intel tab sections (in this order):
+A) Intel Header (4 mini cards in a grid)
+   - Headcount (range) + source chip
+   - Stock (sparkline 30D) + last price + % change + source chip (only show if ticker exists)
+   - HQ location (city/country) + small map thumbnail (if map token exists; else text) + source chip
+   - “Last refreshed” timestamp + Refresh button
+
+B) Verified Facts (max 8 bullets)
+   - Each bullet shows a “source” link chip. No source = do not show.
+
+C) Products & Services (max 6 bullets)
+   - Short bullets describing what the company sells/does, pulled from sources.
+
+D) Latest Signals (max 5 items)
+   - Each: date (YYYY-MM-DD), headline, source link
+   - Only include if within last 18 months. Otherwise omit.
+
+Coaching tab sections (collapsed by default):
+- Talking Points (role-based, inferred, max 4 bullets)
+- Questions (max 4)
+- Watch Outs (max 3)
+Important: label these clearly as “Suggested (Inferred)” and keep them short.
+
+REMOVE / DEPRECATE
+- Remove “Technology Stack” from the UI (unless we later add a real provider). Do NOT fabricate AWS/Python/etc.
+- Remove “Key Developments (may not be up to date)” and replace with “Latest Signals” with real dates + sources.
+
+DATA MODEL (NEW)
+Create types for CompanyIntelV2:
+type IntelSource = { title: string; url: string; };
+type VerifiedBullet = { text: string; source: IntelSource; };
+type SignalItem = { date: string; title: string; url: string; sourceName: string; };
+
+type CompanyIntelV2 = {
+  companyName: string;
+  website?: string | null;
+  canonicalEntity?: string | null; // e.g. parent/legal
+  lastRefreshedAt: string;
+  headcount?: { range: "1-10"|"11-50"|"51-200"|"201-500"|"501-1k"|"1k-5k"|"5k-10k"|"10k+"; source: IntelSource; } | null;
+  stock?: { ticker: string; exchange?: string | null; currency?: string | null; series: Array<{date:string; close:number}>; source: IntelSource; } | null;
+  hq?: { city?: string|null; country?: string|null; lat?: number|null; lng?: number|null; source: IntelSource; } | null;
+  verifiedFacts: VerifiedBullet[];
+  productsAndServices: VerifiedBullet[];
+  latestSignals: SignalItem[];
+  coaching?: {
+    talkingPoints: string[];
+    questions: string[];
+    watchOuts: string[];
+  };
+};
+
+BACKEND / FETCHING (MVP, NO PAID APIS)
+Implement a server endpoint: GET /api/intel-v2?companyName=...&domain=...&role=...
+It should:
+1) Retrieve sources:
+   - Wikipedia REST summary endpoint (if available) for company
+   - Official website pages (About / Products / Solutions / News) by fetching a few relevant URLs:
+     Use the company domain and try common paths: /about, /solutions, /products, /news, /media, /press
+   - If public ticker is detected in Wikipedia infobox text or page content (simple regex), fetch stock prices using a free public endpoint like Stooq (daily close, last 30 trading days).
+2) Produce a compact “sources pack”:
+   - snippets: array of {sourceTitle, url, textExcerpt}
+3) Call the existing LLM (OpenAI) to summarize ONLY from snippets into CompanyIntelV2 JSON.
+   - Strict JSON output. No extra keys. No prose.
+   - HARD RULE: any verifiedFacts/productsAndServices/hq/headcount/stock MUST include a source URL from the provided snippets. If not present, set null/omit.
+
+LLM PROMPT (STRICT)
+SYSTEM:
+You produce ONLY valid JSON that matches the CompanyIntelV2 type. Use ONLY the provided snippets as evidence. If a claim cannot be supported by a snippet + URL, do not include it. Keep it short. Verified Facts <= 8 bullets. Products & Services <= 6 bullets. Latest Signals <= 5 items and must include dates.
+USER:
+Company: {companyName}
+Domain: {domain}
+Contact role: {role}
+Snippets: [...]
+
+CACHING
+- Cache intel results in localStorage keyed by domain/company for 7 days.
+- Show lastRefreshedAt in the UI.
+- Refresh button calls the endpoint with cache-bust and updates UI.
+
+CHARTS (FRONTEND)
+- Implement a StockSparkline component using Recharts (LineChart) with the 30D series (no fancy colors; keep it clean).
+- Implement a HeadcountRange mini bar (single horizontal bar showing the bucket).
+- Implement HQ mini map:
+  - If MAPBOX_TOKEN env exists, use a static map image URL.
+  - Else show a “pin + city, country” line only.
+
+CONTACT PAGE NAV SHORTCUTS
+In the “Contact Extracted” card (top area):
+- Add 3 pill buttons: “Details”, “Actions”, “Timeline”
+- On click: scroll smoothly to the lower tabs section and set active tab accordingly.
+Implementation detail:
+- Assign an id to the tabs container (e.g. id="contact-tabs")
+- Expose a function or state setter for active tab
+- Use window.scrollTo({ top: element.offsetTop - 16, behavior: "smooth" })
+
+Also add a small sticky floating button (bottom-right): “Actions”
+- Clicking it jumps to tabs + selects Actions.
+
+QUALITY BAR
+- Make the default Intel view feel shorter and more premium than the current one.
+- Never show “may not be up to date”.
+- Never fabricate tech stack.
+- Always show source chips for verified items.
+- Make sure this works with companies that have no Wikipedia page: show Unknown gracefully.
+
+DELIVERABLE
+Update the existing Intel/Sales Brief components and backend to implement Intel v2, including new UI, endpoint, caching, charts, and the contact-page shortcuts.

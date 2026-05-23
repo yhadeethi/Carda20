@@ -1,0 +1,84 @@
+GOAL
+Revamp the Carda “Org Map” feature so “Org Chart” is a true interactive org chart (boxes + connecting lines + hierarchy layout), not a list. Make the UX simpler, modern, low-friction, and mobile-first.
+
+UX REQUIREMENTS (must)
+1) Replace the current “Org Chart list grouped by department” with an interactive org chart canvas:
+   - Nodes are contact cards (name, title, department pill).
+   - Edges are visible connector lines from manager → report.
+   - Supports mobile pinch-zoom + pan.
+   - Provide a floating “Center / Fit” button.
+
+2) Simplify navigation:
+   - On the company page, tabs should be: People | Org | Notes.
+   - Inside Org, show a segmented toggle: Org | Influence only.
+   - Remove “View” toggle and remove the current mid-page “Edit” toggle.
+   - Add top-right icon buttons in Org screen:
+     - Pencil = toggle edit mode
+     - Sparkles/Layout = re-run layout (auto arrange)
+     - Trash = clear all reporting lines (confirm modal)
+
+3) Node interaction:
+   - Tap a node opens an iOS-style bottom sheet with:
+     - Contact summary
+     - Department selector
+     - Influence selector
+     - Reports To selector (dropdown)
+     - Direct reports list (read-only)
+   - In edit mode: allow drag-and-drop to set reporting:
+     - User drags a node onto another node → sets dragged node’s reportsToId to target node’s id.
+     - Show a subtle highlight on valid drop targets.
+
+4) Layout:
+   - Automatically layout as a top-down tree:
+     - Managers above direct reports.
+     - Multiple roots supported (if multiple execs have no manager).
+   - Use a deterministic layout algorithm (dagre) and re-run layout on every change to reporting lines.
+
+5) Data integrity:
+   - Detect cycles (A reports to B reports to A). If a cycle occurs, block the update and show a toast: “Invalid reporting line (cycle detected)”.
+
+6) Styling:
+   - Keep Carda aesthetic: rounded cards, soft shadows, clean spacing.
+   - Department colors can be represented as a thin left border or pill color, but don’t make it loud.
+
+TECH IMPLEMENTATION (React)
+1) Use @xyflow/react (React Flow) for the org chart canvas:
+   - Create nodes from contacts in the selected company.
+   - Create edges from reportsToId -> contactId.
+
+2) Use dagre for layout:
+   - rankdir: "TB" (top-to-bottom)
+   - Set node width/height consistent with your card size.
+
+3) Build helpers:
+   - buildOrgGraph(contacts) => { nodes, edges }
+   - applyDagreLayout(nodes, edges) => positionedNodes
+   - wouldCreateCycle(contacts, sourceId, targetId) => boolean
+
+4) Keep existing storage model, but ensure each contact has:
+   - department
+   - influenceLevel
+   - reportsToId (nullable)
+
+5) Add a dedicated component:
+   - OrgChartCanvas.tsx renders the React Flow canvas and handles:
+     - fitView
+     - node tap
+     - drag-drop assignment logic
+     - triggers relayout on updates
+
+6) Bottom sheet:
+   - Reuse existing modal/sheet component if available.
+   - This sheet edits the selected contact fields and persists them.
+
+DO NOT BREAK
+- Do not change scanning, contacts saving, events hub, or existing contact parsing.
+- Keep the company selection flow intact.
+- Only refactor within the company page and org feature components.
+
+ACCEPTANCE TESTS
+- With 3 contacts (Tom, Jonathan, Socrates) and Socrates reports to Tom:
+  - Org tab shows Tom node above Socrates with a visible connecting line.
+  - Zoom/pan works on iPhone.
+  - Tapping Socrates shows a bottom sheet with “Reports To: Tom”.
+  - Drag Socrates onto Jonathan sets reportsToId to Jonathan (unless cycle), and the chart relayouts instantly.

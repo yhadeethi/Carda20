@@ -1,0 +1,280 @@
+You are working in a Replit FULLSTACK JAVASCRIPT project (Node.js + Express backend, React frontend, PostgreSQL database).
+
+IMPORTANT CONSTRAINTS:
+- Stay in JavaScript/TypeScript ONLY.
+- Do NOT switch to Python, Flask, FastAPI, or Expo/React Native.
+- This is a WEB APP (React SPA talking to an Express API), not a native mobile app.
+
+You are building **Carda 2.0** from scratch in this stack.
+
+====================================================
+HIGH-LEVEL PRODUCT DESCRIPTION
+====================================================
+
+Carda 2.0 is a **contact scanner + AI intel assistant** with a very simple UX:
+
+- Exactly **TWO main tabs** in the UI:
+  1. **Scan** – Scan or paste business card details, extract a contact, and show inline company intel.
+  2. **My Card** – User profile, preferences, and a sharable QR code linking to their public profile page.
+
+The main goals:
+- A salesperson / networker can:
+  - Scan a card or paste an email signature
+  - Immediately see a clean contact card
+  - Immediately see **company intel** (snapshot, recent news, talking points)
+  - Save the contact and revisit it later
+
+- The user has **their own digital card** with:
+  - Profile details
+  - A public URL
+  - A QR code they can show or put on their own business card
+
+We’re building:
+- A **React SPA** frontend (mobile-first, 2 tabs, Apple/glassmorphism style).
+- An **Express API** backend.
+- A **PostgreSQL** database (using an ORM like Prisma/Sequelize/Knex).
+- A basic **JWT auth** system (email/password).
+- An **intel service** that:
+  - Resolves company info
+  - Calls external search/news APIs (stubbed if needed)
+  - Calls OpenAI (or similar) to summarise results into structured intel
+  - Caches intel per company for 24 hours.
+
+====================================================
+ARCHITECTURE & PROJECT STRUCTURE
+====================================================
+
+Use the standard Replit Fullstack JS pattern:
+
+- Backend (Node + Express)
+  - /server or /api (whatever the template uses)
+  - Example files:
+    - server/index.js (or app.js)
+    - server/routes/*.js
+    - server/models/*.js
+    - server/services/intelService.js
+    - server/services/contactService.js
+    - server/middleware/auth.js
+    - server/config/db.js
+
+- Frontend (React)
+  - /client or /src (according to the template)
+  - Example files:
+    - src/App.jsx
+    - src/components/ScanTab.jsx
+    - src/components/MyCardTab.jsx
+    - src/components/ContactResultCard.jsx
+    - src/components/CompanyIntelCard.jsx
+    - src/components/RecentContactsList.jsx
+    - src/components/ProfileForm.jsx
+    - src/components/QRCodeSection.jsx
+    - src/api/client.js (API helper)
+
+Make sure:
+- React app is a **single-page application** with internal state managing which tab is active.
+- Express exposes JSON endpoints under `/api/...`.
+- Postgres is wired via ORM (Prisma or Sequelize recommended).
+
+====================================================
+DATABASE SCHEMA (POSTGRES)
+====================================================
+
+Use an ORM and create these tables / models:
+
+1) **users**
+   - id (primary key)
+   - email (string, unique, not null)
+   - password_hash (string, not null)
+   - full_name (string)
+   - company_name (string)
+   - job_title (string)
+   - phone (string)
+   - website (string)
+   - linkedin_url (string)
+   - country (string)
+   - city (string)
+   - industry (string)
+   - focus_topics (text or JSON)  // e.g. "energy storage, SaaS"
+   - public_slug (string, unique) // used in /u/:publicSlug URLs
+   - created_at (timestamp)
+   - updated_at (timestamp)
+
+2) **contacts**
+   - id (primary key)
+   - user_id (FK → users.id)
+   - full_name (string)
+   - company_name (string)
+   - job_title (string)
+   - email (string)
+   - phone (string)
+   - website (string)
+   - linkedin_url (string)
+   - raw_text (text)              // original OCR or pasted text
+   - company_domain (string)
+   - created_at (timestamp)
+
+3) **companies**
+   - id (primary key)
+   - domain (string, unique)
+   - name (string)
+   - industry (string)
+   - size_band (string)           // e.g. "1-10", "11-50", etc.
+   - hq_country (string)
+   - hq_city (string)
+   - last_enriched_at (timestamp)
+
+4) **company_intel**
+   - id (primary key)
+   - company_id (FK → companies.id)
+   - intel_json (JSON or TEXT)    // snapshot, news, talking_points
+   - created_at (timestamp)
+
+====================================================
+AUTHENTICATION
+====================================================
+
+Implement basic email/password auth using JWT.
+
+Backend:
+
+- POST `/api/auth/register`
+  - Input: { email, password, fullName }
+  - Hash password with bcrypt.
+  - Create user with a generated `public_slug` (e.g. slugified name + random suffix).
+  - Return a JWT and basic user profile.
+
+- POST `/api/auth/login`
+  - Input: { email, password }
+  - Verify password with bcrypt.
+  - Return JWT and user profile.
+
+- Middleware: `authMiddleware`
+  - Validate JWT from Authorization: Bearer <token>.
+  - Attach `req.user` with user id & email.
+  - Protect all endpoints that need authenticated user.
+
+Frontend:
+
+- On login/register success:
+  - Store JWT in memory or localStorage.
+  - Use it in Authorization header for future API calls.
+- Add basic login/register UI (can be minimal, even just on top of the app).
+
+====================================================
+API ENDPOINTS – PROFILE & PUBLIC CARD
+====================================================
+
+Profile:
+
+- GET `/api/profile`
+  - Auth required.
+  - Returns the current user’s profile info:
+    - Full name, email, phone, company_name, job_title, website, linkedin_url, country, city, industry, focus_topics, public_slug.
+
+- POST `/api/profile`
+  - Auth required.
+  - Body: updated profile fields.
+  - Update user in DB and return updated profile.
+
+Public profile (for QR):
+
+- GET `/api/public_profile/:publicSlug`
+  - No auth.
+  - Return a limited public profile object for the user:
+    - full_name, job_title, company_name
+    - email, phone, website, linkedin_url
+    - maybe country/city.
+
+- GET `/u/:publicSlug`
+  - No auth.
+  - Serve a minimal HTML page (could be server-rendered or static template) that:
+    - Shows the person’s basic info.
+    - Has a "Save vCard" button (calls `/api/public_profile/:publicSlug/vcard` or generates vCard client-side).
+    - This is the URL encoded into the QR code.
+
+====================================================
+API ENDPOINTS – SCAN, CONTACTS, VCARD
+====================================================
+
+Contacts & Scan:
+
+- POST `/api/scan_contact`
+  - Auth required.
+  - Accept a multipart/form-data with an image file (business card photo).
+  - For now, you can **stub** OCR with a placeholder or a fake parser.
+  - Return a parsed contact object:
+    {
+      full_name,
+      company_name,
+      job_title,
+      email,
+      phone,
+      website,
+      linkedin_url,
+      company_domain
+    }
+
+- POST `/api/extract_contact_from_text`
+  - Auth required.
+  - Body: { text: "..." }
+  - Implement a simple heuristic parser OR stub that returns a contact object from text (you can later connect to OpenAI or another parser).
+  - Return same shape as above.
+
+- POST `/api/contacts`
+  - Auth required.
+  - Body: contact fields (as above).
+  - Create a new contact linked to `req.user.id`.
+  - If `company_name` or `company_domain` is present, ensure a `companies` row exists/updated.
+  - Return saved contact (including id).
+
+- GET `/api/contacts/recent`
+  - Auth required.
+  - Return last N (e.g. 10) contacts for the current user, ordered by created_at DESC.
+  - Only minimal fields needed for list: id, full_name, company_name, created_at.
+
+- GET `/api/contacts/:id`
+  - Auth required.
+  - Ensure contact belongs to current user.
+  - Return full contact details.
+
+- GET `/api/contacts/:id/vcard`
+  - Auth required.
+  - Generate a `.vcf` string from the contact:
+    - BEGIN:VCARD
+    - VERSION:3.0
+    - N:...
+    - FN:...
+    - ORG:...
+    - TITLE:...
+    - TEL;TYPE=CELL:...
+    - EMAIL:...
+    - URL:...
+    - END:VCARD
+  - Send as `text/vcard` or `text/plain` with appropriate headers for download.
+
+====================================================
+API ENDPOINTS – COMPANY INTEL
+====================================================
+
+Company Intel core endpoints:
+
+- POST `/api/company_intel`
+  - Auth required.
+  - Body: { contactId }
+  - Logic:
+    - Fetch contact, ensure it belongs to current user.
+    - Derive company_name, company_domain.
+    - Find or create a `companies` row.
+    - Call intel service (see below) to get intel JSON.
+    - Return intel.
+
+- GET `/api/contacts/:id/intel`
+  - Auth required.
+  - Same as above, but using GET.
+  - Should use cached intel if available (and fresh).
+
+====================================================
+INTEL SERVICE – LOGIC & STRUCTURE
+====================================================
+
+Create `server/services/intelService.js` with a fu

@@ -1,0 +1,227 @@
+You are working on the Carda20 repo (React/TS client + Express server + Neon Postgres via Drizzle).
+Goal: fix EVERYTHING related to canonical data + sync: Contacts, Companies, Timeline/Tasks/Reminders, and Events — so Neon is the single source of truth, IDs are UUID public IDs everywhere in the client, offline works, and all ownership/security is enforced.
+
+DO NOT add new UI features. Only refactor data model, routes, storage, and minimal UI wiring to keep current UX working.
+
+========================================================
+A) NON-NEGOTIABLE END STATE
+========================================================
+1) Neon is canonical for: contacts, companies, user events, event preferences, tasks, reminders, timeline events, merge history.
+2) Client uses UUID public IDs everywhere (no numeric DB ids in the client).
+3) All routes that read/write user data enforce ownership (cannot access other users by guessing ids).
+4) Client localStorage is only a cache + offline queue (temporary), with hydration from server on login.
+5) Existing users with legacy local IDs are migrated safely (non-UUID ids become UUIDs once, and references are updated).
+
+========================================================
+B) STEP 1 — SECURITY / OWNERSHIP FIXES (DO FIRST)
+========================================================
+Fix tasks/reminders/timeline sub-resources ownership AND updates by subresource ID.
+
+1) server/storage.ts
+- Change signatures to include userId filters:
+  getContactTasks(contactId, userId)
+  getContactReminders(contactId, userId)
+  getTimelineEvents(contactId, userId)
+  updateContactTask(taskId, userId, updates)        WHERE id=:taskId AND user_id=:userId
+  deleteContactTask(taskId, userId)                 WHERE id=:taskId AND user_id=:userId
+  updateContactReminder(reminderId, userId, updates) WHERE id=:reminderId AND user_id=:userId
+  deleteContactReminder(reminderId, userId)          WHERE id=:reminderId AND user_id=:userId
+  deleteTimelineEvent(eventId, userId)               WHERE id=:eventId AND user_id=:userId
+- Update IStorage interface accordingly.
+
+2) server/routes.ts
+- For all tasks/reminders/timeline routes:
+  - Resolve contact ownership before GET/POST (confirm contact.userId === currentUserId).
+  - For PUT/DELETE by subresource ID: call storage update/delete with (subresourceId, userId). If 0 rows affected -> 404/403.
+- Apply the same ownership pattern to Events endpoints you add later (see section E).
+
+========================================================
+C) STEP 2 — UUID PUBLIC IDS FOR CONTACTS, COMPANIES, EVENTS
+========================================================
+Use proper uuid columns, and uniqueness should be per-user.
+
+1) shared/schema.ts
+- contacts: add publicId: uuid("public_id") (nullable initially, then not null). Add UNIQUE(user_id, public_id).
+- companies: add userId FK (companies currently lack userId), and add publicId uuid. Add UNIQUE(user_id, public_id).
+- user_events: add publicId uuid. Add UNIQUE(user_id, public_id).
+NOTE: Do NOT use text for UUIDs.
+
+2) Migrations
+- Add real migrations (SQL or drizzle migrations). Do NOT add any /api/run-migrations route.
+- Backfill public_id for existing rows using a one-time script:
+  scripts/backfill-uuids.ts:
+    - for each table contacts/companies/user_events where public_id is null -> set to random UUID
+- After backfill, alter columns to NOT NULL.
+
+========================================================
+D) STEP 3 — RESOLVE *REFS* SERVER-SIDE (NO parseInt FOR CONTACTS/COMPANIES/EVENTS)
+========================================================
+Implement server helpers so routes accept :contactRef / :companyRef / :eventRef (UUID).
+
+1) server/storage.ts
+- getContactByPublicId(userId, publicId)
+- getCompanyByPublicId(userId, publicId)
+- getUserEventByPublicId(userId, publicId)
+
+- resolveContactRef(userId, ref) -> returns internal numeric contact.id (after ownership verified)
+- resolveCompanyRef(userId, ref) -> returns internal numeric company.id
+- resolveEventRef(userId, ref)   -> returns internal numeric user_events.id
+
+Validation:
+- If ref is not a valid UUID -> return 400 (except temporary backward-compat if needed).
+- After this step, remove parseInt for contact/company/event identifiers everywhere.
+
+2) server/routes.ts
+- Change all existing task/reminder/timeline routes:
+  /api/contacts/:contactId/... -> /api/contacts/:contactRef/...
+  and use resolveContactRef(userId, req.params.contactRef)
+
+========================================================
+E) STEP 4 — UPSERT + LIST ENDPOINTS FOR CONTACTS, COMPANIES, EVENTS
+========================================================
+All upserts are authenticated and keyed by (user_id, public_id). Non-destructive merges: do not overwrite with null/"".
+
+1) Contacts
+- POST /api/contacts/upsert
+  Body: { publicId (uuid required), ...fields }
+  Storage: upsertContactByPublicId(userId, publicId, data)
+  Update object must be built dynamically:
+    - skip keys where value is null/undefined/""
+  Return full contact.
+
+- GET /api/contacts
+  Return all contacts for user (include publicId).
+
+2) Companies
+- POST /api/companies/upsert
+  Body: { publicId (uuid required), name, domain, website, linkedinUrl, notes, industry, ... }
+  Storage: upsertCompanyByPublicId(userId, publicId, data) with same non-destructive merge rules.
+
+- GET /api/companies
+  Return all companies for user.
+
+3) Events
+Your schema already has event_preferences and user_events. Make Events fully canonical:
+- POST /api/events/upsert
+  Body: { publicId (uuid required), name, startDate, endDate, location, notes, ... }
+  Storage: upsertUserEventByPublicId(userId, publicId, data) (non-destructive update).
+
+- GET /api/events
+  Return all user events for user.
+
+- Event preferences (if currently localStorage-based):
+  Provide:
+    - GET /api/event-preferences
+    - POST /api/event-preferences/upsert
+  keyed by userId.
+
+4) Event-attendees linkage (REQUIRED)
+If not already present, add a join table:
+- event_contacts:
+   id (pk), userId, eventId (fk user_events.id), contactId (fk contacts.id),
+   createdAt, notes (optional)
+Unique constraint: UNIQUE(userId, eventId, contactId)
+
+Endpoints:
+- POST /api/events/:eventRef/contacts/attach
+   Body: { contactPublicIds: uuid[] }
+   Resolve eventRef -> eventId. For each contactPublicId resolve -> contactId. Insert ignore on conflict.
+
+- GET /api/events/:eventRef/contacts
+   Return contact list for that event (join to contacts).
+
+Ownership: event belongs to user; contact belongs to user; enforce both.
+
+========================================================
+F) STEP 5 — CLIENT: UUID NORMALIZATION + WRITE-THROUGH + HYDRATION FOR ALL THREE DOMAINS
+========================================================
+The client must use UUID ids everywhere: contact.id, company.id, event.id are publicIds.
+
+1) UUID generation
+- client/src/lib/contacts/ids.ts: generateId() -> crypto.randomUUID()
+- If companies/events have ids util, switch them too.
+
+2) Mandatory: normalize existing local IDs ONCE (contacts + companies + events)
+In:
+- client/src/lib/contacts/storage.ts
+- client/src/lib/companiesStorage.ts (or new companies cache)
+- client/src/lib/eventsStorage.ts (or new events cache)
+
+Implement normalization:
+- When loading v2 cache:
+  - if id is not UUID -> generate UUID, store legacyId, replace id
+  - build oldId->newUUID map
+  - update references:
+     - contacts org.reportsToId
+     - merge history mergedFromIds
+     - event attendee references (if stored locally)
+  - persist normalized cache immediately so it doesn’t repeat every load.
+
+3) Write-through behavior (cache then upsert)
+- contacts v2 storage: after local save/update -> POST /api/contacts/upsert with publicId
+- companies cache: after local save/update -> POST /api/companies/upsert
+- events cache: after local save/update -> POST /api/events/upsert
+- For event capture attaching contacts: when scan saves a contact and event mode is active, call:
+   POST /api/events/:eventPublicId/contacts/attach with the captured contact publicId(s).
+
+4) Hydration on login (mandatory)
+Implement:
+- hydrateContactsFromServer()
+- hydrateCompaniesFromServer()
+- hydrateEventsFromServer()
+Each:
+  - GET list endpoint
+  - merge strictly by publicId (no fuzzy matching)
+  - server wins for canonical fields
+  - keep local items missing on server if they are marked needing upsert
+
+Add a minimal marker to local cache objects:
+- _needsUpsert boolean
+Set it true when create/update happens and server call fails/offline.
+Clear it when upsert succeeds.
+Hydration should enqueue/attempt upsert only for _needsUpsert items or those missing on server.
+
+Call all three hydrate* functions once after auth (App.tsx or auth hook).
+
+5) Sync queue
+Extend client/src/lib/syncQueue.ts to support:
+- contacts upsert
+- companies upsert
+- events upsert
+- event attach contacts
+All queue fetches must include credentials: "include".
+Include Idempotency-Key header with job.id.
+
+========================================================
+G) STEP 6 — REMOVE LEGACY DUAL-WRITES (KEEP ONE-TIME MIGRATION ONLY)
+========================================================
+- Remove v2 -> v1 back-sync for contacts.
+- Keep one-time v1 -> v2 migration temporarily, but it must also normalize IDs to UUID during migration.
+
+Do similar cleanup for companies/events localStorage:
+- Stop using carda_companies_v1 and carda_events_prefs_v1 as primary sources.
+- Keep a one-time import if needed, then move to v2 cache + server hydration.
+
+========================================================
+H) ACCEPTANCE TESTS (MUST PASS)
+========================================================
+1) Contacts:
+- Create contact on Device A -> refresh -> still present (from server).
+- Login on Device B -> same contact present (hydrated).
+- Offline create contact -> shows locally -> reconnect -> upserts -> appears on Device B.
+
+2) Timeline/Tasks/Reminders:
+- Add task/reminder/timeline to contact using UUID route -> persists.
+- Security: user A cannot read/update/delete user B tasks/reminders by guessing IDs (must 404/403).
+
+3) Companies:
+- Create/update company -> persists server -> appears on Device B.
+- Contacts linked to company still display correctly (even if link is currently string-based).
+
+4) Events:
+- Create event -> persists -> appears on Device B.
+- In event mode: scan/save contact -> contact attaches to event (server join table).
+- GET event contacts returns correct set cross-device.
+- Security: user A cannot attach contacts to user B’s events.
+
+Implement all of the above in the existing codebase with minimal UI changes, ensure TypeScript builds, and do not introduce any migration endpoints.

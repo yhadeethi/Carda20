@@ -1,0 +1,208 @@
+I want you to implement proper LinkedIn handling in two places:
+
+My QR (outbound contact) – add LinkedIn into vCard + UI
+
+Scanned / pasted contacts (inbound) – add “Search LinkedIn” + UI icon
+
+Follow these instructions exactly.
+
+1) My QR – Add LinkedIn field + vCard support
+
+Objective: Allow the user to add their LinkedIn profile to their “My QR” details, and include it in the vCard in a way that works nicely on iPhone and Android.
+
+Requirements:
+
+In the My QR form / profile editor UI, add a new optional field:
+
+Label: LinkedIn
+
+Placeholder: https://www.linkedin.com/in/username
+
+Icon: show a small LinkedIn logo/icon on the left inside the input field, so visually it matches the other inputs but clearly indicates it’s a LinkedIn-specific field.
+
+Store this field as linkedinUrl in the user’s QR profile object (same place where name, title, company, phone, and email are stored).
+
+When generating the vCard for the QR code, keep using vCard 3.0 and preserve the existing name formatting:
+
+N:last;first;;;
+
+FN:First Last
+
+TITLE, ORG, TEL;TYPE=mobile, EMAIL
+
+If linkedinUrl is present and not empty, include it as the primary URL in the vCard using this exact pattern (this example is hardcoded; you must generate it dynamically):
+
+BEGIN:VCARD
+VERSION:3.0
+N:Smith;John Michael;;;
+FN:John Michael Smith
+TITLE:VP of Sales
+ORG:Acme Corporation
+item1.URL;type=pref:https://www.linkedin.com/in/johnsmith
+item1.X-ABLabel:LinkedIn
+TEL;TYPE=mobile:+61 412 345 678
+EMAIL:john.smith@acme.com
+END:VCARD
+
+
+Replace item1.URL value with linkedinUrl.
+
+Keep vCard VERSION:3.0.
+
+Keep the earlier fixed N/FN formatting that we already implemented.
+
+If there is also a company website field in the profile:
+
+If linkedinUrl exists, treat LinkedIn as the preferred URL.
+
+Optionally add the company website as a secondary URL:
+
+item2.URL;type=WORK:https://www.acme.com
+item2.X-ABLabel:Work Website
+
+
+After this change, scanning the My QR code on iPhone/Android should show:
+
+Name
+
+Title
+
+Company
+
+Phone
+
+Email
+
+A website field clearly labelled LinkedIn which opens the LinkedIn profile.
+
+2) Scanned cards / pasted signatures – Add LinkedIn support via Google search
+
+Objective: When scanning a business card or pasting an email signature, help the user quickly find the person’s LinkedIn even if the card/signature doesn’t contain a direct LinkedIn link.
+
+Requirements:
+
+After parsing a contact from:
+
+a scanned business card, or
+
+a pasted email signature
+
+you usually end up with:
+
+fullName (e.g. John Smith or John Michael Smith)
+
+companyName (e.g. Acme Corporation)
+
+If the parsed text includes a real LinkedIn URL (anything containing linkedin.com/):
+
+Extract it and store as linkedinUrl in the contact object.
+
+Distinguish:
+
+linkedin.com/in/... → person profile
+
+linkedin.com/company/... → company profile
+
+Prefer linkedin.com/in/... as the personal LinkedIn URL.
+
+If no real LinkedIn URL is found:
+
+Build a Google search query:
+fullName + " " + companyName + " LinkedIn"
+
+URL-encode this string and build:
+https://www.google.com/search?q=<encoded_query>
+
+Store this as linkedinSearchUrl in the contact object.
+
+Example:
+https://www.google.com/search?q=John+Smith+Acme+Corporation+LinkedIn
+
+Do NOT scrape LinkedIn or call their API.
+We only provide a Google search link that the user can click and then manually choose the right profile.
+
+3) UI / UX – Where the LinkedIn icon sits and how it behaves
+
+Contact details UI (for scanned or pasted contacts):
+
+For each parsed contact card (where we show name, title, company, phone, email, etc.), update the layout to:
+
+Top row:
+
+Large name (e.g. John Smith)
+
+Smaller subtitle under it with Title · Company (e.g. VP of Sales · Acme Corporation)
+
+Details row(s):
+
+Phone
+
+Email
+
+Optional company website
+
+Add a horizontal action row at the bottom of the contact card for quick actions, using icon+label buttons:
+
+Layout example (left-to-right):
+
+[ Phone icon ] Call
+
+[ Mail icon ] Email
+
+[ LinkedIn icon ] LinkedIn OR Search LinkedIn
+
+LinkedIn icon behaviour:
+
+If linkedinUrl exists (we found a real LinkedIn link from the card/signature):
+
+Show a solid LinkedIn icon with label: LinkedIn
+
+On click/tap: open linkedinUrl in a new tab.
+
+Optional: show a small text under the card like LinkedIn profile detected.
+
+If linkedinSearchUrl exists but no direct linkedinUrl:
+
+Show an outlined LinkedIn icon (or the same icon with a lighter style) with label: Search LinkedIn
+
+On click/tap: open linkedinSearchUrl in a new tab (Google results).
+
+Optional helper text: We couldn’t find a direct LinkedIn profile, so we prepared a Google search for you.
+
+Make sure this LinkedIn action row is consistent:
+
+It appears in the My QR preview panel too (for your own card), showing a LinkedIn icon that opens your linkedinUrl if available.
+
+On desktop and mobile, keep this row visually clean and aligned with the existing Carda design (Apple / liquid glass style if we already use it).
+
+4) Constraints & consistency
+
+Keep using vCard 3.0 format for all QR code exports.
+
+Preserve all previous fixes:
+
+N:last;first;;;
+
+FN:first last
+
+TEL;TYPE=mobile
+
+Correct title + company separation.
+
+Do not remove or break existing fields (name, job title, company, phone, email, etc.).
+
+Make sure the LinkedIn field is optional everywhere:
+
+My QR still works with no LinkedIn.
+
+Scanned contacts still save fine without any LinkedIn URL.
+
+Implement all of the above, then ensure:
+
+My QR → generates a vCard that includes LinkedIn correctly.
+
+Scanned/pasted contacts → show a LinkedIn icon row with either:
+
+Direct LinkedIn link, or
+
+“Search LinkedIn” Google link.

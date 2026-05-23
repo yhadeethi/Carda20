@@ -1,0 +1,191 @@
+You are modifying my existing Carda web app at https://cardayaseen.replit.app.
+
+IMPORTANT CONSTRAINTS – READ CAREFULLY AND FOLLOW STRICTLY:
+- Do NOT break or change any of the existing core behaviours:
+  - The Scan Card / Paste Text flow must remain exactly as it is.
+  - The business card / email signature parsing logic and prompts must remain unchanged.
+  - The “Contact Extracted” view (with Call / Email / LinkedIn / Download vCard / Generate Company Intel / Scan Another Card) must continue to work exactly as now.
+  - The top-right QR code icon for “My Card” must keep its current behaviour unchanged.
+  - The light/dark theme toggle must keep its current behaviour unchanged.
+- Only implement what is described below. Do NOT redesign the whole app.
+
+I want you to implement TWO features:
+
+==================================================
+FEATURE 1 – CONTACTS HUB VIA TOP-RIGHT ICON
+==================================================
+
+GOAL:
+Add a minimalist Contacts Hub that:
+- Is accessed via a new icon in the top-right header (next to the QR icon).
+- Stores each successfully parsed contact in localStorage.
+- Lets me see a list of all saved contacts and open any one in the existing “Contact Extracted” layout.
+- Does not interfere with the existing scanning UX.
+
+HIGH-LEVEL UX:
+- The main centre card should still default to the existing Scan UI.
+- In the top-right header, add a new icon button for Contacts (for example, a simple “people” / “contacts” icon). Use a subtle, clean icon that fits the current design.
+- When the user clicks this Contacts icon:
+  - The central white card should SWITCH from the Scan UI to a “Contacts Hub” view.
+  - This “Contacts Hub” shows a searchable list of previously saved contacts.
+- There must be a clear way to return to:
+  - The Contacts list from a specific contact.
+  - The main Scan screen (for example by clicking the Carda logo or a small “Back to Scan” button if needed).
+
+DATA MODEL & STORAGE:
+- Use `localStorage` to persist contacts on the client.
+- Store all contacts under a single key, e.g. `carda_contacts_v1`.
+- `carda_contacts_v1` should be a JSON-encoded array of contact objects.
+- Each contact object SHOULD include at least:
+  - `id` (string, use a simple uuid or timestamp-based id)
+  - `createdAt` (ISO timestamp string when the contact was first saved)
+  - `name` (string – from the parsed contact)
+  - `company` (string – from the parsed contact, can be empty string if not available)
+  - `title` (string – from the parsed contact, can be empty string)
+  - `email` (string – from the parsed contact, can be empty string)
+  - `phone` (string – from the parsed contact, can be empty string)
+  - `website` (string – from the parsed contact, can be empty string)
+  - `eventName` (string or null – will be used by the Event Mode feature in Feature 2, ok if null for older contacts)
+  - Any additional fields you already use internally to render the “Contact Extracted” card (e.g. original parsed object). You can store the full parsed contact object in a `raw` or `parsed` field if needed.
+
+WHEN TO SAVE A CONTACT:
+- After a successful parse, when the app currently shows the “Contact Extracted” view for the scanned contact, automatically save/update that contact in localStorage.
+- If the contact already exists (e.g. same email OR same name + company), avoid duplicating it:
+  - Prefer to update the existing record’s fields and `createdAt` only if necessary.
+- Handle errors defensively: if something goes wrong with saving, fail silently and DO NOT break the existing UI.
+
+CONTACTS HUB UI (CENTRAL CARD WHEN CONTACTS ICON CLICKED):
+- Replace the central card content with a “Contacts” view when the Contacts icon is active.
+- Keep the overall styling consistent with the existing card (same padding, rounded corners, typography).
+- Layout inside the card:
+
+  1) Title:
+     - Show a simple title at the top: “Contacts”.
+
+  2) Search:
+     - Directly under the title, add a search input.
+     - Placeholder: “Search by name or company…”
+     - As the user types, filter the list by case-insensitive substring match on `name` OR `company`.
+
+  3) List:
+     - Below the search bar, display a scrollable list of saved contacts (newest first).
+     - For each contact row, show at minimum:
+       - Line 1 (bold): `name` (fall back to email if name is missing).
+       - Line 2 (muted): `company` and `title` combined, e.g. “Flow Power · General Counsel & Company Secretary” (hide separators gracefully if fields are missing).
+       - Line 3 (small / subtle): “Scanned on 3 Dec 2025” (format `createdAt` to a readable local date).
+       - If `eventName` is not null, show a small tag/pill like “Event: All-Energy 2025”.
+
+     - Clicking on a contact row should:
+       - Open the existing “Contact Extracted” layout for that contact in the central card, reusing the same component / UI you currently use right after a scan.
+       - Do NOT change the layout of the “Contact Extracted” view itself, except for adding a small back link (see next point).
+
+  4) Back navigation:
+     - When viewing a contact from the Contacts Hub, add a small link or button at the top of the card: “← Back to Contacts”.
+     - Clicking this returns to the Contacts list view inside the card.
+     - From the Contacts Hub (list or contact), the user should be able to get back to the scan view. The simplest options:
+       - Clicking the Carda logo returns to the default scan view, OR
+       - Add a subtle “Back to Scan” text button in the header or inside the Contacts Hub card.
+
+  5) Delete (v1 minimal):
+     - Add a simple way to delete a contact from the hub:
+       - e.g. a small trash icon or “Delete” option per row.
+     - When deleting:
+       - Remove it from localStorage.
+       - Update the list in the UI.
+     - No need for “Clear all” yet unless it’s trivial.
+
+IMPLEMENTATION NOTES:
+- Make the Contacts icon visually balanced with the existing QR code icon: same size, hover behaviour, and positioning.
+- Do NOT rename or repurpose the existing QR icon; it must still open the “My Card / QR” area exactly as it does now.
+- Ensure the app still initially loads into the SCAN view by default (not the Contacts view).
+
+==================================================
+FEATURE 2 – EVENT MODE TOGGLE ON SCAN SCREEN
+==================================================
+
+GOAL:
+Add an “Event Mode” toggle on the Scan screen so that:
+- When Event Mode is ON, every new contact scanned gets tagged with an event name (e.g. “All-Energy 2025”).
+- That `eventName` field is saved with the contact in localStorage.
+- The Contacts Hub can later filter or display by event.
+
+PLACEMENT IN UI:
+- On the main Scan view (the default central white card with “Scan Business Card”), add a new small row directly UNDER the “Scan Business Card” heading and ABOVE the “Scan Card / Paste Text” tabs.
+- This row should contain:
+  - A toggle or switch for Event Mode.
+  - A label that clearly indicates whether Event Mode is ON or OFF.
+  - When ON and an event has been chosen, show the current event name.
+
+VISUAL EXAMPLE (TEXT ONLY, YOU HANDLE STYLING):
+- Title: “Scan Business Card”
+- New row right under the title:
+  - When OFF: something like
+    - [◻] Event mode: Off
+  - When ON with event set, something like:
+    - [✔] Event mode: On · Event: All-Energy 2025 (Change)
+
+Event Mode should look minimal and fit the existing design (same fonts, spacing, etc.). Use whatever switch component or simple checkbox style you already use or can easily create.
+
+BEHAVIOUR OF EVENT MODE:
+- Maintain a piece of state on the Scan view for:
+  - `eventModeEnabled` (boolean)
+  - `currentEventName` (string or null)
+
+- When the user turns Event Mode ON:
+  - If `currentEventName` is null or empty:
+    - Prompt the user once for an event name.
+      - Either via a small modal dialog OR an inline input directly under the toggle.
+      - Basic UX: ask “What event are you at?” with a single text field.
+    - Save this as `currentEventName`.
+  - If `currentEventName` is already set:
+    - Just turn Event Mode ON and display “Event: [currentEventName]”.
+
+- When the user clicks “Change” (or similar text next to the event name):
+  - Let them update `currentEventName` via a small input or modal.
+  - This does NOT retroactively change past contacts in localStorage; only affect new scans going forward.
+
+- When the user turns Event Mode OFF:
+  - Do NOT clear `currentEventName`. It can be reused later if they turn it back ON.
+  - Simply stop tagging new contacts with an event.
+
+TAGGING CONTACTS WHEN SCANNING:
+- When Event Mode is ON at the time of a successful scan:
+  - Include `eventName: currentEventName` in the contact object saved to localStorage under `carda_contacts_v1`.
+- When Event Mode is OFF:
+  - Save `eventName: null` or just omit it.
+- This integrates with Feature 1 so that the Contacts Hub can display the event name.
+
+EVENT FILTERING IN CONTACTS HUB:
+- In the Contacts Hub (Feature 1), add an optional event filter above the list, next to or under the search bar:
+  - A dropdown/select with:
+    - “All events” (default)
+    - One option per unique non-null `eventName` found in the saved contacts.
+  - When a specific event is selected:
+    - Filter the contacts list to only those with `contact.eventName === selectedEvent`.
+- Keep this filter simple and minimal. It should not break search:
+  - Search + filter should both apply:
+    - First filter by selected event, then filter that subset by the search term.
+
+GENERAL IMPLEMENTATION NOTES:
+- Do NOT change the existing Scan Card / Paste Text tab behaviour or layout, other than inserting the Event Mode row between the title and those tabs.
+- Keep all styling consistent with the current UI (same fonts, border radius, padding, etc.).
+- Ensure mobile layout still works well (Event Mode row should wrap gracefully on smaller screens).
+
+==================================================
+FINAL CHECKLIST
+==================================================
+Before you finish, verify ALL of the following:
+
+1. The app still loads by default into the Scan view, with the existing Scan Card / Paste Text UI unchanged except for the new Event Mode row.
+2. Scanning a contact still works exactly as before, and the “Contact Extracted” view looks and behaves the same for a fresh scan.
+3. Every successfully scanned contact is now saved/updated in localStorage under `carda_contacts_v1`, including `eventName` if Event Mode is ON.
+4. The new Contacts icon in the top-right header opens the Contacts Hub in the central card.
+5. The Contacts Hub shows:
+   - Search bar.
+   - Optional event filter dropdown.
+   - List of contacts with name, company, title, formatted scan date, and event tag if present.
+6. Clicking a contact in the hub opens the same “Contact Extracted” view used after scanning, with a “← Back to Contacts” link at the top.
+7. The QR icon and theme toggle still behave exactly as they did before.
+8. No other parts of the app have been unintentionally redesigned or removed.
+
+Only make the changes necessary to implement these two features cleanly and safely.

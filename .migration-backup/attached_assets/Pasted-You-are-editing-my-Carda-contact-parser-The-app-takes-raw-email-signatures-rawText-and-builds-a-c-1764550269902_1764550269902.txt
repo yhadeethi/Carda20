@@ -1,0 +1,341 @@
+You are editing my Carda contact parser. The app takes raw email signatures (rawText) and builds a contact object:
+
+{ fullName, jobTitle, companyName, email, phone, website, address }
+
+Two signatures are still parsed incorrectly.
+
+Test case 1 – Peter Yu (no address / no website line)
+
+Raw signature (approximate rawText):
+
+Regards
+
+Peter Yu
+Senior Sales Engineer - (Middle East & Asia)
+Energy Storage & Optimization
+Mobile (Australia) +61 477 711 558
+peter.yu@wartsila.com
+
+
+Desired result:
+
+fullName → "Peter Yu"
+
+jobTitle → "Senior Sales Engineer - (Middle East & Asia)"
+
+companyName → derived from email domain, e.g. "Wartsila"
+
+website → derived from domain, e.g. "https://www.wartsila.com"
+
+address → empty (no address in signature)
+
+Current bugs:
+
+Company is missing or wrong.
+
+Website becomes www.peter.yu (built from local part of the email).
+
+Address row sometimes shows the phone line.
+
+Please implement the following:
+
+1. Derive website from email / rawText, never from local-part
+
+Add a helper:
+
+const GENERIC_EMAIL_DOMAINS = [
+  "gmail.com",
+  "hotmail.com",
+  "outlook.com",
+  "yahoo.com",
+  "icloud.com",
+  "live.com"
+];
+
+function deriveWebsite(email, rawText) {
+  const lines = rawText
+    ? rawText.split("\n").map(l => l.trim()).filter(Boolean)
+    : [];
+
+  // 1) Prefer explicit website line in the signature
+  for (const line of lines) {
+    const m = line.match(/https?:\/\/\S+|www\.\S+/i);
+    if (m) {
+      let url = m[0];
+      if (!/^https?:\/\//i.test(url)) {
+        url = "https://" + url;
+      }
+      return url;
+    }
+  }
+
+  // 2) Fallback: build from email domain
+  if (!email) return "";
+  const parts = email.split("@");
+  if (parts.length !== 2) return "";
+  const domain = parts[1].toLowerCase();
+  if (GENERIC_EMAIL_DOMAINS.includes(domain)) return ""; // don't invent websites for Gmail etc.
+
+  return "https://www." + domain;
+}
+
+
+After parsing contact, if contact.website is empty:
+
+if (!contact.website) {
+  const derivedWebsite = deriveWebsite(contact.email, rawText);
+  if (derivedWebsite) contact.website = derivedWebsite;
+}
+
+
+Important: never construct website from the local part of the email (peter.yu). Always use the domain after @.
+
+2. Use email domain as company if nothing else
+
+You already have logic similar to deriveCompanyFromDomain and fixCompanyIfAddress(contact, rawText). Make sure that:
+
+If contact.companyName is:
+
+empty, or
+
+looks like an address, or
+
+looks like a URL, or
+
+equals the person’s name (see section 4 below),
+
+then you:
+
+Take the email domain (wartsila.com from peter.yu@wartsila.com).
+
+Call a helper like:
+
+function deriveCompanyFromDomain(domain) {
+  if (!domain) return "";
+  domain = domain.trim().toLowerCase();
+  domain = domain.replace(/^https?:\/\//, "");
+  domain = domain.replace(/^www\./, "");
+  const [main] = domain.split(".");
+  if (!main) return "";
+  return main
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" "); // "wartsila" -> "Wartsila"
+}
+
+
+If this returns a non-empty string, set contact.companyName to that value as a strong default.
+
+Only if domain-based company derivation fails, fall back to scanning rawText lines for explicit company names.
+
+3. No fake address fallback
+
+After you run your address extractors:
+
+extractBestAddress(rawText) (AU-specific)
+
+extractGenericAddress(rawText) (international fallback, see below)
+
+If both return null, leave contact.address empty.
+
+Do not populate contact.address with:
+
+phone lines,
+
+job title,
+
+or random blocks of text.
+
+In the UI, hide the address row when contact.address is falsy.
+
+For Peter Yu this should mean: no address row at all.
+
+Test case 2 – Clément Ladoux (French address + wrong company)
+
+Raw signature (rawText):
+
+Best regards,
+
+Clément LADOUX
+Engineering Manager
+Storage Engineering Department
+
+EDF Renouvelables
+43 Boulevard des BOUVETS, CS 90310,
+92741 NANTERRE CEDEX
+Mob: +33 (0) 6 40 79 11 15
+www.edf-renouvelables.com
+
+
+Desired result:
+
+fullName → "Clément Ladoux"
+
+jobTitle → "Engineering Manager" (or "Engineering Manager, Storage Engineering Department")
+
+companyName → "EDF Renouvelables"
+
+address → "43 Boulevard des BOUVETS, CS 90310, 92741 NANTERRE CEDEX"
+
+website → "https://www.edf-renouvelables.com"
+
+Current bugs:
+
+Company is sometimes set to "Clément Ladoux" (the name).
+
+Address is set to job/department text instead of the street + postcode lines.
+
+Please implement:
+
+4. Treat “company == name” as invalid
+
+In fixCompanyIfAddress(contact, rawText) add:
+
+function isSameAsName(candidate, fullName) {
+  if (!candidate || !fullName) return false;
+  const norm = s =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // remove accents
+      .replace(/[^a-z0-9]+/g, "");     // strip spaces/punct
+  return norm(candidate) === norm(fullName);
+}
+
+const currentCompany = contact.companyName || "";
+const name = contact.fullName || "";
+
+const companyLooksLikeAddress = looksLikeAddress(currentCompany);
+const companyIsSameAsName = isSameAsName(currentCompany, name);
+const companyLooksLikeUrl =
+  /^https?:\/\//i.test(currentCompany) || /www\./i.test(currentCompany);
+
+const hasValidCompany =
+  currentCompany &&
+  !companyLooksLikeAddress &&
+  !companyIsSameAsName &&
+  !companyLooksLikeUrl;
+
+if (hasValidCompany) {
+  return contact; // keep it
+}
+
+
+Also, when looping over rawText lines to find candidate company names, skip lines that are clearly the full name:
+
+const fullNameLower = (contact.fullName || "").trim().toLowerCase();
+
+for (const line of lines) {
+  const lower = line.toLowerCase();
+
+  // skip name line
+  if (fullNameLower && lower === fullNameLower) continue;
+  if (fullNameLower && lower.includes(fullNameLower)) continue;
+
+  // existing filters (skip email, url, phone, address-like, etc.)
+}
+
+
+With this, companyName = "Clément Ladoux" will be treated as invalid and replaced by a better candidate.
+
+5. Generic international address extractor
+
+You already have extractBestAddress(rawText) for AU addresses.
+For non-AU signatures like Clément, it returns null.
+Add a generic fallback:
+
+function extractGenericAddress(rawText) {
+  const lines = rawText
+    .split("\n")
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  const addressKeywords = /(street|st\.|road|rd\.|boulevard|blvd|bouvets|avenue|ave|rue|place|via|plaza|cs\s*\d+)/i;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lower = line.toLowerCase();
+
+    // Skip obvious non-address lines
+    if (/^(mob|mobile|tel|phone|t\.|m\.)\b/i.test(lower)) continue;
+    if (lower.includes("@")) continue;
+    if (lower.startsWith("http") || lower.includes("www.")) continue;
+
+    const hasDigit = /\d/.test(line);
+    const hasKeyword = addressKeywords.test(line);
+
+    if (hasDigit && hasKeyword) {
+      const streetLine = line;
+      const nextLine = lines[i + 1] || "";
+
+      // include next line if it looks like postcode + city (e.g. "92741 NANTERRE CEDEX")
+      let cityLine = "";
+      if (/\d{4,5}/.test(nextLine) || /cedex/i.test(nextLine)) {
+        cityLine = nextLine;
+      }
+
+      return [streetLine, cityLine].filter(Boolean).join(", ");
+    }
+  }
+
+  return null;
+}
+
+
+In your main parsing flow:
+
+let bestAddress = extractBestAddress(rawText); // AU-specific
+if (!bestAddress) {
+  bestAddress = extractGenericAddress(rawText);
+}
+if (bestAddress) {
+  contact.address = bestAddress;
+}
+// if still null, leave contact.address empty
+
+
+For Clément this should produce:
+
+contact.address = "43 Boulevard des BOUVETS, CS 90310, 92741 NANTERRE CEDEX"
+
+splitAuAddress will not match the AU regex, so it will fall back to putting the whole string into the street field in ADR, which is fine for non-AU.
+
+6. Website for Clément
+
+With deriveWebsite implemented (section 1.1), Clément’s website should come from the explicit www.edf-renouvelables.com line.
+If that fails, it should be derived from the email/URL domain, not invented from the name.
+
+Final re-test requirements
+
+After these changes, re-parse all three signatures by pasting them:
+
+Socrates Socratous
+
+Should still parse correctly (no regressions: name, title, Flow Power, AU address, website).
+
+Peter Yu
+
+Name: Peter Yu
+
+Title: Senior Sales Engineer - (Middle East & Asia)
+
+Company: Wartsila (derived from wartsila.com)
+
+Website: https://www.wartsila.com
+
+No address row.
+
+Clément Ladoux
+
+Name: Clément Ladoux
+
+Title: Engineering Manager (or including department)
+
+Company: EDF Renouvelables (not his name)
+
+Address: 43 Boulevard des BOUVETS, CS 90310, 92741 NANTERRE CEDEX
+
+Website: https://www.edf-renouvelables.com
+
+Make sure the UI and the generated vCards reflect this data.

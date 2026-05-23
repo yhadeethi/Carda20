@@ -1,73 +1,54 @@
-# Carda 2.0 - Lean Contact Scanner
+# Carda 2.0
 
-## Overview
-Carda 2.0 is a mobile-first business card scanner that extracts contact information using AI, generates AI-powered company insights, and helps manage professional networks. It aims to streamline contact management, facilitate smart follow-ups, and provide organizational intelligence for B2B sales and networking.
+A contact intelligence app for scanning, organizing, and enriching business contacts — with CRM sync (HubSpot & Salesforce), AI-powered intel, and event management.
 
-## User Preferences
-I prefer iterative development, so please break down tasks into smaller, manageable steps. Focus on high-level feature implementation and architectural decisions. I value clear, concise explanations and prefer that you ask for clarification if anything is unclear before proceeding with major changes. Ensure all changes are mobile-first and responsive.
+## Run & Operate
 
-## System Architecture
+- `pnpm --filter @workspace/api-server run dev` — run the API server
+- `pnpm --filter @workspace/carda-web run dev` — run the frontend (PORT + BASE_PATH required, use workflows)
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only, use `--force` flag non-interactively)
+- Required env: `DATABASE_URL`, `SESSION_SECRET`, `REPL_ID`
 
-### UI/UX Decisions
--   **Mobile-first, Responsive Design**: Optimized for mobile experience with graceful degradation for larger screens.
--   **Glassmorphism**: Utilizes glassmorphism for card designs and the bottom navigation bar.
--   **Bottom Navigation**: Apple-style liquid glass bottom nav bar with smooth Framer Motion transitions and scroll-driven morph effects.
--   **System Font Stack**: Employs system fonts for a native look and feel.
--   **Dark Mode Support**: Provides a consistent experience across different lighting conditions.
--   **Company Detail Page**: Features a three-tab interface (People, Org, Notes).
--   **Org Map v3**: Hierarchy-first approach with a collapsible tree structure as the default view and an optional React Flow canvas diagram with drag-and-drop functionality for reporting lines.
+## Stack
 
-### Technical Implementations
--   **Frontend**: React SPA using TypeScript.
--   **Backend**: Express.js server using TypeScript.
--   **Authentication**: Replit Auth (OpenID Connect) supporting Google, GitHub, Apple, X, and email/password login. Sessions stored in PostgreSQL with 7-day TTL.
--   **Contact Storage**: PostgreSQL as canonical database with offline-first localStorage caching. All entities (contacts, companies, events) use UUID as their single canonical ID. Client localStorage acts as a read-through cache with `_needsUpsert` flags for dirty tracking. Server-side hydration on login merges server data into local cache. Legacy numeric/string IDs are auto-migrated to UUIDs via `normalizeIds.ts` (runs once per user). Sync queue handles background upserts with retry logic and failure persistence (max 5 retries; failed items kept with `status:'failed'`, `lastError`, `nextRetryAt`; UI badge shows failed count with retry action). Sync queue classifies errors: 401/403 pauses queue without burning retries, 400 marks as non-retryable failed, 500/network errors retry with backoff. Queue payload migration on startup rewrites old-format contact_upsert items to new field-mapped format. Server responses normalized via `normalizeServerContact()` and `normalizeServerCompany()` (in `client/src/lib/contacts/normalize.ts`) which transform `{id: number, publicId: UUID}` to `{id: UUID, dbId?: number}` at every consumption point (useContacts, hydration, EventDetail for contacts; hydration for companies). Server route resolvers (`resolveContactRef`, `resolveCompanyRef`, `resolveEventRef`) accept both UUID and numeric IDs with userId ownership validation. CRM export flows (HubSpot/Salesforce) intentionally use raw numeric DB IDs for server-to-server operations. All 7 cost endpoints (`/api/scan`, `/api/parse`, `/api/intel`, `/api/intel-v2`, `/api/parse-ai`, `/api/scan-ai`, `/api/followup`) require authentication and have per-user rate limiting (AI: 20/15min, uploads: 30/15min, parse: 60/15min).
--   **Contact Sync Pipeline**: Client `buildContactUpsertPayload()` in `client/src/lib/api/sync.ts` explicitly maps client fields to DB columns: `name→fullName`, `company→companyName`, `title→jobTitle`. Client never sends `companyId` (UUID or integer). Server route `/api/contacts/upsert` validates with Zod `.strict()` schema — unknown fields rejected with 400. Server `upsertContactByPublicId()` in `server/storage.ts` wraps company find-or-create + contact upsert in a single `db.transaction()`. Company is resolved by case-insensitive name match or auto-created. FK `db_company_id` is set transactionally, making FK violations structurally impossible. Unique constraint: `contacts_user_public_id` on `(userId, publicId)` ensures idempotent upserts.
--   **Unified Contacts Merge**: `enrichWithLocalData()` in `client/src/hooks/useUnifiedContacts.ts` merges cloud and local data using `pickNonEmpty()` — for each field (name, company, title, email, phone, etc.), prefers cloud value if non-empty, falls back to localStorage. This ensures the scoreboard shows real contact names even when cloud sync is delayed.
--   **Client-Side Image Compression**: Resizes images and progressively compresses them to optimize for OCR services, staying under 1MB.
--   **Modular OCR**: Designed with a `OCRProvider` interface to allow easy swapping of OCR services (currently OCR.space).
--   **AI-Powered Parsing (gpt-4o-mini)**: Primary parsing mechanism with a robust prompt for business card and email signature extraction, providing structured JSON output. It includes logo detection, OCR noise handling, and validation.
--   **Deterministic Parsing**: Fallback mechanism using regex and heuristics for robust extraction of contact details, including AU-aware address extraction, email domain-derived company names, and sophisticated email signature parsing.
--   **Company Intel Generation (gpt-4o)**: Uses OpenAI via Replit AI Integrations to create detailed sales briefs, including company snapshots, relevance to sales, role insights, high-impact questions, key developments, **funding data** (stage, total raised, investors), **technology stack** (by category with key insights), and **competitive landscape** (direct/indirect competitors, market position), with a 24-hour caching mechanism.
--   **Org Intelligence v3**: Auto-generates companies from contact data, enables organizational mapping with departments, roles, and manager assignments, and provides an interactive Org Map.
--   **Smart Follow-Up**: AI-powered generation of personalized follow-up messages (email, LinkedIn) with tone and length selection, integrated with task and reminder management.
--   **Contact Timeline**: Comprehensive history of interactions with each contact, supporting various event types and filtering.
--   **ContactDetailView (iOS-style)**: Dedicated contact detail page with digital business card hero, sticky bottom bar with quick actions, timeline feed, and inline editing. Uses a callback pattern where `onContactUpdated(contactId)` fires only after confirmed persistence to localStorage.
--   **Duplicate Detection & Merge**: Fuzzy matching and scoring for contact deduplication, with a side-by-side merge UI and undo support.
--   **Calendar Integration**: Generates ICS files for meeting invites with customizable dates, times, and durations.
--   **Batch Scanning (Event Mode)**: Multi-photo capture mode that queues business cards for background processing. Users can snap multiple cards quickly, then process all at once with a review/approve workflow before saving.
--   **HubSpot CRM Integration**: Per-user OAuth connection with token auto-refresh. Accessible from the profile dropdown menu. Supports bulk contact export, event export (as HubSpot Notes), and selective timeline export. OAuth tokens stored in `hubspot_tokens` table. Required scopes: `oauth crm.objects.contacts.read crm.objects.contacts.write crm.objects.notes.write`.
--   **Salesforce CRM Integration**: Per-user OAuth connection with token auto-refresh. Accessible from the profile dropdown menu (alongside HubSpot). Supports bulk contact export, event export (as Salesforce Notes), and selective timeline export. OAuth tokens stored in `salesforce_tokens` table. Required scopes: `api refresh_token`. Uses Salesforce REST API v59.0.
+- pnpm workspaces, Node.js 24, TypeScript 5.9
+- Frontend: React + Vite + Tailwind v3 + wouter + Framer Motion
+- API: Express 5 + Replit Auth (OIDC)
+- DB: PostgreSQL + Drizzle ORM
+- Build: esbuild (CJS bundle for api-server)
 
-### Feature Specifications
--   **Business Card OCR**: Upload/scan images to extract text.
--   **Contact Parsing**: Extracts name, title, company, email, phone, website, LinkedIn, and address.
--   **Editable Results**: Allows users to review and modify extracted fields.
--   **vCard Export**: Exports contacts as .vcf files.
--   **My QR**: Generates personal QR codes for quick contact sharing.
--   **Events (Capture Sessions)**: User-created networking events (e.g., "Tech Meetup Sydney 2026") that serve as containers for contact capture. Users start an event, then scan cards or add contacts manually within that event context. Events have active/ended states, tags, notes, GPS-detected location, and optional event links. Contacts are attached to events, organizing them by the occasion where they were met.
--   **Events Hub (Legacy)**: A curated directory of industry events across renewable energy, mining, and construction sectors with user preferences (pin, attendance, notes). Uses static/curated data from `eventsData.ts` with localStorage-based preferences.
--   **Org Intelligence**: Manages company and organizational data, including department filtering and auto-grouping based on job titles.
--   **Smart Follow-Up**: Creates personalized messages and manages tasks/reminders.
--   **Contact Timeline**: Logs all interactions and events for a contact.
--   **Duplicate Management**: Detects and helps merge duplicate contacts.
--   **Calendar Integration**: Facilitates meeting scheduling and ICS export.
--   **Batch Scanning**: In Event Mode, enables multi-photo capture with thumbnail previews, background OCR processing, and batch review/approve workflow for rapid networking events.
--   **HubSpot Export**: Users connect HubSpot from profile menu, then export contacts (bulk), events (as Notes attached to contacts), and selected timeline entries (as Notes) to their HubSpot CRM.
--   **Salesforce Export**: Users connect Salesforce from profile menu, then export contacts (bulk), events (as Salesforce Notes linked to contacts), and selected timeline entries (as Notes) to their Salesforce CRM.
--   **Company PDF Report**: On-demand PDF report generation from company detail page. Fetches fresh AI intel (v1 + v2) and current contacts each time. Report includes: company brief, fact sheet with socials, employee directory table (sorted by department), and org chart tree diagram. Client-side generation using jsPDF + jspdf-autotable. Includes cycle detection for org charts.
--   **Voice Debrief**: Record voice notes after meetings. Audio is transcribed via OpenAI Whisper (`POST /api/debrief/transcribe`), then parsed by GPT-4o-mini (`POST /api/debrief/parse`) to extract: matched contact (fuzzy match against existing contacts), meeting note summary, sentiment, warmth level, tasks with due dates, and reminders. Review sheet allows editing all extracted fields before saving. Creates `voice_debrief` timeline event. Components: `voice-debrief-recorder.tsx` (3-state recorder: idle/recording/processing), `voice-debrief-review.tsx` (AI parse review with contact matching), `fuzzyMatch.ts` (NFD-normalized fuzzy contact matcher), `dateParser.ts` (natural language date parser for due dates/reminders).
+## Where things live
 
-### Events Data Model (UserEvent)
--   Stored in PostgreSQL (`user_events` table), scoped per authenticated user.
--   Fields: `id`, `userId`, `title`, `tags` (text array), `notes`, `eventLink`, `locationLabel`, `latitude`, `longitude`, `isActive` (1=active, 0=ended), `startedAt`, `endedAt`, `createdAt`.
--   Contacts are associated to events via `eventId` foreign key or a join table (`user_event_contacts`).
--   API endpoints: `GET /api/user-events`, `GET /api/user-events/active`, `GET /api/user-events/:id`, `POST /api/user-events`, `PATCH /api/user-events/:id`, `GET /api/user-events/:id/contacts`, `POST /api/user-events/:id/attach-contacts`, `GET /api/user-events/:id/report`.
+- `artifacts/carda-web/` — React frontend (Tailwind v3, glassmorphism theme)
+- `artifacts/api-server/src/` — Express backend
+  - `routes/routes.ts` — all API routes (registerRoutes pattern)
+  - `storage.ts` — database access layer
+  - `replitAuth.ts` — Replit OIDC auth + sessions
+  - `hubspotService.ts`, `salesforceService.ts` — CRM integrations
+  - `intelService.ts`, `intelV2Service.ts` — AI company intel
+  - `ocrService.ts`, `aiParseService.ts` — card scanning/parsing
+- `lib/db/src/schema/schema.ts` — DB schema (source of truth)
 
-## External Dependencies
--   **OCR.space API**: For Optical Character Recognition.
--   **OpenAI API (via Replit AI Integrations)**: Used for AI-powered parsing (gpt-4o-mini) and company intelligence generation (gpt-4o).
--   **Framer Motion**: For UI animations, particularly in navigation and organizational hierarchy.
--   **React Flow**: For rendering interactive organizational diagram.
--   **Dagre**: For auto-layout of organizational charts.
--   **HubSpot API**: For CRM integration — OAuth, contacts, notes, and associations. Uses `@hubspot/api-client` SDK.
+## Architecture decisions
+
+- Backend uses `registerRoutes(httpServer, app)` pattern (not Router refactor) — kept for auth/session middleware complexity
+- Frontend uses existing custom `queryClient.ts` fetch layer (not OpenAPI-generated hooks) — too large to rewrite safely for a port
+- `lib/db` re-exports pool/db; `artifacts/api-server/src/db.ts` re-exports from `@workspace/db`
+- Tailwind v3 (not v4) — preserved from original, uses postcss.config.js
+- `SiLinkedin` from react-icons/si replaced with `FaLinkedin` from react-icons/fa (v5 naming change)
+
+## Product
+
+Business card scanner and contact intelligence app. Users scan cards (camera/OCR), add/edit contacts, get AI company intel, manage event attendance, sync to HubSpot/Salesforce, and share profiles via QR code.
+
+## Gotchas
+
+- `pnpm --filter @workspace/db run push` requires `--force` flag when running non-interactively (it prompts for destructive column removals)
+- zod/v4 subpath must be used in server code — zod is in api-server dependencies
+- `drizzle-zod`'s `createInsertSchema` already omits `generatedAlwaysAsIdentity` columns — do not call `.omit({ id: true })` on the result in zod v4
+- Replit Auth redirects unauthenticated users; preview pane shows replit.com login (expected)
+
+## Pointers
+
+- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details

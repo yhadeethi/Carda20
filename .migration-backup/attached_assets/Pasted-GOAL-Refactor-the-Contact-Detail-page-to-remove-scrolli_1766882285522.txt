@@ -1,0 +1,116 @@
+GOAL
+Refactor the Contact Detail page to remove scrolling + boxy sections. Replace with a clean iOS-style layout:
+(1) ContactHeroCard (digital business card)
+(2) TimelineFeed (default content)
+(3) Sticky Bottom Bar (Save to Phone + Quick Actions)
+(4) Quick Actions liquid-glass sheet (matrix grid)
+
+STACK (DO NOT CHANGE)
+React 18 + TypeScript + Tailwind + shadcn/ui (Radix) + Wouter + TanStack Query.
+No Next.js. No Ionic. No new UI libraries.
+
+SCOPE
+Only change the Contact Detail screen and related components.
+Do NOT refactor unrelated routes, data models, or styling system globally.
+
+STEP 1 — LOCATE CURRENT PAGE
+Find the current Contact Detail page component (search for route like /contact/:id or similar).
+If it’s in client/src/pages or client/src/routes, keep it there.
+Keep existing routing and query hooks intact.
+
+STEP 2 — DELETE/REMOVE THESE UI SECTIONS ENTIRELY
+Remove old boxed sections/cards including:
+- any “Actions” box
+- any “Tasks/Reminders” panels or quick reminder widgets
+- any duplicate call/email button rows
+- any multiple stacked Card components separating small sections
+The new page should NOT be a stack of Card components.
+
+STEP 3 — CREATE THESE COMPONENTS
+Create these files in: client/src/components/contact/
+
+A) ContactHeroCard.tsx
+Props:
+type Contact = { id:string; firstName?:string; lastName?:string; name?:string; title?:string; role?:string; company?:string; phone?:string; email?:string; website?:string; linkedinUrl?:string; lastTouchedAt?:string|Date; scannedAt?:string|Date; syncedToHubspot?:boolean; };
+interface ContactHeroCardProps { contact: Contact; onOpenWebsite?:()=>void; onOpenLinkedIn?:()=>void; onCall?:()=>void; onEmail?:()=>void; onMore?:()=>void; }
+UI:
+- One hero surface: rounded-2xl, bg-background/50, backdrop-blur-xl, border border-white/10, shadow-lg.
+- Header: avatar/initials on left, name large, role+company one line, small chips: Scanned, Synced, Last touched.
+- Below header: iOS Settings-style tappable rows (full-width) with left icon + label/value + right icon (chevron/external).
+Rows:
+- Phone row: shows phone, tap triggers onCall()
+- Email row: shows email, tap triggers onEmail()
+- LinkedIn row:
+  - If linkedinUrl exists: value “View profile”, tap triggers onOpenLinkedIn() (open new tab)
+  - If missing: value “Find on LinkedIn”, tap opens LinkedIn search URL with query:
+    `${firstName lastName} ${company}` fallback `${firstName lastName} ${role}`
+  - Include SiLinkedin icon
+- Website row: opens website in new tab
+- If any field missing, hide that row EXCEPT LinkedIn which should show “Find on LinkedIn”.
+- Keep max 4 rows visible. If more fields exist, show a “More” row that calls onMore() (can be stubbed).
+
+B) ContactBottomBar.tsx
+Props:
+interface ContactBottomBarProps { isSaved:boolean; onSave:()=>void; onQuickActions:()=>void; }
+UI:
+- Fixed bottom bar (respect safe-area): position:fixed bottom-0 left-0 right-0
+- Background: bg-background/70 backdrop-blur-xl border-t border-border
+- Primary button:
+  - if !isSaved: “Save to Phone”
+  - if saved: “Saved ✓” and on tap open a small menu (Dialog/Drawer) with “Update contact” and “View in contacts” (stub ok)
+- Secondary small pill button: “Quick Actions” (glass style)
+
+C) QuickActionsSheet.tsx
+Props:
+interface QuickActionsSheetProps { open:boolean; onOpenChange:(v:boolean)=>void; actions:{ id:string; label:string; icon:ReactNode; status?:string; onClick:()=>void; }[]; }
+UI:
+- Use shadcn Drawer for mobile behavior.
+- Liquid glass: bg-background/60 backdrop-blur-2xl border border-white/10 rounded-2xl
+- Inside: grid 2 columns (mobile) / 3 columns (desktop), with large icon tiles.
+Default actions (must render):
+1 Generate Follow-up
+2 Add Reminder
+3 Schedule Meeting
+4 Company Brief (Intel)
+5 Sync to HubSpot (SiHubspot icon) show status badge “Synced ✓” if contact.syncedToHubspot true else “Not synced”
+6 Add Note
+- Tiles have press animation and hover state.
+- If handler not implemented, show toast “Coming soon”.
+
+D) TimelineFeed.tsx
+Props:
+type TimelineItem = { id:string; type:"note"|"followup"|"reminder"|"crm"|"created"; title:string; detail?:string; at:string|Date; };
+interface TimelineFeedProps { items:TimelineItem[]; onAddNote:(text:string)=>void; }
+UI:
+- Filter chips: All / Notes / Follow-ups / Reminders / CRM
+- Inline note composer above list: textarea + “Add” button
+- Timeline list is a clean list with subtle dividers (NO cards)
+
+STEP 4 — REBUILD CONTACT DETAIL PAGE LAYOUT
+New layout order:
+1 ContactHeroCard
+2 (Optional) Next Best Action strip (one line) — if easy; otherwise skip
+3 TimelineFeed
+4 ContactBottomBar (sticky)
+
+STEP 5 — STYLING RULES
+- Do NOT wrap everything in multiple Card components.
+- Use dividers (divide-y) instead of boxes.
+- Keep spacing tight and thumb-friendly.
+- Ensure bottom bar does not cover timeline content (add padding-bottom equal to bar height + safe-area).
+
+STEP 6 — WIRING
+- Keep existing contact data source and hooks. Map fields into Contact type.
+- Implement open links with window.open(url, "_blank", "noopener,noreferrer")
+- Implement mailto: and tel: using window.location.href
+- If contact missing first/last but has name, split safely or just use name.
+
+STEP 7 — QA CHECKS
+- Basic actions accessible without scrolling.
+- Rows clearly tappable.
+- Bottom bar sticky.
+- Quick Actions opens smoothly and shows matrix.
+- No duplicate old sections remain.
+
+DELIVERABLE
+Commit changes to the codebase and ensure it builds. No console errors.

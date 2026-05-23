@@ -1,0 +1,72 @@
+You are editing my existing **Carda** app on Replit.  
+Tech stack: Next.js + React + TypeScript + Tailwind.  
+
+Critical instructions (do NOT ignore):
+- Do **not** break or significantly change any existing features:
+  - Business card scanning, AI parsing, email signature parsing
+  - Contacts hub, recent scans
+  - My QR / Edit Card flow
+  - Bottom navigation and liquid-style animations
+- Only add the new **Events Hub** feature + minimal navigation to expose it.
+
+--------------------------------------------------
+1. Goal – Events Hub for 3 industries
+--------------------------------------------------
+
+Implement a dedicated **Events Hub** inside the app with:
+
+- **Industries (fixed for now):**
+  - `Renewable Energy`
+  - `Mining`
+  - `Construction`
+- **Event tiers / sources:**
+  - Curated **Major Events** (manually added, reliable)
+  - “AI-suggested” big events (mocked/static for now but structured properly)
+  - Other / smaller events (long tail, including future user-added)
+- **User controls for each event:**
+  - Pin / Unpin
+  - Mark Attending / Not Attending
+  - Open official website / registration
+  - (Optional) Add quick note for the event
+
+This should be architected so that later we can plug in a real AI + cron-based pipeline **without rewriting the UI**.
+
+--------------------------------------------------
+2. Data model – events layer
+--------------------------------------------------
+
+Create a new file for event data, e.g. `lib/eventsData.ts` (use the existing `lib/` or similar folder structure).
+
+Define the following types:
+
+```ts
+export type EventIndustryId = 'renewable' | 'mining' | 'construction';
+
+export type EventSource = 'curated' | 'ai' | 'other';
+
+export type EventTier = 'major' | 'standard';
+
+export interface EventItem {
+  id: string;                 // stable unique id (e.g. 'all-energy-australia-2025')
+  industryId: EventIndustryId;
+  name: string;
+  city: string;
+  state: string;              // e.g. 'NSW', 'VIC', 'QLD'
+  venue?: string;
+  dateRangeLabel: string;     // human readable date: '22–23 October 2025'
+  startDateIso?: string;      // optional ISO date: '2025-10-22'
+  endDateIso?: string;        // optional ISO date: '2025-10-23'
+  description: string;        // short, 1–2 lines max
+  tags?: string[];            // e.g. ['Flagship', 'Expo']
+  websiteUrl?: string;
+  source: EventSource;        // 'curated' | 'ai' | 'other'
+  tier: EventTier;            // 'major' | 'standard'
+  reliabilityNote?: string;   // e.g. 'Verified from official website' or 'AI-suggested – double check details'
+  createdAtIso?: string;      // optional, for future AI refresh bookkeeping
+}
+
+export interface EventIndustryMeta {
+  id: EventIndustryId;
+  label: string;
+  iconHint?: string;          // optional: used only for choosing icons, e.g. 'sun', 'pickaxe', 'building'
+}

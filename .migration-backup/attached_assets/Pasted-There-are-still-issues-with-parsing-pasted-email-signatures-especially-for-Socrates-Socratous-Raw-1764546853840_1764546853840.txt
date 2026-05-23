@@ -1,0 +1,199 @@
+There are still issues with parsing pasted email signatures, especially for Socrates Socratous.
+
+Raw email signature text (approximate rawText):
+
+Regards
+
+Socrates Socratous
+EPC Project Manager Energy Projects
+
+m. 0432 200 136
+e. socrates.socratous@flowpower.com.au
+w. flowpower.com.au
+
+Ground Floor, 109 Burwood road Hawthorn
+Melbourne Vic 3122
+
+
+Current behaviour when I paste this text:
+
+Company becomes something like w. flowpower.com.au or the job title.
+
+Address in the UI and in the iOS contact is only Melbourne Vic 3122, missing the full street line.
+
+I want the result to be:
+
+fullName → Socrates Socratous
+
+jobTitle → EPC Project Manager Energy Projects
+
+companyName → Flow Power (derived from flowpower.com.au)
+
+address → Ground Floor, 109 Burwood Road Hawthorn, Melbourne VIC 3122, Australia
+
+vCard ADR split to:
+
+street: Ground Floor, 109 Burwood Road Hawthorn
+
+city: Melbourne
+
+state: VIC
+
+postcode: 3122
+
+country: Australia
+
+Please make the following changes.
+
+1. Make AU address detection work for “Vic” and join both lines
+
+In extractBestAddress:
+
+State detection must be case-insensitive.
+Change:
+
+const hasState = /\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/.test(line);
+
+
+to:
+
+const hasState = /\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/i.test(line);
+
+
+For the Socrates example (no “Registered address” label), I still want the function to:
+
+Take the line with state + postcode as placeLine (Melbourne Vic 3122), and
+
+Always include the previous line as streetLine (Ground Floor, 109 Burwood road Hawthorn) if it exists.
+
+We already do const streetLine = lines[i - 1] || "" – keep that, but verify that for the Socrates rawText we actually end up with:
+
+full = "Ground Floor, 109 Burwood road Hawthorn Melbourne Vic 3122 Australia"
+
+
+or similar.
+
+If the address text does not contain a country, default country to "Australia" when we later split it in splitAuAddress.
+
+In splitAuAddress(address):
+
+Ensure the regex is case-insensitive and tolerant:
+
+let match = trimmed.match(
+  /(.*?),(?:\s*)([A-Za-z ]+)\s+(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+(\d{4})(?:\s+(Australia|AU|AUS))?/i
+);
+
+
+If countryRaw is missing, set country = "Australia".
+
+For the Socrates pasted example, after extractBestAddress + splitAuAddress, the vCard ADR should end up as:
+
+ADR;TYPE=WORK:;;Ground Floor, 109 Burwood road Hawthorn;Melbourne;VIC;3122;Australia
+
+
+and the contact card should display:
+
+Ground Floor, 109 Burwood road Hawthorn, Melbourne Vic 3122
+
+2. Derive company name from website domain for signatures
+
+For pasted signatures like this, there is no explicit company name line – only w. flowpower.com.au.
+Currently fixCompanyIfAddress sometimes uses w. flowpower.com.au itself as the company, which looks ugly, or falls back to the job title.
+
+I want a helper that derives a clean company name from the domain and uses that with top priority when no proper company line is present.
+
+2.1 Create deriveCompanyFromDomain
+
+Add a utility:
+
+function deriveCompanyFromDomain(rawDomain) {
+  if (!rawDomain) return "";
+
+  let domain = rawDomain.trim();
+  // strip protocol and leading labels
+  domain = domain.replace(/^https?:\/\//i, "");
+  domain = domain.replace(/^www\./i, "");
+  domain = domain.replace(/^w\.\s*/i, "");
+
+  // if the line has extra text like "w. flowpower.com.au"
+  // extract the first thing that looks like a domain
+  const domainMatch = domain.match(/[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+  if (domainMatch) {
+    domain = domainMatch[0];
+  }
+
+  const parts = domain.split(".");
+  const main = parts[0]; // e.g. "flowpower"
+  if (!main) return "";
+
+  return main
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" "); // "flowpower" -> "Flow Power"
+}
+
+2.2 Use this in fixCompanyIfAddress
+
+In fixCompanyIfAddress(contact, rawText):
+
+Get a candidate domain:
+
+Prefer contact.website if present.
+
+If not, search rawText lines for one that contains "www." or "w. " and capture the domain.
+
+At the start of fixCompanyIfAddress, after we detect that:
+
+contact.companyName is empty, or
+
+contact.companyName looks like an address, or
+
+contact.companyName is just "w. something" / an obvious URL,
+
+then:
+
+const fromDomain = deriveCompanyFromDomain(candidateDomain);
+if (fromDomain) {
+  contact.companyName = fromDomain;
+  // still run the remaining logic, but treat this as a strong default
+}
+
+
+Keep the existing priority logic:
+
+Domain-based company (fromDomain)
+
+Then company suffix lines (Pty Ltd, Inc, Ltd, etc.)
+
+Then first safe non-address, non-job-title line as a last resort.
+
+Ensure we never set companyName to:
+
+A line that matches the full job title.
+
+A pure URL string (flowpower.com.au, www.flowpower.com.au, etc.) if deriveCompanyFromDomain already succeeded.
+
+Finally, ensure the vCard generator uses contact.companyName (e.g. "Flow Power") in the ORG: field, not the raw website line.
+
+3. Confirm behaviour with the Socrates pasted signature
+
+After these changes, please paste the exact Socrates signature text into the app and confirm:
+
+Contact card shows:
+
+Name: Socrates Socratous
+
+Briefcase line: EPC Project Manager Energy Projects as title, company: Flow Power (or Flow Power Pty Ltd if you append that).
+
+Address row: Ground Floor, 109 Burwood road Hawthorn, Melbourne Vic 3122
+
+iOS contact created from the vCard shows:
+
+Title: EPC Project Manager Energy Projects
+
+Organisation: Flow Power (not website, not address)
+
+Work address: Ground Floor, 109 Burwood Road Hawthorn, Melbourne VIC 3122, Australia
+
+Also re-check that Yaseen’s card still parses correctly with address and company untouched.

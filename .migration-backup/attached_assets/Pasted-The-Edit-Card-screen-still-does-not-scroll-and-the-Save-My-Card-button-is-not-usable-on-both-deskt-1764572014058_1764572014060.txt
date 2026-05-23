@@ -1,0 +1,91 @@
+The Edit Card screen still does not scroll and the “Save My Card” button is not usable on both desktop and mobile.
+
+Fix this properly in two steps:
+
+1. Fix the outer layout so scrolling works
+
+Search the whole project and REMOVE overflow-hidden from any layout or root container that wraps the Edit Card screen (for example App, Layout, or main wrapper divs).
+
+If any of these containers use h-screen, change that to min-h-screen instead.
+
+Ensure html, body and the React root all allow scrolling:
+
+In global CSS:
+
+html, body, #root {
+  height: 100%;
+}
+body {
+  overflow-y: auto;
+}
+
+
+The main app shell should look like:
+
+function AppLayout({ children }) {
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      {children}
+    </div>
+  );
+}
+
+
+2. Rebuild the Edit Card page with a scrolling body + sticky bottom bar
+Replace the Edit Card page layout with this structure, but keep all existing form state and handlers:
+
+export default function EditCardPage() {
+  return (
+    <div className="flex-1 flex justify-center">
+      <div className="w-full max-w-lg flex flex-col min-h-screen">
+        {/* Header (My QR / Edit Card buttons) stays at the top */}
+        <header className="px-4 pt-3 pb-2">
+          {/* existing header content */}
+        </header>
+
+        {/* Scrollable form area */}
+        <main className="flex-1 overflow-y-auto px-4 pt-2 pb-28">
+          {/* KEEP all existing input fields here:
+              Full Name, Job Title, Company, Phone, Email, Website, LinkedIn, Address etc.
+          */}
+        </main>
+
+        {/* Sticky bottom save bar (inside the page, not fixed to the window) */}
+        <div
+          className="
+            sticky bottom-0
+            bg-white/95 backdrop-blur
+            border-t border-slate-200
+            px-4 pt-3 pb-[max(env(safe-area-inset-bottom),16px)]
+            z-20
+          "
+        >
+          <button
+            type="button"
+            onClick={handleSave}  // reuse the existing save handler
+            className="w-full rounded-xl py-3 text-base font-medium bg-slate-900 text-white"
+          >
+            Save My Card
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+Important details:
+
+flex-1 overflow-y-auto pb-28 on <main> is required so the fields can scroll and there is space under the last input.
+
+The save bar uses sticky bottom-0 instead of fixed bottom-0, so it stays attached to the bottom of the scrolling content, not the browser window.
+
+Make sure NO parent of this component uses overflow-hidden.
+
+Test on:
+
+Desktop browser (Replit preview and a full tab) — the page must scroll and the button must be fully visible and clickable.
+
+iPhone Safari — you must be able to scroll the fields and tap “Save My Card” above the home indicator / Safari bar.
+
+Update the code until both conditions are true.

@@ -1,0 +1,130 @@
+I want to improve the Company Intel feature so it feels like a focused sales brief, not generic fluff, and I want to avoid any paid/live news APIs for now.
+
+Please update the intel system as follows:
+
+1) Change intel output into a structured sales brief
+
+Given:
+
+Contact name
+
+Contact title
+
+Company name
+
+Company website/domain
+
+Any inferred industry/region if available
+
+Generate a structured JSON like this:
+
+{
+  "companySnapshot": "2–3 sentence overview of what this company actually does and who they serve.",
+  "whyTheyMatterToYou": [
+    "Specific reason this company is relevant to someone selling B2B solutions (use the domain/industry).",
+    "Another angle tied to scale, geography, or strategy.",
+    "Optional third angle if relevant."
+  ],
+  "roleInsights": [
+    "What someone with this title at this type of company typically cares about (KPIs, problems, responsibilities).",
+    "Be concrete and role-specific, not generic corporate-speak.",
+    "Include technical/operational focus if the role is engineering/operations."
+  ],
+  "highImpactQuestions": [
+    "Short, sharp question the user could ask in a first meeting.",
+    "Another question that surfaces business pain / priorities.",
+    "Another question tying to risk, roadmap, or timelines.",
+    "Keep each question 1–2 lines max."
+  ],
+  "risksOrSensitivities": [
+    "Potential landmines or sensitive topics (regulation, recent setbacks, major competitor relationships) if any are known.",
+    "If nothing specific is known, keep this list very short or empty."
+  ],
+  "keyDevelopments": [
+    {
+      "headline": "Important past event or strategic move (may not be recent).",
+      "approxDate": "Month Year (or just Year if approximate).",
+      "summary": "1–2 lines on why this matters for a salesperson.",
+      "note": "Based on non-live, historical information."
+    }
+  ]
+}
+
+
+Guidelines for generation:
+
+Use short, punchy bullets, not long paragraphs.
+
+Make everything role- and industry-specific based on the title + company domain, not generic “innovative solutions” language.
+
+highImpactQuestions should be questions you could literally read out in a meeting.
+
+keyDevelopments is not live news – just key historical developments the model knows about. Limit to the 3–4 most important items.
+
+Update the backend intel function to return this exact structure, and update the frontend to render sections as:
+
+Company Snapshot → companySnapshot
+
+Why They Matter to You → bullets from whyTheyMatterToYou
+
+What This Contact Likely Cares About → bullets from roleInsights
+
+High-Impact Questions → bullets from highImpactQuestions
+
+Key Developments (may not be up to date) → list from keyDevelopments
+
+Watch Outs → bullets from risksOrSensitivities (only show section if list is non-empty)
+
+2) Be honest about “news” not being live
+
+I do not want to integrate or call any external news APIs yet, and I do not want to scrape Google.
+
+So:
+
+Do not add any new HTTP calls to NewsAPI, SerpAPI, Google, etc.
+
+Treat keyDevelopments as historical context only, and clearly label it:
+
+Section title: “Key Developments (may not be up to date)”
+
+Each item should include the note field like:
+“Based on historical information up to the model’s knowledge cutoff.”
+
+If there’s very little reliable info, keep this section short or omit it rather than guessing.
+
+3) Add a “View Latest News on Google” button
+
+Under the Key Developments section, add a simple secondary button:
+
+Label: “View latest news on Google”
+
+On click:
+
+Open a new tab with a Google News / Google search URL using the company name, for example:
+https://news.google.com/search?q=<company name>
+or
+https://www.google.com/search?q=<company name>+news
+
+Rules:
+
+This should just be a link opener in the user’s browser, not an API call or scraping.
+
+No parsing of Google results, no backend requests to Google – just a client-side redirect.
+
+4) Keep existing functionality, just upgrade the intel UX
+
+Do not change the scan / paste / parsing / vCard flows – they are working well.
+
+Only modify:
+
+The intel generation prompt / function to output the new JSON structure.
+
+The frontend rendering of the intel card(s).
+
+Add the “View latest news on Google” button under the keyDevelopments section.
+
+Goal:
+
+When I generate intel for a contact, I should get something that feels like a clean one-page sales brief: sharp snapshot, reasons they matter, what the contact cares about, great questions to ask, a few historical key developments, and an easy button to jump to live Google news if I want more.
+
+Please implement these changes and then publish so I can test on real contacts again.

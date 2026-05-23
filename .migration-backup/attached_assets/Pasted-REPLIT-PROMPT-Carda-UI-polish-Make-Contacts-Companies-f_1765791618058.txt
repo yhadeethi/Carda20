@@ -1,0 +1,140 @@
+REPLIT PROMPT — Carda UI polish (Make Contacts/Companies feel “Apple”, remove list-y dashboard vibe)
+
+You are working inside my existing Carda repo (React + TypeScript + Tailwind; keep existing logic/data unchanged). 
+Goal: Make the Contacts → Companies experience feel modern, minimal, and “native-like” by doing ONLY these 3 changes:
+1) Companies screen → replace list cards with a clean grid of company tiles.
+2) Company detail header → simplify hierarchy (less boxed UI, clearer title area).
+3) People filters → hide chips/buttons into a bottom sheet (Filter icon) so the screen isn’t cluttered.
+
+CRITICAL RULES
+- Do NOT break existing routes, state, storage, or data models.
+- Do NOT remove features. You may relocate/hide controls behind menus/sheets.
+- Do NOT change the bottom nav, Scan flow, Events Hub, or any other module.
+- Keep the existing design tokens/colors; just improve layout and hierarchy.
+- Must be fully responsive (mobile-first) and iOS-safe-area friendly.
+
+========================================================
+A) COMPANIES SCREEN: GRID TILES (replaces list-y rows)
+========================================================
+Find the Companies view under Contacts (the screen that currently shows company cards with “View Org Map” button).
+
+1) Replace the vertical list of company cards with a TILE GRID:
+- Mobile: 2 columns (gap ~12px).
+- Tablet/Desktop: 3–4 columns (auto-fit).
+- Keep the existing Search input and “Add Company” button at the top.
+- Keep the “People | Companies” segmented control as-is.
+
+2) Tile design (CompanyTile):
+- Whole tile is tappable → navigates to Company detail page (same behavior as clicking a company today).
+- Content (minimal):
+  - Top-left: company monogram / building icon in a soft rounded square.
+  - Company name (truncate to 1 line).
+  - Under it: “X contacts” (subtle).
+  - Under it: website domain (subtle, truncate).
+- Remove “View Org Map” from each tile (no per-row CTA).
+- Optional quick action (recommended): a small “⋯” icon in the top-right of the tile opens a tiny menu:
+  - Open Company
+  - Open Org
+  - Add Note
+  (Menu must not be required; tapping the tile must still work.)
+
+3) Interactions:
+- Hover (desktop): slight lift + subtle shadow transition.
+- Mobile: active press state (slight scale or opacity) with smooth transition.
+- Loading/empty states:
+  - If no companies: show clean empty state with “Add Company” CTA.
+  - Search empty: “No matching companies”.
+
+Implementation notes:
+- Create reusable components:
+  - client/src/components/companies/CompanyTile.tsx
+  - client/src/components/companies/CompanyGrid.tsx
+- Update the Companies screen component to use CompanyGrid.
+- Keep existing company data mapping; only change layout.
+
+========================================================
+B) COMPANY DETAIL: SIMPLIFY HEADER & HIERARCHY
+========================================================
+Find the Company detail page (shows Flow Power header card + tabs People/Org/Notes).
+
+1) Replace the big boxed header card with a simpler “hero header”:
+- Left: logo/monogram icon (same as tile).
+- Right: company name (large), website domain (small), contact count (small).
+- Reduce the “card inside a card” feel: use one clean surface, not multiple stacked boxes.
+
+2) Tabs row:
+- Keep People / Org / Notes tabs, but tighten spacing and make it feel like a single control.
+- Ensure it stays readable and not cramped on iPhone width.
+
+3) Primary actions:
+- Any edit actions (Edit Org, Auto-group, etc.) must remain available BUT should not clutter the top.
+- Put secondary actions behind:
+  - a small toolbar row inside the active tab area, OR
+  - a “⋯” menu in the header.
+Pick the option that keeps the screen clean.
+
+========================================================
+C) PEOPLE FILTERS: MOVE CHIPS INTO A BOTTOM SHEET (CLEAN UI)
+========================================================
+Currently People view shows filter chips (All/Exec/Legal/Project Delivery…) plus buttons.
+
+Change to:
+1) Replace visible chips row with a compact controls row:
+- Left: “Filter” button/icon (funnel) that opens a bottom sheet.
+- Optionally show a tiny summary text like “All · Any influence” when filters are default.
+- Right: Sort icon (optional) or keep current sort if any.
+
+2) Bottom sheet content (FilterSheet):
+- Must be mobile-friendly (bottom drawer / sheet).
+- Sections:
+  - Department/Role (multi-select): All, Exec, Legal, Project Delivery (and any existing ones).
+  - Influence (single select): Any, High, Low (or existing influence options).
+  - Clear filters button
+  - Apply button
+- On Apply, update the People list exactly as before (same filtering logic; you’re just relocating UI).
+
+3) “Auto-group” and “Edit Org”:
+- If those are on People view, keep them accessible but move them into a small “Actions” area:
+  - Either inside the FilterSheet under an “Actions” section, OR
+  - Behind a “⋯” menu next to Filter.
+Do NOT remove functionality.
+
+Implementation notes:
+- Use existing UI primitives in the repo. If shadcn/ui Sheet or Drawer exists, use it.
+- If not, implement a lightweight bottom-sheet component with:
+  - portal overlay
+  - slide-up animation
+  - close on backdrop tap
+  - close button
+- Create:
+  - client/src/components/filters/FilterSheet.tsx
+
+========================================================
+D) POLISH REQUIREMENTS (MUST DO)
+========================================================
+- Consistent spacing: reduce vertical stacking; use whitespace intentionally.
+- Touch targets: minimum ~44px height for tappable controls.
+- iOS safe area: ensure bottom sheet and pages don’t clash with the bottom nav; use safe-area-inset-bottom padding where needed.
+- Truncation: company names and roles must not overflow.
+- No layout jumps: keep heights stable where possible.
+
+========================================================
+E) ACCEPTANCE CHECKLIST (TEST THIS)
+========================================================
+1) Contacts → Companies shows a clean grid (2 columns on iPhone).
+2) Tapping a tile opens company details correctly.
+3) No “View Org Map” buttons on company tiles anymore.
+4) Company detail header looks simplified and premium (less “card stack”).
+5) People view looks clean: no chip row clutter; Filter opens bottom sheet.
+6) Applying filters changes the People list correctly.
+7) Auto-group and Edit Org are still reachable and working.
+8) Nothing else in the app got visually/regression-broken.
+
+Now implement these changes with minimal refactors:
+- Prefer adding new components and swapping layout over rewriting core logic.
+- Keep existing props, types, and storage behavior intact.
+- After implementing, quickly scan for unused components/styles and remove dead code safely.
+
+OUTPUT
+- Make the code changes directly in the repo.
+- If you add new components, wire them cleanly and keep naming consistent with the existing codebase.

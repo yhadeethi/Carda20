@@ -1,0 +1,107 @@
+You are working on the Carda web app. The current Company Detail screen has tabs (People / Org / Notes). Org currently shows either an “Influence bubbles” view or a basic org chart, but it still feels prototype-y: bubbles go off-screen, labels overlap, org chart uses a small portion of the screen, node styling looks generic, and controls feel scattered.
+
+GOAL
+Make the Org experience feel like an Apple-grade, modern, intuitive “Org Map”:
+- Full-screen canvas inside the Company page (uses most of the vertical space)
+- Beautiful node cards (not generic boxes)
+- Smooth pan + pinch zoom on mobile
+- Clear controls: Fit / Zoom / Auto-layout / Edit relationships
+- Influence view that never crops off-screen and doesn’t overlap labels
+
+NON-NEGOTIABLE CONSTRAINTS
+- Do NOT change unrelated parts of the app. Only touch Company detail (Org tab) and any shared UI components needed.
+- Keep existing routes, data, and People/Notes working.
+- Mobile-first: must feel great on iPhone viewport.
+- No “debug” UI left behind.
+
+IMPLEMENTATION PLAN (do exactly this)
+
+1) ORG TAB LAYOUT: MAKE IT A REAL CANVAS
+- In the Company detail Org tab, the content area should become a large canvas container:
+  - height: fill available space under the header and segmented control
+  - rounded corners, subtle border, very light background with faint dots grid
+- Add a sticky “glass” toolbar row at the top of the canvas (inside the canvas card) with:
+  - Segmented control: [Org] [Influence]
+  - Right-side actions:
+    - Fit (fitView)
+    - + and - zoom buttons
+    - Auto-layout
+    - Edit mode toggle (default OFF)
+- Toolbar must look iOS 26-ish: translucent blur, subtle shadow, soft separators.
+
+2) ORG CHART VIEW: USE REACT FLOW PROPERLY (IF ALREADY USED, ENHANCE IT)
+- Use React Flow for org chart if it’s already there. If not, add it.
+- Auto layout with Dagre (top-to-bottom hierarchy):
+  - If multiple roots exist, create a virtual root node “Flow Power” (company) and connect roots to it with faint edges.
+- Set:
+  - fitView on load and when user presses Fit
+  - minZoom and maxZoom sensible for mobile
+  - smooth edges (smoothstep/bezier), subtle arrows
+  - animated transitions when layout recalculates
+
+3) NODE DESIGN: “APPLE CARD” NODES
+Replace default node boxes with custom node components:
+- Node card style:
+  - rounded-2xl
+  - translucent / light fill
+  - subtle border
+  - soft shadow
+- Content:
+  - Left: small circular avatar with initials
+  - Right: Name (bold), Title (secondary)
+  - Bottom row: compact chips for Department (e.g., Legal / Exec / Delivery) and Influence (High/Low)
+- Add a small “grab” affordance or make entire card draggable.
+- Use department color as a thin left accent or faint gradient border (very subtle).
+- Selected node state: slightly stronger border + shadow, not loud.
+
+4) EDIT MODE (THIS IS THE GAME CHANGER)
+When Edit mode toggle is ON:
+- Tapping a node shows a bottom sheet with:
+  - Set Manager (dropdown of people in same company)
+  - Department (dropdown)
+  - Influence level (High/Med/Low or numeric 1–5)
+  - Stance: Champion / Neutral / Blocker / Unknown
+  - Save
+- Also allow “quick rewire”:
+  - User taps “Set Manager”, then taps another node to assign as manager (with clear UI guidance).
+- Persist changes in the same storage you currently use for contacts/company relationships (local DB / localStorage / backend, whatever exists). Do NOT invent a new incompatible model.
+
+Data fields needed per contact (company-scoped):
+- companyId
+- department
+- managerId (nullable)
+- influenceLevel
+- stance
+
+5) INFLUENCE VIEW: FIX IT SO IT NEVER LOOKS BROKEN
+Current bubble view is cropped and messy. Rebuild it like this:
+- Canvas-based pack layout that ALWAYS fits within the viewport:
+  - Use d3-hierarchy pack OR a force simulation with collide + bounds
+  - Compute bubble radii from influence level (or size metric)
+  - Then normalize + translate so all bubbles fit within container padding
+- Labels:
+  - Name inside bubble if radius large enough
+  - Otherwise show name below bubble
+  - No overlapping text (truncate, clamp lines)
+- Interaction:
+  - Tap bubble => focus/zoom into bubble (gentle animation)
+  - Long-press => open the same bottom sheet editor (in Edit mode) OR show a mini tooltip (when Edit mode is off)
+
+6) UI POLISH (DO THIS, IT MATTERS)
+- Remove the random floating icons row (edit/magic/bin) from the org area.
+- Put actions only in the toolbar and/or bottom sheet.
+- Add micro-animations:
+  - Mode switch Org <-> Influence crossfade/slide
+  - Node hover/press (scale 0.98)
+  - Layout transitions (animate positions)
+- Ensure safe-area padding at bottom so the bottom nav doesn’t cover content.
+
+7) ACCEPTANCE CRITERIA
+- Org view loads with a clean, centered hierarchy using most of the screen.
+- Fit button reliably frames the whole graph.
+- Zoom buttons work; pinch zoom works on iPhone.
+- Influence bubbles never crop off-screen; no overlapping labels chaos.
+- Edit mode allows setting manager/department/influence/stance and updates reflect immediately in both views.
+- No regressions to People / Companies / Notes tabs.
+
+Deliver the code changes with clear file names and minimal scope.

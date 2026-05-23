@@ -1,0 +1,180 @@
+I want you to upgrade the bottom navigation bar in my Carda web app to behave subtly like the bottom nav in the Apple Photos app on iOS 26, but without adding any extra chip rows or filters.
+
+The goal: keep my current minimal 3-tab bottom nav, but give it a very light morph between an “expanded” and “compact” state based on scroll direction. No new content, just animation (height, padding, scale, etc.).
+
+Tech stack / constraints
+
+The app is React + TypeScript + Tailwind (Next.js style).
+
+The bottom nav already exists with 3 tabs.
+
+Do NOT break or alter any routing, business logic, or page structure. Only:
+
+Wrap / restyle the bottom nav
+
+Add a scroll-based hook to drive the visual states
+
+Do not add extra UI elements like chip rows or secondary filters. Keep exactly the same items I have now.
+
+Tabs (keep as-is)
+
+Keep my existing 3 tabs (currently: Scan, Contacts, Events or whatever labels/routes I already use).
+
+Each tab should still show its icon + label just like now.
+
+The active tab should remain clearly distinguished (you can refine the styling, but don’t change the logic):
+
+Higher icon opacity
+
+Slightly bolder / stronger label
+
+Click behaviour and routes must stay identical.
+
+Layout & glass style
+
+I want the nav as a floating glass pill centered at the bottom (like I already have, but polished):
+
+Outer wrapper (positioning):
+
+fixed inset-x-0 bottom-3 z-40 flex justify-center
+
+pointer-events-none on this wrapper so content can scroll beneath it.
+
+Inner nav capsule (the pill itself):
+
+pointer-events-auto so it can be tapped.
+
+max-w-[440px] w-[92%] for width.
+
+Light mode glass: backdrop-blur-2xl bg-white/80 border border-white/60
+
+Dark mode: backdrop-blur-2xl bg-neutral-900/80 border border-white/10
+
+Add a soft bottom shadow similar to iOS (single soft shadow).
+
+Inside, keep a simple flex layout to evenly space the 3 tabs.
+
+Scroll-driven two-state behaviour (subtle only)
+
+Implement a small hook, e.g. useScrollDirectionNav, used in the layout that renders the bottom nav. It should expose a boolean expanded.
+
+Behaviour:
+
+On initial load: expanded = true.
+
+Add a window scroll listener (passive) to track window.scrollY.
+
+Compare the current scroll position to the previous value:
+
+If the user scrolls down (delta > +6–8px) → set expanded = true.
+
+If the user scrolls up (delta < –6–8px) → set expanded = false.
+
+Ignore small deltas to avoid flicker.
+
+This boolean should only control the visual state of the nav (no functional changes).
+
+Expanded vs Compact visual states
+
+Use conditional Tailwind classes based on expanded to create a very subtle morph.
+
+Expanded state (expanded === true)
+
+Nav pill:
+
+Slightly taller: height around 64–70px
+
+More padding: e.g. px-5 py-3
+
+Border radius a bit rounder: rounded-[26px]
+
+Transform: translate-y-0 scale-100
+
+Slightly stronger shadow (but still tasteful).
+
+Tab content:
+
+Icons and labels can be very slightly larger or more relaxed.
+
+Don’t add extra rows or extra components. Just reuse the existing icon+label layout.
+
+Example Tailwind class combo for container in expanded state (you can adjust numbers, but keep the idea):
+
+expanded
+  ? "h-16 px-5 py-3 rounded-[26px] translate-y-0 scale-100"
+  : "h-14 px-4 py-2 rounded-[22px] translate-y-1 scale-[0.97]"
+
+
+(You can implement it differently, but the behaviour should be equivalent.)
+
+Compact state (expanded === false)
+
+Nav pill:
+
+Slightly shorter: height around 52–56px
+
+Less padding: e.g. px-4 py-2
+
+Slightly smaller radius: rounded-[22px]
+
+Transform: translate-y-1 scale-[0.97] to make it feel tucked a bit closer to the bottom edge.
+
+Shadow can be slightly softer, but don’t overdo it.
+
+Tab content:
+
+Same icons + labels, just with less vertical breathing room.
+
+No content is removed or added in this state.
+
+The point is: it should feel like the same bar, just “tightened” on scroll, not like a totally new component.
+
+Animations & easing
+
+The transition between the two states must feel smooth and premium, not jerky.
+
+Use Tailwind transitions on the nav container and internal spacing:
+
+transition-all duration-250 or duration-300
+
+Easing: ease-[cubic-bezier(0.23,1,0.32,1)] (or similar) for that Apple-style feel.
+
+Animate:
+
+height
+
+padding
+
+border-radius
+
+scale
+
+translateY
+
+Do not introduce big opacity changes or jarring transforms. Keep the effect subtle.
+
+Ensure it performs smoothly on mobile Safari.
+
+Responsiveness & theming
+
+Prioritise mobile (iPhone) view; on desktop, the nav should still appear as a centered floating pill.
+
+Keep my existing light/dark mode behaviour; only enhance styling for the nav.
+
+Content should scroll underneath the nav; don’t let the bar block critical UI elements.
+
+Integration & output
+
+Implement useScrollDirectionNav (or similar) in a shared hooks file or layout file.
+
+Use that hook inside the component that renders the bottom nav to switch classNames based on expanded.
+
+Do not rename or remove any existing navigation logic or handlers.
+
+At the end, show me:
+
+The updated bottom nav React component code.
+
+The hook implementation.
+
+Any changes you made in the layout to integrate it.
