@@ -48,6 +48,18 @@ export interface ScanResult {
   contact: Partial<Contact>;
 }
 
+export interface ContactTask {
+  id: number;
+  contactId: number;
+  userId: number;
+  clientId: string;
+  title: string;
+  done: number;
+  dueAt?: string;
+  completedAt?: string;
+  createdAt?: string;
+}
+
 export interface IntelResult {
   companyName?: string;
   domain?: string;
@@ -146,6 +158,33 @@ export const api = {
 
   getEventContacts: (id: number): Promise<Contact[]> =>
     apiFetch(`/api/user-events/${id}/contacts`),
+
+  getContactTasks: (contactId: number): Promise<ContactTask[]> =>
+    apiFetch(`/api/contacts/${contactId}/tasks`),
+
+  createContactTask: (
+    contactId: number,
+    data: { clientId: string; title: string; dueAt?: string }
+  ): Promise<ContactTask> =>
+    apiFetch(`/api/contacts/${contactId}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateContactTask: (
+    contactId: number,
+    taskId: number,
+    data: { done?: boolean; title?: string; dueAt?: string }
+  ): Promise<ContactTask> =>
+    apiFetch(`/api/contacts/${contactId}/tasks/${taskId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteContactTask: (contactId: number, taskId: number): Promise<void> =>
+    apiFetch(`/api/contacts/${contactId}/tasks/${taskId}`, {
+      method: "DELETE",
+    }),
 
   getHubSpotStatus: (): Promise<{ connected: boolean }> =>
     apiFetch("/api/hubspot/status"),

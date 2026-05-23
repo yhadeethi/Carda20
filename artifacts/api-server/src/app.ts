@@ -6,6 +6,14 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+const ALLOWED_ORIGINS = new Set<string>(
+  (process.env.REPLIT_DOMAINS ?? "")
+    .split(",")
+    .map((d) => d.trim())
+    .filter(Boolean)
+    .map((d) => `https://${d}`)
+);
+
 app.use(
   pinoHttp({
     logger,
@@ -28,7 +36,19 @@ app.use(
 app.use(
   cors({
     origin: (origin, callback) => {
-      callback(null, origin ?? "*");
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (
+        ALLOWED_ORIGINS.has(origin) ||
+        /^https:\/\/.*\.expo\.dev$/.test(origin) ||
+        /^https:\/\/.*\.replit\.dev$/.test(origin) ||
+        /^https:\/\/.*\.repl\.co$/.test(origin)
+      ) {
+        callback(null, origin);
+      } else {
+        callback(null, false);
+      }
     },
     credentials: true,
   }),
