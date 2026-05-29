@@ -7,6 +7,7 @@ import {
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Redirect, Stack, useRouter, useSegments } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -15,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -39,32 +41,27 @@ function RootLayoutNav() {
   }, [user, loading, segments]);
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.foreground,
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen
         name="contact/[id]"
-        options={{
-          title: "Contact",
-          headerBackTitle: "Back",
-          headerTransparent: false,
-        }}
+        options={{ title: "Contact", headerBackTitle: "Back" }}
       />
       <Stack.Screen
         name="company/[id]"
-        options={{
-          title: "Company",
-          headerBackTitle: "Back",
-          headerTransparent: false,
-        }}
+        options={{ title: "Company", headerBackTitle: "Back" }}
       />
       <Stack.Screen
         name="event/[id]"
-        options={{
-          title: "Event",
-          headerBackTitle: "Back",
-          headerTransparent: false,
-        }}
+        options={{ title: "Event", headerBackTitle: "Back" }}
       />
       <Stack.Screen name="+not-found" />
     </Stack>
@@ -89,10 +86,11 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <StatusBar style="dark" backgroundColor={colors.background} />
       <ErrorBoundary>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1 }}>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
               <KeyboardProvider>
                 <RootLayoutNav />
               </KeyboardProvider>

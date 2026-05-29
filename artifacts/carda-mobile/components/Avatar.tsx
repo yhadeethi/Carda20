@@ -1,48 +1,47 @@
-import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { useColors } from "@/hooks/useColors";
 
 interface AvatarProps {
   name?: string;
   size?: number;
+  square?: boolean;
 }
 
-function getInitials(name?: string): string {
+export function getInitials(name?: string): string {
   if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "?";
-  return (
-    (parts[0][0] ?? "").toUpperCase() +
-    (parts[parts.length - 1][0] ?? "").toUpperCase()
-  );
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  }
+  return (words[0]?.slice(0, 2) ?? "?").toUpperCase();
 }
 
-export function Avatar({ name, size = 44 }: AvatarProps) {
-  const colors = useColors();
+export function Avatar({ name, size = 44, square = false }: AvatarProps) {
   const initials = getInitials(name);
-  const fontSize = size * 0.38;
+  const fontSize = Math.round(size * 0.36);
+  const borderRadius = square ? Math.round(size * 0.28) : size / 2;
 
   return (
-    <LinearGradient
-      colors={[colors.gradientStart, colors.gradientEnd]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}
+    <View
+      style={[
+        styles.container,
+        { width: size, height: size, borderRadius },
+      ]}
     >
       <Text style={[styles.initials, { fontSize }]}>{initials}</Text>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: "rgba(0,0,0,0.06)",
     alignItems: "center",
     justifyContent: "center",
   },
   initials: {
-    color: "#FFFFFF",
-    fontWeight: "600" as const,
-    letterSpacing: 0.5,
+    color: "#3A3A3F",
+    fontWeight: "800" as const,
+    letterSpacing: 0.3,
   },
 });

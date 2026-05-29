@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     gap: 8,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(0,0,0,0.06)",
   },
   profileName: { fontSize: 20, fontWeight: "700" as const, marginTop: 4 },
   profileEmail: { fontSize: 14 },

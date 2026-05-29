@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
-import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
+import { Avatar } from "@/components/Avatar";
 import { ContactCard } from "@/components/ContactCard";
 import { GlassCard } from "@/components/GlassCard";
 import { api, Company, Contact, IntelResult } from "@/lib/api";
@@ -80,14 +80,7 @@ export default function CompanyDetailScreen() {
             { backgroundColor: colors.card, borderBottomColor: colors.border },
           ]}
         >
-          <LinearGradient
-            colors={[colors.gradientStart + "33", colors.gradientEnd + "33"]}
-            style={[styles.companyIcon, { borderRadius: colors.radius }]}
-          >
-            <Text style={[styles.companyInitial, { color: colors.primary }]}>
-              {(company.name[0] ?? "?").toUpperCase()}
-            </Text>
-          </LinearGradient>
+          <Avatar name={company.name} size={72} square />
           <Text style={[styles.companyName, { color: colors.foreground }]}>
             {company.name}
           </Text>
@@ -254,14 +247,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 6,
   },
-  companyIcon: {
-    width: 72,
-    height: 72,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  companyInitial: { fontSize: 32, fontWeight: "700" as const },
   companyName: { fontSize: 22, fontWeight: "700" as const, letterSpacing: -0.3 },
   industry: { fontSize: 14 },
   domain: { fontSize: 14 },
