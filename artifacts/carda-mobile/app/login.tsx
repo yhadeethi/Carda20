@@ -1,5 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
+import * as Haptics from "expo-haptics";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -13,17 +14,60 @@ import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
+const DEV_CODE_LENGTH = 4;
+
 export default function LoginScreen() {
-  const { login, loading, checkAuth } = useAuth();
+  const { checkAuth } = useAuth();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [checking, setChecking] = React.useState(false);
+  const [digits, setDigits] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleCheckAuth = async () => {
-    setChecking(true);
-    await checkAuth();
-    setChecking(false);
+  const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+
+  const handleDigit = async (d: string) => {
+    if (loading) return;
+    const next = [...digits, d];
+    setDigits(next);
+    setError("");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (next.length === DEV_CODE_LENGTH) {
+      const code = next.join("");
+      setLoading(true);
+      try {
+        const res = await fetch(`${BASE_URL}/api/dev-login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+          credentials: "include",
+        });
+        if (res.ok) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          await checkAuth();
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setError("Wrong code — try again");
+          setDigits([]);
+        }
+      } catch {
+        setError("Connection error — try again");
+        setDigits([]);
+      } finally {
+        setLoading(false);
+      }
+    }
   };
+
+  const handleDelete = () => {
+    if (loading) return;
+    setDigits((prev) => prev.slice(0, -1));
+    setError("");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const keys = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -45,159 +89,126 @@ export default function LoginScreen() {
           >
             <Feather name="credit-card" size={36} color="#FFFFFF" />
           </LinearGradient>
-          <Text style={[styles.appName, { color: colors.foreground }]}>
-            Carda
-          </Text>
+          <Text style={[styles.appName, { color: colors.foreground }]}>Carda</Text>
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
-            Business card intelligence
+            Enter your access code
           </Text>
         </View>
 
-        <View style={styles.features}>
-          {[
-            { icon: "camera" as const, text: "Scan business cards instantly" },
-            { icon: "cpu" as const, text: "AI contact extraction" },
-            { icon: "zap" as const, text: "HubSpot & Salesforce sync" },
-          ].map((item) => (
-            <View key={item.icon} style={styles.featureRow}>
-              <View
-                style={[
-                  styles.featureIcon,
-                  {
-                    backgroundColor: colors.primary + "1A",
-                    borderRadius: colors.radius,
-                  },
-                ]}
-              >
-                <Feather name={item.icon} size={16} color={colors.primary} />
-              </View>
-              <Text style={[styles.featureText, { color: colors.foreground }]}>
-                {item.text}
-              </Text>
-            </View>
+        <View style={styles.dotsRow}>
+          {Array.from({ length: DEV_CODE_LENGTH }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                {
+                  backgroundColor:
+                    i < digits.length ? colors.primary : "transparent",
+                  borderColor:
+                    i < digits.length ? colors.primary : colors.border,
+                },
+              ]}
+            />
           ))}
         </View>
 
-        <View style={styles.actions}>
-          <TouchableOpacity
-            onPress={login}
-            activeOpacity={0.85}
-            style={styles.loginButton}
-          >
-            <LinearGradient
-              colors={[colors.gradientStart, colors.gradientEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.loginGradient, { borderRadius: colors.radius }]}
-            >
-              <Text style={styles.loginText}>Sign in with Replit</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+        {error ? (
+          <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text>
+        ) : (
+          <View style={styles.errorPlaceholder} />
+        )}
 
-          <TouchableOpacity
-            onPress={handleCheckAuth}
-            activeOpacity={0.7}
-            style={styles.recheckButton}
-            disabled={checking || loading}
-          >
-            {checking || loading ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Text
-                style={[styles.recheckText, { color: colors.mutedForeground }]}
-              >
-                Already signed in? Tap to continue
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <Text style={[styles.footer, { color: colors.mutedForeground }]}>
-          Your contacts are private and secure
-        </Text>
+        {loading ? (
+          <View style={styles.keypadPlaceholder}>
+            <ActivityIndicator color={colors.primary} size="large" />
+          </View>
+        ) : (
+          <View style={styles.keypad}>
+            {keys.map((key, i) => {
+              if (key === "") return <View key={i} style={styles.keyEmpty} />;
+              const isDelete = key === "⌫";
+              return (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => (isDelete ? handleDelete() : handleDigit(key))}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.key,
+                    {
+                      backgroundColor: isDelete
+                        ? "transparent"
+                        : colors.secondary,
+                      borderRadius: 999,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.keyText,
+                      {
+                        color: isDelete ? colors.mutedForeground : colors.foreground,
+                        fontSize: isDelete ? 22 : 26,
+                      },
+                    ]}
+                  >
+                    {key}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   content: {
     flex: 1,
     paddingHorizontal: 28,
+    alignItems: "center",
     justifyContent: "space-between",
   },
-  logoSection: {
-    alignItems: "center",
-    paddingTop: 32,
-  },
+  logoSection: { alignItems: "center", paddingTop: 32, gap: 10 },
   logoContainer: {
     width: 80,
     height: 80,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
   },
-  appName: {
-    fontSize: 36,
-    fontWeight: "700" as const,
-    letterSpacing: -0.5,
-    marginBottom: 6,
+  appName: { fontSize: 36, fontWeight: "700" as const, letterSpacing: -0.5 },
+  tagline: { fontSize: 15, textAlign: "center" },
+  dotsRow: { flexDirection: "row", gap: 18, marginTop: 8 },
+  dot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
   },
-  tagline: {
-    fontSize: 16,
-    textAlign: "center",
-  },
-  features: {
-    gap: 14,
-  },
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  featureIcon: {
-    width: 38,
-    height: 38,
+  error: { fontSize: 14, textAlign: "center", marginTop: 4 },
+  errorPlaceholder: { height: 20 },
+  keypadPlaceholder: {
+    height: 300,
+    width: "100%",
     alignItems: "center",
     justifyContent: "center",
   },
-  featureText: {
-    fontSize: 15,
-    fontWeight: "500" as const,
-  },
-  actions: {
+  keypad: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
     gap: 14,
-  },
-  loginButton: {
-    shadowColor: "#4B68F5",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  loginGradient: {
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  loginText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600" as const,
-    letterSpacing: 0.2,
-  },
-  recheckButton: {
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  recheckText: {
-    fontSize: 14,
-  },
-  footer: {
-    fontSize: 12,
-    textAlign: "center",
     paddingBottom: 8,
   },
+  key: {
+    width: 80,
+    height: 80,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  keyEmpty: { width: 80, height: 80 },
+  keyText: { fontWeight: "400" as const },
 });

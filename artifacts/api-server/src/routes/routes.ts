@@ -278,6 +278,12 @@ export async function registerRoutes(
 
   app.get('/api/auth/user', async (req: any, res) => {
     try {
+      // Dev passcode bypass
+      const devUserId = (req.session as any)?.devUserId;
+      if (devUserId) {
+        const user = await storage.getUserByAuthId("dev-test-user");
+        return res.json(user);
+      }
       if (!req.isAuthenticated() || !req.user?.claims?.sub) {
         return res.json(null);
       }
@@ -288,6 +294,29 @@ export async function registerRoutes(
       console.error("Error fetching user:", error);
       res.json(null);
     }
+  });
+
+  app.post("/api/dev-login", async (req: Request, res: Response) => {
+    const { code } = req.body;
+    if (code !== "0707") {
+      return res.status(401).json({ error: "Invalid code" });
+    }
+    await storage.upsertUser({
+      authId: "dev-test-user",
+      email: "dev@carda.test",
+      firstName: "Dev",
+      lastName: "Tester",
+    });
+    const user = await storage.getUserByAuthId("dev-test-user");
+    (req.session as any).devUserId = user?.id;
+    req.session.save(() => {
+      res.json(user);
+    });
+  });
+
+  app.post("/api/dev-logout", async (req: Request, res: Response) => {
+    delete (req.session as any).devUserId;
+    req.session.save(() => res.json({ ok: true }));
   });
 
   app.post("/api/contacts", isAuthenticated, async (req: any, res: Response) => {

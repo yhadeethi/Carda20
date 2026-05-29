@@ -150,6 +150,13 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // Dev passcode bypass — attach a synthetic user so all routes work unchanged
+  const devUserId = (req.session as any)?.devUserId;
+  if (devUserId) {
+    (req as any).user = { claims: { sub: "dev-test-user" }, access_token: "dev" };
+    return next();
+  }
+
   const user = req.user as ReplitAuthUser | undefined;
 
   if (!req.isAuthenticated() || !user?.claims?.sub) {
