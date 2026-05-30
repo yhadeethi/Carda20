@@ -21,7 +21,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
-import { api, Contact, ContactActivity, ContactTask, TimelineEvent } from "@/lib/api";
+import { api, Contact, ContactActivity, ContactTask, TimelineEvent, ContactReminder } from "@/lib/api";
+import { ContactActivityCalendar } from "@/components/ContactActivityCalendar";
 import { debriefStore } from "@/lib/debriefStore";
 import { useColors } from "@/hooks/useColors";
 
@@ -220,6 +221,21 @@ export default function ContactDetailScreen() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [addingTask, setAddingTask] = useState(false);
 
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderLabel, setReminderLabel] = useState("");
+  const [reminderDate, setReminderDate] = useState<Date>(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d;
+  });
+  const [savingReminder, setSavingReminder] = useState(false);
+
+  const [showFollowUp, setShowFollowUp] = useState(false);
+  const [followUpTone, setFollowUpTone] = useState<"friendly" | "warm" | "direct" | "formal">("friendly");
+  const [followUpMode, setFollowUpMode] = useState<"email_followup" | "linkedin_message" | "meeting_intro">("email_followup");
+  const [followUpLength, setFollowUpLength] = useState<"short" | "medium">("medium");
+  const [followUpContext, setFollowUpContext] = useState("");
+  const [generatingFollowUp, setGeneratingFollowUp] = useState(false);
+  const [followUpResult, setFollowUpResult] = useState<{ subject?: string; body: string; bullets: string[] } | null>(null);
+
   const { data: contact, isLoading } = useQuery<Contact>({
     queryKey: ["contact", id],
     queryFn: async () => {
@@ -242,6 +258,12 @@ export default function ContactDetailScreen() {
   const { data: timelineEvents = [] } = useQuery<TimelineEvent[]>({
     queryKey: ["contact-timeline", id],
     queryFn: () => api.getContactTimeline(Number(id)),
+    enabled: !!id,
+  });
+
+  const { data: reminders = [] } = useQuery<ContactReminder[]>({
+    queryKey: ["contact-reminders", id],
+    queryFn: () => api.getContactReminders(Number(id)),
     enabled: !!id,
   });
 
@@ -460,6 +482,88 @@ export default function ContactDetailScreen() {
         },
       },
     ]);
+  };
+
+  const handleSaveReminder = async () => {
+    if (!contact || !reminderLabel.trim()) return;
+    setSavingReminder(true);
+    try {
+      await api.createContactReminder(contact.id, {
+        clientId: `reminder-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        label: reminderLabel.trim(),
+        remindAt: reminderDate.toISOString(),
+      });
+      await qc.invalidateQueries({ queryKey: ["contact-reminders", id] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowReminderModal(false);
+      setReminderLabel("");
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+      setReminderDate(d);
+    } catch {
+      Alert.alert("Error", "Could not save reminder.");
+    } finally {
+      setSavingReminder(false);
+    }
+  };
+
+  const handleDismissReminder = async (reminder: ContactReminder) => {
+    if (!contact) return;
+    try {
+      await api.updateContactReminder(contact.id, reminder.id, {
+        done: true,
+        doneAt: new Date().toISOString(),
+      });
+      await qc.invalidateQueries({ queryKey: ["contact-reminders", id] });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      Alert.alert("Error", "Could not update reminder.");
+    }
+  };
+
+  const handleDeleteReminder = (reminder: ContactReminder) => {
+    if (!contact) return;
+    Alert.alert("Delete reminder", `"${reminder.label}" will be removed.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.deleteContactReminder(contact.id, reminder.id);
+            await qc.invalidateQueries({ queryKey: ["contact-reminders", id] });
+          } catch {
+            Alert.alert("Error", "Could not delete reminder.");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleGenerateFollowUp = async () => {
+    if (!contact) return;
+    setGeneratingFollowUp(true);
+    setFollowUpResult(null);
+    try {
+      const result = await api.generateFollowUp({
+        contact: {
+          name: contact.fullName || contact.email || "Contact",
+          company: contact.companyName,
+          title: contact.jobTitle,
+          email: contact.email,
+        },
+        request: {
+          mode: followUpMode,
+          tone: followUpTone,
+          length: followUpLength,
+          context: followUpContext.trim() || undefined,
+        },
+      });
+      setFollowUpResult(result);
+    } catch {
+      Alert.alert("Error", "Could not generate follow-up. AI service may not be configured.");
+    } finally {
+      setGeneratingFollowUp(false);
+    }
   };
 
   const displayName = contact?.fullName || contact?.email || "Contact";
@@ -804,6 +908,48 @@ export default function ContactDetailScreen() {
                 </Text>
               </GlassCard>
             </TouchableOpacity>
+
+            {/* Set Reminder */}
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowReminderModal(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <GlassCard style={styles.actionCard}>
+                <View style={[styles.actionIconWrap, { backgroundColor: "#F59E0B18" }]}>
+                  <Feather name="bell" size={18} color="#F59E0B" />
+                </View>
+                <Text style={[styles.actionTitle, { color: colors.foreground }]}>Set Reminder</Text>
+                <Text style={[styles.actionSub, { color: colors.mutedForeground }]}>
+                  {reminders.filter((r) => r.done === 0).length > 0
+                    ? `${reminders.filter((r) => r.done === 0).length} pending`
+                    : "Schedule follow-up"}
+                </Text>
+              </GlassCard>
+            </TouchableOpacity>
+
+            {/* Draft Follow-up */}
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setFollowUpResult(null);
+                setFollowUpContext("");
+                setShowFollowUp(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <GlassCard style={styles.actionCard}>
+                <View style={[styles.actionIconWrap, { backgroundColor: "#22C55E18" }]}>
+                  <Feather name="zap" size={18} color="#22C55E" />
+                </View>
+                <Text style={[styles.actionTitle, { color: colors.foreground }]}>Draft Follow-up</Text>
+                <Text style={[styles.actionSub, { color: colors.mutedForeground }]}>
+                  AI-powered draft
+                </Text>
+              </GlassCard>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -946,18 +1092,27 @@ export default function ContactDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Activity list */}
-            {filteredActivities.length > 0 ? (
-              filteredActivities.map((item) => (
-                <ActivityRow key={item.id} item={item} />
-              ))
+            {/* Calendar view */}
+            {activityView === "calendar" ? (
+              <ContactActivityCalendar
+                timeline={timelineEvents}
+                tasks={tasks ?? []}
+                reminders={reminders}
+              />
             ) : (
-              <View style={styles.emptyActivity}>
-                <Feather name="clock" size={20} color={colors.mutedForeground} style={{ opacity: 0.5 }} />
-                <Text style={[styles.emptyActivityText, { color: colors.mutedForeground }]}>
-                  No activity yet
-                </Text>
-              </View>
+              /* Activity list */
+              filteredActivities.length > 0 ? (
+                filteredActivities.map((item) => (
+                  <ActivityRow key={item.id} item={item} />
+                ))
+              ) : (
+                <View style={styles.emptyActivity}>
+                  <Feather name="clock" size={20} color={colors.mutedForeground} style={{ opacity: 0.5 }} />
+                  <Text style={[styles.emptyActivityText, { color: colors.mutedForeground }]}>
+                    No activity yet
+                  </Text>
+                </View>
+              )
             )}
           </GlassCard>
         </View>
@@ -991,6 +1146,79 @@ export default function ContactDetailScreen() {
               <View style={styles.emptyTasks}>
                 <Text style={[styles.emptyTasksText, { color: colors.mutedForeground }]}>
                   No tasks yet — add a follow-up action
+                </Text>
+              </View>
+            )}
+          </GlassCard>
+        </View>
+
+        {/* ── REMINDERS ── */}
+        <View style={styles.section}>
+          <View style={styles.taskSectionHeader}>
+            <Feather name="bell" size={13} color={colors.mutedForeground} />
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>
+              REMINDERS ({reminders.length})
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowReminderModal(true)}
+              style={[styles.addTaskBtn, { backgroundColor: "#F59E0B", borderRadius: colors.radius - 4 }]}
+            >
+              <Feather name="plus" size={14} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <GlassCard style={{ padding: 0 }}>
+            {reminders.length > 0 ? (
+              reminders.map((r) => {
+                const isDone = r.done === 1;
+                const remindDate = new Date(r.remindAt);
+                const isPast = remindDate < new Date() && !isDone;
+                return (
+                  <View
+                    key={r.id}
+                    style={[styles.taskRow, { borderBottomColor: colors.border }]}
+                  >
+                    <TouchableOpacity
+                      onPress={() => !isDone && handleDismissReminder(r)}
+                      style={styles.taskCheck}
+                    >
+                      <View style={[
+                        styles.checkbox,
+                        {
+                          borderColor: isDone ? "#F59E0B" : isPast ? "#EF4444" : "#F59E0B",
+                          backgroundColor: isDone ? "#F59E0B" : "transparent",
+                          borderRadius: 4,
+                        },
+                      ]}>
+                        {isDone ? <Feather name="check" size={11} color="#fff" /> : null}
+                      </View>
+                    </TouchableOpacity>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[
+                        styles.taskTitle,
+                        {
+                          color: isDone ? colors.mutedForeground : colors.foreground,
+                          textDecorationLine: isDone ? "line-through" : "none",
+                        },
+                      ]} numberOfLines={2}>
+                        {r.label}
+                      </Text>
+                      <Text style={[{ fontSize: 11, marginTop: 2, color: isPast && !isDone ? "#EF4444" : colors.mutedForeground }]}>
+                        {remindDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {" · "}
+                        {remindDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        {isPast && !isDone ? " · Overdue" : ""}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleDeleteReminder(r)} style={styles.taskDelete}>
+                      <Feather name="x" size={14} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.emptyTasks}>
+                <Text style={[styles.emptyTasksText, { color: colors.mutedForeground }]}>
+                  No reminders — tap + to schedule one
                 </Text>
               </View>
             )}
@@ -1159,6 +1387,307 @@ export default function ContactDetailScreen() {
                 <Text style={styles.modalButtonText}>Add Task</Text>
               )}
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Set Reminder Modal */}
+      <Modal
+        visible={showReminderModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReminderModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.reminderSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Set Reminder</Text>
+              <TouchableOpacity onPress={() => setShowReminderModal(false)}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>REMINDER LABEL</Text>
+            <TextInput
+              value={reminderLabel}
+              onChangeText={setReminderLabel}
+              placeholder="e.g. Follow up on proposal"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.modalInput, {
+                color: colors.foreground,
+                backgroundColor: colors.secondary,
+                borderColor: colors.border,
+                borderRadius: 10,
+              }]}
+            />
+
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 4 }]}>QUICK DATE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 2 }}>
+              <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
+                {[
+                  { label: "Today", days: 0, hour: 17 },
+                  { label: "Tomorrow", days: 1, hour: 9 },
+                  { label: "In 3 days", days: 3, hour: 9 },
+                  { label: "1 week", days: 7, hour: 9 },
+                  { label: "2 weeks", days: 14, hour: 9 },
+                ].map((preset) => {
+                  const presetDate = new Date();
+                  presetDate.setDate(presetDate.getDate() + preset.days);
+                  presetDate.setHours(preset.hour, 0, 0, 0);
+                  const isActive =
+                    reminderDate.toDateString() === presetDate.toDateString() &&
+                    reminderDate.getHours() === preset.hour;
+                  return (
+                    <TouchableOpacity
+                      key={preset.label}
+                      onPress={() => setReminderDate(presetDate)}
+                      style={[
+                        styles.presetPill,
+                        {
+                          backgroundColor: isActive ? "#F59E0B" : colors.secondary,
+                          borderColor: isActive ? "#F59E0B" : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.presetPillText, { color: isActive ? "#fff" : colors.mutedForeground }]}>
+                        {preset.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 8 }]}>TIME</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+              <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
+                {[
+                  { label: "8:00 AM", h: 8 }, { label: "9:00 AM", h: 9 }, { label: "12:00 PM", h: 12 },
+                  { label: "2:00 PM", h: 14 }, { label: "5:00 PM", h: 17 }, { label: "8:00 PM", h: 20 },
+                ].map((t) => {
+                  const isActive = reminderDate.getHours() === t.h;
+                  return (
+                    <TouchableOpacity
+                      key={t.label}
+                      onPress={() => {
+                        const d = new Date(reminderDate);
+                        d.setHours(t.h, 0, 0, 0);
+                        setReminderDate(d);
+                      }}
+                      style={[
+                        styles.presetPill,
+                        {
+                          backgroundColor: isActive ? "#F59E0B" : colors.secondary,
+                          borderColor: isActive ? "#F59E0B" : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.presetPillText, { color: isActive ? "#fff" : colors.mutedForeground }]}>
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <View style={[styles.reminderPreview, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
+              <Feather name="bell" size={14} color="#D97706" />
+              <Text style={[styles.reminderPreviewText, { color: "#92400E" }]}>
+                {reminderDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                {" at "}
+                {reminderDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleSaveReminder}
+              disabled={!reminderLabel.trim() || savingReminder}
+              style={[
+                styles.modalButton,
+                {
+                  backgroundColor: reminderLabel.trim() ? "#F59E0B" : colors.muted,
+                  borderRadius: colors.radius,
+                },
+              ]}
+            >
+              {savingReminder ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.modalButtonText}>Save Reminder</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Draft Follow-up Sheet */}
+      <Modal
+        visible={showFollowUp}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setShowFollowUp(false); setFollowUpResult(null); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.followUpSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Draft Follow-up</Text>
+              <TouchableOpacity onPress={() => { setShowFollowUp(false); setFollowUpResult(null); }}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            {followUpResult ? (
+              /* Result view */
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                {followUpResult.subject && (
+                  <View style={[styles.fuResultBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                    <Text style={[styles.fuResultLabel, { color: colors.mutedForeground }]}>SUBJECT</Text>
+                    <Text style={[styles.fuResultText, { color: colors.foreground }]}>{followUpResult.subject}</Text>
+                  </View>
+                )}
+                <View style={[styles.fuResultBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                  <Text style={[styles.fuResultLabel, { color: colors.mutedForeground }]}>MESSAGE</Text>
+                  <Text style={[styles.fuResultText, { color: colors.foreground }]}>{followUpResult.body}</Text>
+                </View>
+                {followUpResult.bullets.length > 0 && (
+                  <View style={[styles.fuResultBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                    <Text style={[styles.fuResultLabel, { color: colors.mutedForeground }]}>KEY POINTS</Text>
+                    {followUpResult.bullets.map((b, i) => (
+                      <View key={i} style={styles.fuBulletRow}>
+                        <View style={[styles.fuBulletDot, { backgroundColor: colors.primary }]} />
+                        <Text style={[styles.fuResultText, { color: colors.foreground }]}>{b}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 8, marginBottom: 16 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const text = (followUpResult.subject ? `Subject: ${followUpResult.subject}\n\n` : "") + followUpResult.body;
+                      Share.share({ message: text, title: "Follow-up Draft" });
+                    }}
+                    style={[styles.fuActionBtn, { backgroundColor: colors.primary, flex: 1 }]}
+                  >
+                    <Feather name="share-2" size={15} color="#fff" />
+                    <Text style={styles.fuActionBtnText}>Share</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setFollowUpResult(null)}
+                    style={[styles.fuActionBtn, { backgroundColor: colors.secondary, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
+                  >
+                    <Feather name="refresh-cw" size={15} color={colors.foreground} />
+                    <Text style={[styles.fuActionBtnText, { color: colors.foreground }]}>Regenerate</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            ) : (
+              /* Config view */
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>MEDIUM</Text>
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                  {([
+                    { value: "email_followup" as const, label: "Email" },
+                    { value: "linkedin_message" as const, label: "LinkedIn" },
+                    { value: "meeting_intro" as const, label: "Meet Request" },
+                  ]).map((opt) => (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setFollowUpMode(opt.value)}
+                      style={[styles.fuPill, {
+                        backgroundColor: followUpMode === opt.value ? colors.primary : colors.secondary,
+                        borderColor: followUpMode === opt.value ? colors.primary : colors.border,
+                      }]}
+                    >
+                      <Text style={[styles.fuPillText, { color: followUpMode === opt.value ? "#fff" : colors.mutedForeground }]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>TONE</Text>
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                  {([
+                    { value: "friendly" as const, label: "Friendly" },
+                    { value: "warm" as const, label: "Warm" },
+                    { value: "direct" as const, label: "Direct" },
+                    { value: "formal" as const, label: "Formal" },
+                  ]).map((opt) => (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setFollowUpTone(opt.value)}
+                      style={[styles.fuPill, {
+                        backgroundColor: followUpTone === opt.value ? "#6366F1" : colors.secondary,
+                        borderColor: followUpTone === opt.value ? "#6366F1" : colors.border,
+                      }]}
+                    >
+                      <Text style={[styles.fuPillText, { color: followUpTone === opt.value ? "#fff" : colors.mutedForeground }]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>LENGTH</Text>
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+                  {([
+                    { value: "short" as const, label: "Short (2-3 sentences)" },
+                    { value: "medium" as const, label: "Medium (4-6 sentences)" },
+                  ]).map((opt) => (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setFollowUpLength(opt.value)}
+                      style={[styles.fuPill, {
+                        backgroundColor: followUpLength === opt.value ? "#22C55E" : colors.secondary,
+                        borderColor: followUpLength === opt.value ? "#22C55E" : colors.border,
+                        flex: 1,
+                      }]}
+                    >
+                      <Text style={[styles.fuPillText, { color: followUpLength === opt.value ? "#fff" : colors.mutedForeground }]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>CONTEXT (optional)</Text>
+                <TextInput
+                  value={followUpContext}
+                  onChangeText={setFollowUpContext}
+                  placeholder="How you met, what you discussed…"
+                  placeholderTextColor={colors.mutedForeground}
+                  multiline
+                  style={[styles.modalInput, styles.multilineInput, {
+                    color: colors.foreground,
+                    backgroundColor: colors.secondary,
+                    borderColor: colors.border,
+                    borderRadius: 10,
+                    marginBottom: 14,
+                  }]}
+                />
+
+                <TouchableOpacity
+                  onPress={handleGenerateFollowUp}
+                  disabled={generatingFollowUp}
+                  style={[styles.modalButton, { backgroundColor: "#6366F1", borderRadius: colors.radius, marginBottom: 16 }]}
+                >
+                  {generatingFollowUp ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text style={styles.modalButtonText}>Generating…</Text>
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Feather name="zap" size={16} color="#fff" />
+                      <Text style={styles.modalButtonText}>Generate Draft</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -1494,6 +2023,86 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1,
   },
-  modalButton: { paddingVertical: 14, alignItems: "center" },
+  modalButton: { paddingVertical: 14, alignItems: "center", justifyContent: "center" },
   modalButtonText: { color: "#fff", fontWeight: "600" as const, fontSize: 15 },
+
+  sheetHandle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.15)",
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  reminderSheet: {
+    marginHorizontal: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 36,
+    gap: 6,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    letterSpacing: 0.8,
+    textTransform: "uppercase" as const,
+    marginBottom: 6,
+  },
+  presetPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  presetPillText: { fontSize: 12, fontWeight: "600" as const },
+  reminderPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  reminderPreviewText: { fontSize: 13, fontWeight: "600" as const },
+
+  followUpSheet: {
+    marginHorizontal: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: "90%",
+    flex: 0,
+  },
+  fuPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  fuPillText: { fontSize: 12, fontWeight: "600" as const },
+  fuResultBlock: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 10,
+    gap: 6,
+  },
+  fuResultLabel: { fontSize: 10, fontWeight: "700" as const, letterSpacing: 0.8, textTransform: "uppercase" as const },
+  fuResultText: { fontSize: 14, lineHeight: 20 },
+  fuBulletRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  fuBulletDot: { width: 6, height: 6, borderRadius: 3, marginTop: 7, flexShrink: 0 },
+  fuActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
+  },
+  fuActionBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" as const },
 });

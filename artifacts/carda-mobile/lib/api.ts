@@ -80,6 +80,18 @@ export interface TimelineEvent {
   createdAt?: string;
 }
 
+export interface ContactReminder {
+  id: number;
+  contactId: number;
+  userId: number;
+  clientId: string;
+  label: string;
+  remindAt: string;
+  done: number;
+  doneAt?: string | null;
+  createdAt?: string;
+}
+
 export interface IntelResult {
   companyName?: string;
   domain?: string;
@@ -229,6 +241,49 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  getContactReminders: (contactId: number): Promise<ContactReminder[]> =>
+    apiFetch(`/api/contacts/${contactId}/reminders`),
+
+  createContactReminder: (
+    contactId: number,
+    data: { clientId: string; label: string; remindAt: string }
+  ): Promise<ContactReminder> =>
+    apiFetch(`/api/contacts/${contactId}/reminders`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateContactReminder: (
+    contactId: number,
+    reminderId: number,
+    data: { done?: boolean; doneAt?: string | null; label?: string; remindAt?: string }
+  ): Promise<ContactReminder> =>
+    apiFetch(`/api/contacts/${contactId}/reminders/${reminderId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteContactReminder: (contactId: number, reminderId: number): Promise<void> =>
+    apiFetch(`/api/contacts/${contactId}/reminders/${reminderId}`, {
+      method: "DELETE",
+    }),
+
+  generateFollowUp: (data: {
+    contact: { name: string; company?: string; title?: string; email?: string };
+    request: {
+      mode: "email_followup" | "linkedin_message" | "meeting_intro";
+      tone: "friendly" | "direct" | "warm" | "formal";
+      goal?: string;
+      context?: string;
+      length: "short" | "medium";
+    };
+  }): Promise<{ subject?: string; body: string; bullets: string[] }> =>
+    apiFetch("/api/followup", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
 
   getHubSpotStatus: (): Promise<{ connected: boolean }> =>
     apiFetch("/api/hubspot/status"),

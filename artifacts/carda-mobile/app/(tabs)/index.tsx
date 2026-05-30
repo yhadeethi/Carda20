@@ -19,7 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { ContactCard } from "@/components/ContactCard";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
-import { api, Contact } from "@/lib/api";
+import { api, Contact, ContactReminder } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
 import { useCapture } from "@/context/CaptureContext";
 
@@ -294,6 +294,15 @@ export default function HomeScreen() {
     })),
   });
 
+  // ── Batch-fetch reminders for all contacts ──────────────────────────────
+  const reminderQueries = useQueries({
+    queries: contacts.map((c) => ({
+      queryKey: ["contact-reminders", c.id],
+      queryFn: () => api.getContactReminders(c.id),
+      staleTime: 60_000,
+    })),
+  });
+
   const followUps = useMemo(
     () =>
       taskQueries.reduce(
@@ -302,6 +311,37 @@ export default function HomeScreen() {
       ),
     [taskQueries]
   );
+
+  type UpNextItem = {
+    reminder: ContactReminder;
+    contact: Contact;
+    group: "today" | "tomorrow" | "thisWeek";
+  };
+
+  const upNextItems = useMemo<UpNextItem[]>(() => {
+    const now = new Date();
+    const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+    const tomorrowEnd = new Date(todayEnd); tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+    const weekEnd = new Date(now); weekEnd.setHours(0, 0, 0, 0); weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const items: UpNextItem[] = [];
+    reminderQueries.forEach((q, i) => {
+      const contact = contacts[i];
+      if (!contact || !q.data) return;
+      q.data.forEach((r) => {
+        if (r.done === 1) return;
+        const d = new Date(r.remindAt);
+        if (d <= todayEnd) {
+          items.push({ reminder: r, contact, group: "today" });
+        } else if (d <= tomorrowEnd) {
+          items.push({ reminder: r, contact, group: "tomorrow" });
+        } else if (d <= weekEnd) {
+          items.push({ reminder: r, contact, group: "thisWeek" });
+        }
+      });
+    });
+    return items.sort((a, b) => new Date(a.reminder.remindAt).getTime() - new Date(b.reminder.remindAt).getTime());
+  }, [reminderQueries, contacts]);
 
   // ── Derived stats ────────────────────────────────────────────────────────
   const sevenDaysAgo = useMemo(() => {
@@ -491,21 +531,68 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── Calendar teaser ─────────────────────────────────────── */}
-        <View style={s.section}>
-          <GlassCard style={s.calTeaser}>
-            <View style={[s.calIcon, { backgroundColor: colors.primary + "18" }]}>
-              <Feather name="calendar" size={18} color={colors.primary} />
+        {/* ── Up Next ─────────────────────────────────────────────── */}
+        {upNextItems.length > 0 && (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>Up next</Text>
+              <View style={[s.badge, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
+                <Text style={[s.badgeText, { color: "#D97706" }]}>
+                  🔔 {upNextItems.length} reminder{upNextItems.length !== 1 ? "s" : ""}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.calTitle, { color: colors.foreground }]}>Connect your calendar</Text>
-              <Text style={[s.calSub, { color: colors.mutedForeground }]}>See who you're meeting today</Text>
-            </View>
-            <View style={[s.comingSoonBadge, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-              <Text style={[s.comingSoonText, { color: colors.mutedForeground }]}>Soon</Text>
-            </View>
-          </GlassCard>
-        </View>
+            <GlassCard style={{ padding: 0 }}>
+              {(() => {
+                const groups: Array<{ key: "today" | "tomorrow" | "thisWeek"; label: string }> = [
+                  { key: "today", label: "Today" },
+                  { key: "tomorrow", label: "Tomorrow" },
+                  { key: "thisWeek", label: "This Week" },
+                ];
+                return groups.map(({ key, label }) => {
+                  const groupItems = upNextItems.filter((i) => i.group === key);
+                  if (groupItems.length === 0) return null;
+                  return (
+                    <View key={key}>
+                      <View style={[s.upNextGroupHeader, { borderBottomColor: colors.border }]}>
+                        <Text style={[s.upNextGroupLabel, { color: colors.mutedForeground }]}>
+                          {label}
+                        </Text>
+                      </View>
+                      {groupItems.map((item) => {
+                        const contactName = item.contact.fullName || item.contact.email || "Contact";
+                        const remindDate = new Date(item.reminder.remindAt);
+                        return (
+                          <TouchableOpacity
+                            key={item.reminder.id}
+                            onPress={() => router.push(`/contact/${item.contact.id}` as any)}
+                            style={[s.upNextRow, { borderBottomColor: colors.border }]}
+                            activeOpacity={0.75}
+                          >
+                            <View style={[s.upNextIcon, { backgroundColor: "#FEF3C7" }]}>
+                              <Feather name="bell" size={14} color="#D97706" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[s.upNextLabel, { color: colors.foreground }]} numberOfLines={1}>
+                                {item.reminder.label}
+                              </Text>
+                              <Text style={[s.upNextMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
+                                {contactName}
+                                {" · "}
+                                {remindDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                              </Text>
+                            </View>
+                            <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  );
+                });
+              })()}
+            </GlassCard>
+          </View>
+        )}
 
         {/* ── Recent captures ────────────────────────────────────── */}
         {isLoading ? (
@@ -680,6 +767,20 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
     calSub: { fontSize: 12, marginTop: 1 },
     comingSoonBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
     comingSoonText: { fontSize: 11, fontWeight: "600" as const },
+
+    upNextGroupHeader: { paddingHorizontal: 14, paddingVertical: 6, borderBottomWidth: 1 },
+    upNextGroupLabel: { fontSize: 10, fontWeight: "700" as const, letterSpacing: 0.7, textTransform: "uppercase" as const },
+    upNextRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 11,
+      paddingHorizontal: 14,
+      borderBottomWidth: 1,
+    },
+    upNextIcon: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+    upNextLabel: { fontSize: 13, fontWeight: "600" as const },
+    upNextMeta: { fontSize: 11, marginTop: 1 },
 
     list: { gap: 8 },
 
