@@ -89,6 +89,8 @@ export default function VoiceDebriefReviewScreen() {
   const [editingSummary, setEditingSummary] = useState(false);
   const [tasks, setTasks] = useState<ParsedTask[]>([]);
   const [followUp, setFollowUp] = useState("");
+  const [editingFollowUp, setEditingFollowUp] = useState(false);
+  const [followUpDismissed, setFollowUpDismissed] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
 
   const [selectedContactId, setSelectedContactId] = useState<number | null>(
@@ -195,9 +197,14 @@ export default function VoiceDebriefReviewScreen() {
     try {
       if (selectedContactId) {
         const summaryText = summary.trim() || "Voice Debrief";
-        await api.createContactTask(selectedContactId, {
+        const now = new Date().toISOString();
+
+        await api.createTimelineEvent(selectedContactId, {
           clientId: `debrief-${Date.now()}`,
-          title: `Voice Debrief: ${summaryText.slice(0, 120)}`,
+          type: "voice_debrief",
+          summary: summaryText,
+          eventAt: now,
+          meta: { rawTranscript: transcript },
         });
 
         for (const task of acceptedTasks) {
@@ -208,6 +215,13 @@ export default function VoiceDebriefReviewScreen() {
               .toString(36)
               .slice(2)}`,
             title,
+          });
+        }
+
+        if (!followUpDismissed && followUp.trim()) {
+          await api.createContactTask(selectedContactId, {
+            clientId: `debrief-followup-${Date.now()}`,
+            title: followUp.trim().slice(0, 200),
           });
         }
 
@@ -670,16 +684,55 @@ export default function VoiceDebriefReviewScreen() {
           )}
 
           {/* ── Follow-up ── */}
-          {followUp ? (
+          {followUp && !followUpDismissed ? (
             <View style={s.section}>
               <Text style={s.sectionLabel}>FOLLOW-UP</Text>
               <GlassCard style={s.card}>
-                <View style={s.followUpHeader}>
-                  <Feather name="send" size={14} color="#6366F1" />
-                  <Text style={[s.followUpText, { color: colors.foreground }]}>
-                    {followUp}
-                  </Text>
-                </View>
+                {editingFollowUp ? (
+                  <>
+                    <TextInput
+                      style={[
+                        s.summaryInput,
+                        { color: colors.foreground, borderColor: colors.border },
+                      ]}
+                      value={followUp}
+                      onChangeText={setFollowUp}
+                      multiline
+                      autoFocus
+                      textAlignVertical="top"
+                      placeholderTextColor={colors.mutedForeground}
+                      placeholder="Describe the follow-up action…"
+                    />
+                    <TouchableOpacity
+                      style={[s.doneBtn, { backgroundColor: colors.primary }]}
+                      onPress={() => setEditingFollowUp(false)}
+                    >
+                      <Text style={s.doneBtnText}>Done</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <View style={s.followUpHeader}>
+                    <Feather name="send" size={14} color="#6366F1" style={{ marginTop: 2 }} />
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => setEditingFollowUp(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[s.followUpText, { color: colors.foreground }]}>
+                        {followUp}
+                      </Text>
+                      <Text style={[s.taskDue, { color: colors.mutedForeground, marginTop: 4 }]}>
+                        Tap to edit
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setFollowUpDismissed(true)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Feather name="x" size={16} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </GlassCard>
             </View>
           ) : null}

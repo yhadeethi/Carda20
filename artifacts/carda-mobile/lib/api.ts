@@ -200,6 +200,21 @@ export const api = {
       method: "DELETE",
     }),
 
+  createTimelineEvent: (
+    contactId: number,
+    data: {
+      clientId: string;
+      type: string;
+      summary: string;
+      eventAt: string;
+      meta?: Record<string, unknown>;
+    }
+  ): Promise<unknown> =>
+    apiFetch(`/api/contacts/${contactId}/timeline`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   getHubSpotStatus: (): Promise<{ connected: boolean }> =>
     apiFetch("/api/hubspot/status"),
 
