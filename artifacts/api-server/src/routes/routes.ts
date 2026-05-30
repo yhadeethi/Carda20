@@ -2073,7 +2073,7 @@ ${JSON.stringify(contacts || [], null, 2)}`;
       const { eventId, error, status } = await resolveEventParam(req.params.id, userId);
       if (error) return res.status(status!).json({ error });
 
-      const { title, locationLabel, latitude, longitude, tags, notes, eventLink, isActive, endedAt } = req.body;
+      const { title, locationLabel, latitude, longitude, tags, notes, eventLink, isActive, endedAt, startedAt } = req.body;
 
       const updates: any = {};
       if (title !== undefined) updates.title = title;
@@ -2085,6 +2085,7 @@ ${JSON.stringify(contacts || [], null, 2)}`;
       if (eventLink !== undefined) updates.eventLink = eventLink;
       if (isActive !== undefined) updates.isActive = isActive ? 1 : 0;
       if (endedAt !== undefined) updates.endedAt = endedAt ? new Date(endedAt) : null;
+      if (startedAt !== undefined) updates.startedAt = startedAt ? new Date(startedAt) : null;
 
       const event = await storage.updateUserEvent(eventId, updates);
       res.json(event);

@@ -95,7 +95,10 @@ export default function ScanScreen() {
           await api.attachContactsToEvent(eventId, [saved.id]);
           await qc.invalidateQueries({ queryKey: ["event-contacts", String(eventId)] });
         } catch {
-          // non-fatal — contact saved, attach failed silently
+          Alert.alert(
+            "Attach Failed",
+            "Contact saved, but could not attach it to the event. You can add it manually from the event screen."
+          );
         }
       }
       await qc.invalidateQueries({ queryKey: ["contacts"] });

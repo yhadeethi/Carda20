@@ -200,7 +200,10 @@ export default function BatchScanScreen() {
         await api.attachContactsToEvent(eventId, savedIds);
         await qc.invalidateQueries({ queryKey: ["event-contacts", String(eventId)] });
       } catch {
-        // non-fatal
+        Alert.alert(
+          "Attach Failed",
+          "Contacts saved, but could not attach them to the event. You can add them manually from the event screen."
+        );
       }
     }
 
@@ -317,6 +320,30 @@ export default function BatchScanScreen() {
 
   // ── Review phase (one-by-one carousel) ───────────────────────────────────
   if (phase === "review") {
+    if (items.length === 0) {
+      return (
+        <>
+          <Stack.Screen options={{ title: "Review Cards" }} />
+          <View style={[styles.container, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }]}>
+            <Feather name="check-circle" size={52} color={colors.primary} />
+            <Text style={{ fontSize: 18, fontWeight: "700" as const, color: colors.foreground }}>
+              All cards removed
+            </Text>
+            <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center" }}>
+              No cards left to review. Go back to capture more.
+            </Text>
+            <TouchableOpacity
+              onPress={() => setPhase("capture")}
+              style={[styles.saveBarBtn, { backgroundColor: colors.primary, borderRadius: colors.radius, paddingHorizontal: 28 }]}
+            >
+              <Feather name="camera" size={16} color="#fff" />
+              <Text style={styles.saveBarBtnText}>Scan More Cards</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      );
+    }
+
     const safeIndex = Math.min(reviewIndex, items.length - 1);
     const currentItem = items[safeIndex];
     const total = items.length;
