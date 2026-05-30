@@ -43,7 +43,7 @@ function makeLast7Days() {
     d.setDate(d.getDate() - (6 - i));
     return {
       iso: d.toISOString().split("T")[0],
-      label: d.toLocaleDateString("en-US", { weekday: "narrow" }),
+      label: ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][d.getDay()],
       isToday: i === 6,
     };
   });
@@ -556,7 +556,7 @@ export default function HomeScreen() {
             <View style={s.sectionHeader}>
               <View style={[s.skeletonLine, { width: 70, height: 13 }]} />
             </View>
-            <View style={[s.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <GlassCard>
               <View style={s.chart}>
                 {[0.45, 0.7, 0.3, 0.85, 0.55, 0.65, 0.9].map((h, i) => (
                   <View key={i} style={s.chartCol}>
@@ -568,7 +568,7 @@ export default function HomeScreen() {
                   </View>
                 ))}
               </View>
-            </View>
+            </GlassCard>
           </View>
         ) : contacts.length > 0 ? (
           <View style={s.section}>
@@ -580,7 +580,7 @@ export default function HomeScreen() {
                 </View>
               )}
             </View>
-            <View style={[s.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <GlassCard>
               <View style={s.chart}>
                 {chartData.map((d) => (
                   <View key={d.iso} style={s.chartCol}>
@@ -621,7 +621,7 @@ export default function HomeScreen() {
                 ))}
               </View>
               <Text style={s.chartSubtitle}>Tap + below to keep the streak going.</Text>
-            </View>
+            </GlassCard>
           </View>
         ) : null}
 
@@ -631,23 +631,21 @@ export default function HomeScreen() {
             <View style={s.sectionHeader}>
               <View style={[s.skeletonLine, { width: 110, height: 13 }]} />
             </View>
-            <GlassCard padding={0} style={{ overflow: "hidden" } as any}>
+            <View style={{ flexDirection: "row", gap: 8 }}>
               {[1, 2, 3].map((i) => (
                 <View
                   key={i}
                   style={[
-                    s.captureRow,
-                    i > 1 && { borderTopWidth: 1, borderTopColor: colors.border },
+                    s.captureCard,
+                    { backgroundColor: colors.card, borderColor: colors.border },
                   ]}
                 >
-                  <View style={[s.skeletonCircle, { width: 36, height: 36 }]} />
-                  <View style={{ flex: 1, gap: 6 }}>
-                    <View style={[s.skeletonLine, { width: "55%", height: 12 }]} />
-                    <View style={[s.skeletonLine, { width: "38%", height: 10 }]} />
-                  </View>
+                  <View style={[s.skeletonCircle, { width: 40, height: 40 }]} />
+                  <View style={[s.skeletonLine, { width: "80%", height: 12, marginTop: 4 }]} />
+                  <View style={[s.skeletonLine, { width: "60%", height: 10 }]} />
                 </View>
               ))}
-            </GlassCard>
+            </View>
           </View>
         ) : recentCaptures.length > 0 ? (
           <View style={s.section}>
@@ -659,30 +657,27 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               )}
             </View>
-            <GlassCard padding={0} style={{ overflow: "hidden" } as any}>
-              {recentCaptures.map((c, idx) => (
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {recentCaptures.map((c) => (
                 <TouchableOpacity
                   key={c.id}
                   onPress={() => router.push(`/contact/${c.id}` as any)}
                   style={[
-                    s.captureRow,
-                    idx > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+                    s.captureCard,
+                    { backgroundColor: colors.card, borderColor: colors.border },
                   ]}
                   activeOpacity={0.75}
                 >
-                  <Avatar name={c.fullName || c.email} size={36} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.captureName, { color: colors.foreground }]} numberOfLines={1}>
-                      {c.fullName || c.email || "Unknown"}
-                    </Text>
-                    <Text style={[s.captureMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {c.companyName || c.jobTitle || "No company"}
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+                  <Avatar name={c.fullName || c.email} size={40} />
+                  <Text style={[s.captureName, { color: colors.foreground }]} numberOfLines={2}>
+                    {c.fullName || c.email || "Unknown"}
+                  </Text>
+                  <Text style={[s.captureMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {c.companyName || c.jobTitle || "No company"}
+                  </Text>
                 </TouchableOpacity>
               ))}
-            </GlassCard>
+            </View>
           </View>
         ) : (
           <View style={s.empty}>
@@ -829,15 +824,16 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
     chartDayLabel: { fontSize: 11 },
     chartSubtitle: { fontSize: 11, color: colors.mutedForeground, opacity: 0.55, marginTop: 10 },
 
-    captureRow: {
-      flexDirection: "row" as const,
+    captureCard: {
+      flex: 1,
+      borderWidth: 1,
+      borderRadius: 12,
+      padding: 12,
       alignItems: "center" as const,
-      gap: 12,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
+      gap: 6,
     },
-    captureName: { fontSize: 14, fontWeight: "600" as const },
-    captureMeta: { fontSize: 12, marginTop: 2 },
+    captureName: { fontSize: 12, fontWeight: "600" as const, textAlign: "center" as const },
+    captureMeta: { fontSize: 11, textAlign: "center" as const },
 
     skeletonLine: { backgroundColor: colors.border, borderRadius: 4, opacity: 0.6 },
     skeletonCircle: { borderRadius: 18, backgroundColor: colors.border, opacity: 0.6 },
