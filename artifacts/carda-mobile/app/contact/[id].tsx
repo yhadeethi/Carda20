@@ -156,31 +156,29 @@ function ActivityRow({ item }: { item: DisplayActivity }) {
     meeting: "users",
     email: "mail",
     voice_debrief: "mic",
+    reminder: "bell",
   };
   const icon = iconMap[item.type] ?? "activity";
   const isDebrief = item.isDebrief;
+  const isReminder = item.type === "reminder";
+
+  const iconColor = isDebrief ? "#6366F1" : isReminder ? "#F59E0B" : colors.primary;
+  const iconBg = isDebrief ? "#6366F11A" : isReminder ? "#FEF3C7" : colors.primary + "18";
 
   return (
     <View style={[styles.activityRow, { borderBottomColor: colors.border }]}>
-      <View
-        style={[
-          styles.activityIcon,
-          {
-            backgroundColor: isDebrief ? "#6366F1" + "1A" : colors.primary + "18",
-            borderRadius: 8,
-          },
-        ]}
-      >
-        <Feather
-          name={icon as any}
-          size={14}
-          color={isDebrief ? "#6366F1" : colors.primary}
-        />
+      <View style={[styles.activityIcon, { backgroundColor: iconBg, borderRadius: 8 }]}>
+        <Feather name={icon as any} size={14} color={iconColor} />
       </View>
       <View style={{ flex: 1 }}>
         {isDebrief && (
           <Text style={[styles.activityLabel, { color: "#6366F1" }]}>
             Voice Debrief
+          </Text>
+        )}
+        {isReminder && (
+          <Text style={[styles.activityLabel, { color: "#F59E0B" }]}>
+            Reminder
           </Text>
         )}
         <Text style={[styles.activityText, { color: colors.foreground }]}>
@@ -229,9 +227,8 @@ export default function ContactDetailScreen() {
   const [savingReminder, setSavingReminder] = useState(false);
 
   const [showFollowUp, setShowFollowUp] = useState(false);
-  const [followUpTone, setFollowUpTone] = useState<"friendly" | "warm" | "direct" | "formal">("friendly");
-  const [followUpMode, setFollowUpMode] = useState<"email_followup" | "linkedin_message" | "meeting_intro">("email_followup");
-  const [followUpLength, setFollowUpLength] = useState<"short" | "medium">("medium");
+  const [followUpTone, setFollowUpTone] = useState<"Friendly" | "Professional" | "Brief">("Friendly");
+  const [followUpMedium, setFollowUpMedium] = useState<"Email" | "SMS">("Email");
   const [followUpContext, setFollowUpContext] = useState("");
   const [generatingFollowUp, setGeneratingFollowUp] = useState(false);
   const [followUpResult, setFollowUpResult] = useState<{ subject?: string; body: string; bullets: string[] } | null>(null);
@@ -262,7 +259,7 @@ export default function ContactDetailScreen() {
   });
 
   const { data: reminders = [] } = useQuery<ContactReminder[]>({
-    queryKey: ["contact-reminders", id],
+    queryKey: ["contact-reminders", Number(id)],
     queryFn: () => api.getContactReminders(Number(id)),
     enabled: !!id,
   });
@@ -493,7 +490,7 @@ export default function ContactDetailScreen() {
         label: reminderLabel.trim(),
         remindAt: reminderDate.toISOString(),
       });
-      await qc.invalidateQueries({ queryKey: ["contact-reminders", id] });
+      await qc.invalidateQueries({ queryKey: ["contact-reminders", Number(id)] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowReminderModal(false);
       setReminderLabel("");
@@ -513,7 +510,7 @@ export default function ContactDetailScreen() {
         done: true,
         doneAt: new Date().toISOString(),
       });
-      await qc.invalidateQueries({ queryKey: ["contact-reminders", id] });
+      await qc.invalidateQueries({ queryKey: ["contact-reminders", Number(id)] });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {
       Alert.alert("Error", "Could not update reminder.");
@@ -530,7 +527,7 @@ export default function ContactDetailScreen() {
         onPress: async () => {
           try {
             await api.deleteContactReminder(contact.id, reminder.id);
-            await qc.invalidateQueries({ queryKey: ["contact-reminders", id] });
+            await qc.invalidateQueries({ queryKey: ["contact-reminders", Number(id)] });
           } catch {
             Alert.alert("Error", "Could not delete reminder.");
           }
@@ -544,6 +541,11 @@ export default function ContactDetailScreen() {
     setGeneratingFollowUp(true);
     setFollowUpResult(null);
     try {
+      const toneMap: Record<"Friendly" | "Professional" | "Brief", "friendly" | "formal" | "direct"> = {
+        Friendly: "friendly",
+        Professional: "formal",
+        Brief: "direct",
+      };
       const result = await api.generateFollowUp({
         contact: {
           name: contact.fullName || contact.email || "Contact",
@@ -552,9 +554,9 @@ export default function ContactDetailScreen() {
           email: contact.email,
         },
         request: {
-          mode: followUpMode,
-          tone: followUpTone,
-          length: followUpLength,
+          mode: "email_followup",
+          tone: toneMap[followUpTone],
+          length: followUpTone === "Brief" ? "short" : "medium",
           context: followUpContext.trim() || undefined,
         },
       });
@@ -583,6 +585,13 @@ export default function ContactDetailScreen() {
       text: e.summary,
       createdAt: e.eventAt,
       isDebrief: e.type === "voice_debrief",
+    })),
+    ...reminders.map((r) => ({
+      id: `reminder-${r.id}`,
+      type: "reminder" as const,
+      text: r.label,
+      createdAt: r.remindAt,
+      isDebrief: false,
     })),
   ].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -1567,6 +1576,16 @@ export default function ContactDetailScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       const text = (followUpResult.subject ? `Subject: ${followUpResult.subject}\n\n` : "") + followUpResult.body;
+                      Share.share({ message: text, title: "Copy" });
+                    }}
+                    style={[styles.fuActionBtn, { backgroundColor: colors.secondary, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
+                  >
+                    <Feather name="copy" size={15} color={colors.foreground} />
+                    <Text style={[styles.fuActionBtnText, { color: colors.foreground }]}>Copy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const text = (followUpResult.subject ? `Subject: ${followUpResult.subject}\n\n` : "") + followUpResult.body;
                       Share.share({ message: text, title: "Follow-up Draft" });
                     }}
                     style={[styles.fuActionBtn, { backgroundColor: colors.primary, flex: 1 }]}
@@ -1588,21 +1607,17 @@ export default function ContactDetailScreen() {
               <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
                 <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>MEDIUM</Text>
                 <View style={{ flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-                  {([
-                    { value: "email_followup" as const, label: "Email" },
-                    { value: "linkedin_message" as const, label: "LinkedIn" },
-                    { value: "meeting_intro" as const, label: "Meet Request" },
-                  ]).map((opt) => (
+                  {(["Email", "SMS"] as const).map((opt) => (
                     <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setFollowUpMode(opt.value)}
+                      key={opt}
+                      onPress={() => setFollowUpMedium(opt)}
                       style={[styles.fuPill, {
-                        backgroundColor: followUpMode === opt.value ? colors.primary : colors.secondary,
-                        borderColor: followUpMode === opt.value ? colors.primary : colors.border,
+                        backgroundColor: followUpMedium === opt ? colors.primary : colors.secondary,
+                        borderColor: followUpMedium === opt ? colors.primary : colors.border,
                       }]}
                     >
-                      <Text style={[styles.fuPillText, { color: followUpMode === opt.value ? "#fff" : colors.mutedForeground }]}>
-                        {opt.label}
+                      <Text style={[styles.fuPillText, { color: followUpMedium === opt ? "#fff" : colors.mutedForeground }]}>
+                        {opt}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -1610,44 +1625,17 @@ export default function ContactDetailScreen() {
 
                 <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>TONE</Text>
                 <View style={{ flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-                  {([
-                    { value: "friendly" as const, label: "Friendly" },
-                    { value: "warm" as const, label: "Warm" },
-                    { value: "direct" as const, label: "Direct" },
-                    { value: "formal" as const, label: "Formal" },
-                  ]).map((opt) => (
+                  {(["Friendly", "Professional", "Brief"] as const).map((opt) => (
                     <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setFollowUpTone(opt.value)}
+                      key={opt}
+                      onPress={() => setFollowUpTone(opt)}
                       style={[styles.fuPill, {
-                        backgroundColor: followUpTone === opt.value ? "#6366F1" : colors.secondary,
-                        borderColor: followUpTone === opt.value ? "#6366F1" : colors.border,
+                        backgroundColor: followUpTone === opt ? "#6366F1" : colors.secondary,
+                        borderColor: followUpTone === opt ? "#6366F1" : colors.border,
                       }]}
                     >
-                      <Text style={[styles.fuPillText, { color: followUpTone === opt.value ? "#fff" : colors.mutedForeground }]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>LENGTH</Text>
-                <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
-                  {([
-                    { value: "short" as const, label: "Short (2-3 sentences)" },
-                    { value: "medium" as const, label: "Medium (4-6 sentences)" },
-                  ]).map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setFollowUpLength(opt.value)}
-                      style={[styles.fuPill, {
-                        backgroundColor: followUpLength === opt.value ? "#22C55E" : colors.secondary,
-                        borderColor: followUpLength === opt.value ? "#22C55E" : colors.border,
-                        flex: 1,
-                      }]}
-                    >
-                      <Text style={[styles.fuPillText, { color: followUpLength === opt.value ? "#fff" : colors.mutedForeground }]}>
-                        {opt.label}
+                      <Text style={[styles.fuPillText, { color: followUpTone === opt ? "#fff" : colors.mutedForeground }]}>
+                        {opt}
                       </Text>
                     </TouchableOpacity>
                   ))}
