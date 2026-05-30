@@ -1,3 +1,4 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -20,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ContactCard } from "@/components/ContactCard";
 import { GlassCard } from "@/components/GlassCard";
-import { api, Contact, UserEvent } from "@/lib/api";
+import { api, Contact, UpdateUserEventPayload, UserEvent } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
 
 function formatDate(dateStr?: string) {
@@ -51,6 +52,9 @@ export default function EventDetailScreen() {
   const [editLink, setEditLink] = useState("");
   const [editTags, setEditTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const [editDate, setEditDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(new Date());
 
   // ── add-existing search ───────────────────────────────────────────────────
   const [contactSearch, setContactSearch] = useState("");
@@ -76,7 +80,7 @@ export default function EventDetailScreen() {
 
   // ── mutations ─────────────────────────────────────────────────────────────
   const updateMutation = useMutation({
-    mutationFn: (data: Partial<UserEvent>) => api.updateUserEvent(Number(id), data),
+    mutationFn: (data: UpdateUserEventPayload) => api.updateUserEvent(Number(id), data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-event", id] });
       qc.invalidateQueries({ queryKey: ["user-events"] });
@@ -113,15 +117,19 @@ export default function EventDetailScreen() {
     setEditLink(event.eventLink || "");
     setEditTags(event.tags || []);
     setTagInput("");
+    const d = event.startedAt ? new Date(event.startedAt) : null;
+    setEditDate(d);
+    setTempDate(d || new Date());
     setSheet("edit");
   }, [event]);
 
   const saveEdit = () => {
     updateMutation.mutate({
       title: editTitle.trim() || event?.title,
-      notes: editNotes.trim() || undefined,
-      eventLink: editLink.trim() || undefined,
-      tags: editTags.length > 0 ? editTags : undefined,
+      notes: editNotes.trim() || null,
+      eventLink: editLink.trim() || null,
+      tags: editTags.length > 0 ? editTags : null,
+      startedAt: editDate ? editDate.toISOString() : undefined,
     });
   };
 
@@ -406,6 +414,24 @@ export default function EventDetailScreen() {
                 placeholder="Event name"
               />
 
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 14 }]}>DATE</Text>
+              <TouchableOpacity
+                onPress={() => { setTempDate(editDate || new Date()); setShowDatePicker(true); }}
+                style={[styles.textInput, styles.dateTouchable, { backgroundColor: colors.secondary, borderColor: colors.border, borderRadius: colors.radius }]}
+              >
+                <Feather name="calendar" size={15} color={colors.mutedForeground} />
+                <Text style={{ color: editDate ? colors.foreground : colors.mutedForeground, fontSize: 15, flex: 1 }}>
+                  {editDate
+                    ? editDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+                    : "Tap to set date (optional)"}
+                </Text>
+                {editDate && (
+                  <TouchableOpacity onPress={() => setEditDate(null)}>
+                    <Feather name="x" size={15} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 14 }]}>TAGS</Text>
               <View style={styles.tagInputRow}>
                 <TextInput
@@ -482,6 +508,41 @@ export default function EventDetailScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Date Picker Modal ────────────────────────────────────────────── */}
+      <Modal
+        visible={showDatePicker}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: insets.bottom + 8 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <Text style={{ color: colors.mutedForeground, fontSize: 15 }}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: "600" as const }}>Event Date</Text>
+              <TouchableOpacity onPress={() => { setEditDate(tempDate); setShowDatePicker(false); }}>
+                <Text style={{ color: colors.primary, fontSize: 15, fontWeight: "600" as const }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={tempDate}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(_, date) => {
+                if (date) setTempDate(date);
+                if (Platform.OS === "android") {
+                  setEditDate(date || tempDate);
+                  setShowDatePicker(false);
+                }
+              }}
+              style={{ width: "100%" }}
+            />
+          </View>
+        </View>
       </Modal>
 
       {/* ── Add Existing Contact Sheet ────────────────────────────────────── */}
@@ -620,6 +681,7 @@ const styles = StyleSheet.create({
   editTagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
   editTagChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, borderWidth: 1 },
   editTagChipText: { fontSize: 13, fontWeight: "500" as const },
+  dateTouchable: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8, paddingHorizontal: 12, paddingVertical: 11 },
   saveEditBtn: { paddingVertical: 14, alignItems: "center" },
   saveEditBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" as const },
 

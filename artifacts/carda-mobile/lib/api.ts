@@ -55,6 +55,17 @@ export interface UserEvent {
   createdAt?: string;
 }
 
+export interface UpdateUserEventPayload {
+  title?: string;
+  locationLabel?: string;
+  tags?: string[] | null;
+  notes?: string | null;
+  eventLink?: string | null;
+  isActive?: boolean;
+  startedAt?: string;
+  endedAt?: string;
+}
+
 export interface ScanResult {
   rawText: string;
   contact: Partial<Contact>;
@@ -189,7 +200,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  updateUserEvent: (id: number, data: Partial<UserEvent>): Promise<UserEvent> =>
+  updateUserEvent: (id: number, data: UpdateUserEventPayload): Promise<UserEvent> =>
     apiFetch(`/api/user-events/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

@@ -53,6 +53,7 @@ export default function BatchScanScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState(0);
   const [totalToScan, setTotalToScan] = useState(0);
+  const [reviewIndex, setReviewIndex] = useState(0);
 
   const editingItem = editingId ? items.find((i) => i.id === editingId) : null;
 
@@ -131,6 +132,7 @@ export default function BatchScanScreen() {
       })
     );
 
+    setReviewIndex(0);
     setPhase("review");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -313,107 +315,186 @@ export default function BatchScanScreen() {
     );
   }
 
-  // ── Review phase ──────────────────────────────────────────────────────────
+  // ── Review phase (one-by-one carousel) ───────────────────────────────────
   if (phase === "review") {
+    const safeIndex = Math.min(reviewIndex, items.length - 1);
+    const currentItem = items[safeIndex];
+    const total = items.length;
+    const isFirst = safeIndex === 0;
+    const isLast = safeIndex === total - 1;
+    const isFailed = currentItem?.phase === "failed";
+    const c = currentItem?.result || {};
+
+    const goNext = () => {
+      if (!isLast) setReviewIndex((i) => i + 1);
+    };
+    const goPrev = () => {
+      if (!isFirst) setReviewIndex((i) => i - 1);
+    };
+
     return (
       <>
         <Stack.Screen
           options={{
-            title: "Review Scans",
+            title: `Review Cards`,
             headerRight: () => (
               <TouchableOpacity onPress={approveAll} style={{ marginRight: 4, padding: 6 }}>
-                <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 14 }}>Approve All</Text>
+                <Text style={{ color: colors.primary, fontWeight: "600" as const, fontSize: 14 }}>Approve All</Text>
               </TouchableOpacity>
             ),
           }}
         />
         <EditModal />
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-          {/* summary bar */}
-          <View style={[styles.reviewSummary, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-            <View style={styles.reviewSummaryItem}>
-              <Text style={[styles.reviewSummaryNum, { color: "#22C55E" }]}>
-                {items.filter((i) => i.phase === "done").length}
+          {/* progress nav bar */}
+          <View style={[styles.carouselNav, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <TouchableOpacity
+              onPress={goPrev}
+              disabled={isFirst}
+              style={[styles.carouselNavBtn, isFirst && { opacity: 0.3 }]}
+            >
+              <Feather name="chevron-left" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+            <View style={{ flex: 1, alignItems: "center", gap: 2 }}>
+              <Text style={[styles.carouselCounter, { color: colors.foreground }]}>
+                Card {safeIndex + 1} of {total}
               </Text>
-              <Text style={[styles.reviewSummaryLabel, { color: colors.mutedForeground }]}>Scanned</Text>
+              <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+                {approvedCount} approved · {failedCount} failed
+              </Text>
             </View>
-            {failedCount > 0 && (
-              <View style={styles.reviewSummaryItem}>
-                <Text style={[styles.reviewSummaryNum, { color: colors.destructive }]}>{failedCount}</Text>
-                <Text style={[styles.reviewSummaryLabel, { color: colors.mutedForeground }]}>Failed</Text>
-              </View>
-            )}
-            <View style={styles.reviewSummaryItem}>
-              <Text style={[styles.reviewSummaryNum, { color: colors.primary }]}>{approvedCount}</Text>
-              <Text style={[styles.reviewSummaryLabel, { color: colors.mutedForeground }]}>Approved</Text>
-            </View>
+            <TouchableOpacity
+              onPress={goNext}
+              disabled={isLast}
+              style={[styles.carouselNavBtn, isLast && { opacity: 0.3 }]}
+            >
+              <Feather name="chevron-right" size={22} color={colors.foreground} />
+            </TouchableOpacity>
           </View>
 
-          <FlatList
-            data={items}
-            keyExtractor={(i) => i.id}
-            contentContainerStyle={{ padding: 12, paddingBottom: paddingBottom + 80 }}
-            renderItem={({ item }) => {
-              if (item.phase === "failed") {
-                return (
-                  <View style={[styles.reviewRow, styles.reviewRowFailed, { borderColor: colors.destructive + "44", backgroundColor: colors.destructive + "0D" }]}>
-                    <View style={[styles.reviewThumb, { backgroundColor: colors.muted }]}>
-                      <Feather name="alert-circle" size={24} color={colors.destructive} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.reviewName, { color: colors.destructive }]}>Scan failed</Text>
-                      <Text style={[styles.reviewMeta, { color: colors.mutedForeground }]} numberOfLines={2}>{item.error}</Text>
-                    </View>
+          {/* card display */}
+          <ScrollView
+            contentContainerStyle={{ padding: 20, paddingBottom: paddingBottom + 140 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {isFailed ? (
+              <View style={[styles.carouselCard, { backgroundColor: colors.destructive + "12", borderColor: colors.destructive + "44" }]}>
+                <Feather name="alert-circle" size={40} color={colors.destructive} />
+                <Text style={[styles.carouselFailTitle, { color: colors.destructive }]}>Scan Failed</Text>
+                <Text style={[styles.carouselFailMsg, { color: colors.mutedForeground }]}>
+                  {currentItem?.error || "Could not parse this card."}
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.carouselCard, {
+                backgroundColor: currentItem?.approved ? "#22C55E08" : colors.card,
+                borderColor: currentItem?.approved ? "#22C55E66" : colors.border,
+              }]}>
+                <Image
+                  source={{ uri: currentItem?.uri }}
+                  style={[styles.carouselImage, { borderColor: colors.border, borderRadius: colors.radius }]}
+                  resizeMode="cover"
+                />
+                {currentItem?.approved && (
+                  <View style={styles.carouselApprovedBadge}>
+                    <Feather name="check-circle" size={18} color="#22C55E" />
+                    <Text style={{ color: "#22C55E", fontWeight: "600" as const, fontSize: 13 }}>Approved</Text>
                   </View>
-                );
-              }
-
-              const c = item.result || {};
-              return (
-                <View
-                  style={[
-                    styles.reviewRow,
-                    {
-                      borderColor: item.approved ? "#22C55E44" : colors.border,
-                      backgroundColor: item.approved ? "#22C55E08" : colors.card,
-                    },
-                  ]}
-                >
-                  <Image source={{ uri: item.uri }} style={[styles.reviewThumb, { borderRadius: 6, borderColor: colors.border }]} resizeMode="cover" />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.reviewName, { color: colors.foreground }]} numberOfLines={1}>
-                      {c.fullName || "Unknown"}
+                )}
+                <View style={styles.carouselDetails}>
+                  <Text style={[styles.carouselName, { color: colors.foreground }]}>
+                    {c.fullName || "Unknown Name"}
+                  </Text>
+                  {(c.jobTitle || c.companyName) ? (
+                    <Text style={[styles.carouselMeta, { color: colors.mutedForeground }]}>
+                      {[c.jobTitle, c.companyName].filter(Boolean).join(" · ")}
                     </Text>
-                    {(c.jobTitle || c.companyName) ? (
-                      <Text style={[styles.reviewMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
-                        {[c.jobTitle, c.companyName].filter(Boolean).join(" · ")}
-                      </Text>
-                    ) : null}
-                    {c.email ? (
-                      <Text style={[styles.reviewMeta, { color: colors.mutedForeground }]} numberOfLines={1}>{c.email}</Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.reviewActions}>
-                    <TouchableOpacity onPress={() => openEdit(item.id)} style={styles.reviewBtn}>
-                      <Feather name="edit-2" size={16} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => toggleApprove(item.id)}
-                      style={[styles.reviewBtn, item.approved && { backgroundColor: "#22C55E22" }]}
-                    >
-                      <Feather name="check" size={16} color={item.approved ? "#22C55E" : colors.mutedForeground} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.reviewBtn}>
-                      <Feather name="x" size={16} color={colors.destructive} />
-                    </TouchableOpacity>
-                  </View>
+                  ) : null}
+                  {c.email ? (
+                    <Text style={[styles.carouselMeta, { color: colors.mutedForeground }]}>{c.email}</Text>
+                  ) : null}
+                  {c.phone ? (
+                    <Text style={[styles.carouselMeta, { color: colors.mutedForeground }]}>{c.phone}</Text>
+                  ) : null}
+                  {c.website ? (
+                    <Text style={[styles.carouselMeta, { color: colors.mutedForeground }]}>{c.website}</Text>
+                  ) : null}
                 </View>
-              );
-            }}
-          />
+                <TouchableOpacity
+                  onPress={() => currentItem && openEdit(currentItem.id)}
+                  style={[styles.carouselEditBtn, { borderColor: colors.border, borderRadius: colors.radius }]}
+                >
+                  <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+                  <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>Edit details</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* dot indicators */}
+            <View style={styles.dotRow}>
+              {items.map((item, idx) => (
+                <TouchableOpacity key={item.id} onPress={() => setReviewIndex(idx)}>
+                  <View style={[
+                    styles.dot,
+                    {
+                      backgroundColor: idx === safeIndex
+                        ? colors.primary
+                        : item.approved
+                          ? "#22C55E"
+                          : item.phase === "failed"
+                            ? colors.destructive
+                            : colors.border,
+                      width: idx === safeIndex ? 20 : 8,
+                    },
+                  ]} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+
+          {/* action buttons */}
+          {!isFailed && (
+            <View style={[styles.carouselActions, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={() => { removeItem(currentItem!.id); if (!isFirst) setReviewIndex((i) => i - 1); }}
+                style={[styles.carouselActionBtn, { borderColor: colors.destructive + "55", borderRadius: colors.radius }]}
+              >
+                <Feather name="trash-2" size={16} color={colors.destructive} />
+                <Text style={{ color: colors.destructive, fontWeight: "500" as const }}>Remove</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { toggleApprove(currentItem!.id); if (!isLast) goNext(); }}
+                style={[
+                  styles.carouselActionBtn,
+                  {
+                    backgroundColor: currentItem?.approved ? "#22C55E" : colors.primary,
+                    borderColor: "transparent",
+                    borderRadius: colors.radius,
+                    flex: 2,
+                  },
+                ]}
+              >
+                <Feather name={currentItem?.approved ? "x" : "check"} size={16} color="#fff" />
+                <Text style={{ color: "#fff", fontWeight: "600" as const }}>
+                  {currentItem?.approved ? "Unapprove" : "Approve"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {isFailed && (
+            <View style={[styles.carouselActions, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={() => { removeItem(currentItem!.id); if (!isFirst) setReviewIndex((i) => i - 1); }}
+                style={[styles.carouselActionBtn, { borderColor: colors.destructive + "55", borderRadius: colors.radius, flex: 1 }]}
+              >
+                <Feather name="trash-2" size={16} color={colors.destructive} />
+                <Text style={{ color: colors.destructive, fontWeight: "500" as const }}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* save bar */}
-          <View style={[styles.saveBar, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
+          <View style={[styles.saveBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
             <TouchableOpacity
               onPress={saveApproved}
               disabled={approvedCount === 0}
@@ -526,7 +607,25 @@ const styles = StyleSheet.create({
   progressBar: { width: "100%", height: 6, borderRadius: 3, overflow: "hidden" },
   progressFill: { height: 6, borderRadius: 3 },
 
-  // review
+  // carousel review
+  carouselNav: { flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: 10, borderBottomWidth: 1 },
+  carouselNavBtn: { width: 44, height: 44, alignItems: "center" as const, justifyContent: "center" as const },
+  carouselCounter: { fontSize: 16, fontWeight: "600" as const },
+  carouselCard: { borderRadius: 14, borderWidth: 1, padding: 16, alignItems: "center" as const, gap: 12, marginBottom: 20 },
+  carouselImage: { width: "100%" as const, height: 200, borderWidth: 1 },
+  carouselApprovedBadge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6 },
+  carouselDetails: { width: "100%" as const, gap: 4 },
+  carouselName: { fontSize: 18, fontWeight: "700" as const, textAlign: "center" as const },
+  carouselMeta: { fontSize: 14, textAlign: "center" as const },
+  carouselEditBtn: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, marginTop: 4 },
+  carouselFailTitle: { fontSize: 17, fontWeight: "600" as const, textAlign: "center" as const },
+  carouselFailMsg: { fontSize: 14, textAlign: "center" as const },
+  carouselActions: { flexDirection: "row" as const, gap: 10, padding: 12, borderTopWidth: 1 },
+  carouselActionBtn: { flex: 1, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6, paddingVertical: 13, borderWidth: 1 },
+  dotRow: { flexDirection: "row" as const, gap: 5, justifyContent: "center" as const, marginTop: 4 },
+  dot: { height: 8, borderRadius: 4 },
+
+  // review (list, kept for reference)
   reviewSummary: { flexDirection: "row", justifyContent: "center", gap: 32, paddingVertical: 12, borderBottomWidth: 1 },
   reviewSummaryItem: { alignItems: "center" },
   reviewSummaryNum: { fontSize: 22, fontWeight: "700" as const },

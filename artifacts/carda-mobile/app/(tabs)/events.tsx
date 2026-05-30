@@ -18,8 +18,23 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EventCard } from "@/components/EventCard";
-import { api, UserEvent } from "@/lib/api";
+import { api, Contact, UserEvent } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
+
+function EventCardRow({ event, onPress }: { event: UserEvent; onPress: () => void }) {
+  const { data: contacts } = useQuery<Contact[]>({
+    queryKey: ["event-contacts", String(event.id)],
+    queryFn: () => api.getEventContacts(event.id),
+    staleTime: 2 * 60 * 1000,
+  });
+  return (
+    <EventCard
+      event={event}
+      onPress={onPress}
+      attendeeCount={contacts !== undefined ? contacts.length : undefined}
+    />
+  );
+}
 
 export default function EventsScreen() {
   const colors = useColors();
@@ -97,7 +112,7 @@ export default function EventsScreen() {
           data={data ?? []}
           keyExtractor={(e) => String(e.id)}
           renderItem={({ item }) => (
-            <EventCard
+            <EventCardRow
               event={item}
               onPress={() => router.push(`/event/${item.id}`)}
             />
