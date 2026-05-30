@@ -15,7 +15,15 @@ export interface Contact {
   companyDomain?: string;
   companyId?: number;
   notes?: string;
+  orgRelationshipStrength?: string;
   createdAt?: string;
+}
+
+export interface ContactActivity {
+  id: string;
+  type: "note" | "call" | "meeting" | "email";
+  text: string;
+  createdAt: string;
 }
 
 export interface Company {
