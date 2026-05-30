@@ -183,61 +183,53 @@ export default function VoiceDebriefReviewScreen() {
   const selectedContact = contacts.find((c) => c.id === selectedContactId);
 
   const handleSave = async () => {
-    const acceptedTasks = tasks.filter((t) => t.accepted);
-
-    if (!selectedContactId && acceptedTasks.length === 0) {
+    if (!selectedContactId) {
       Alert.alert(
-        "Nothing to save",
-        "Select a contact or keep at least one task."
+        "Select a contact",
+        "Choose a contact to attach this debrief to before saving."
       );
       return;
     }
 
+    const acceptedTasks = tasks.filter((t) => t.accepted);
+    const summaryText = summary.trim() || "Voice Debrief";
+    const now = new Date().toISOString();
+
     setSaving(true);
     try {
-      if (selectedContactId) {
-        const summaryText = summary.trim() || "Voice Debrief";
-        const now = new Date().toISOString();
+      await api.createTimelineEvent(selectedContactId, {
+        clientId: `debrief-${Date.now()}`,
+        type: "voice_debrief",
+        summary: summaryText,
+        eventAt: now,
+        meta: { rawTranscript: transcript },
+      });
 
-        await api.createTimelineEvent(selectedContactId, {
-          clientId: `debrief-${Date.now()}`,
-          type: "voice_debrief",
-          summary: summaryText,
-          eventAt: now,
-          meta: { rawTranscript: transcript },
+      for (const task of acceptedTasks) {
+        const title = task.editing ? task.editText.trim() : task.title;
+        if (!title) continue;
+        await api.createContactTask(selectedContactId, {
+          clientId: `debrief-task-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`,
+          title,
         });
-
-        for (const task of acceptedTasks) {
-          const title = task.editing ? task.editText.trim() : task.title;
-          if (!title) continue;
-          await api.createContactTask(selectedContactId, {
-            clientId: `debrief-task-${Date.now()}-${Math.random()
-              .toString(36)
-              .slice(2)}`,
-            title,
-          });
-        }
-
-        if (!followUpDismissed && followUp.trim()) {
-          await api.createContactTask(selectedContactId, {
-            clientId: `debrief-followup-${Date.now()}`,
-            title: followUp.trim().slice(0, 200),
-          });
-        }
-
-        await qc.invalidateQueries({ queryKey: ["contact-tasks", String(selectedContactId)] });
-        await qc.invalidateQueries({ queryKey: ["contact-timeline", String(selectedContactId)] });
-        await qc.invalidateQueries({ queryKey: ["/api/contacts"] });
       }
+
+      if (!followUpDismissed && followUp.trim()) {
+        await api.createContactTask(selectedContactId, {
+          clientId: `debrief-followup-${Date.now()}`,
+          title: followUp.trim().slice(0, 200),
+        });
+      }
+
+      await qc.invalidateQueries({ queryKey: ["contact-tasks", String(selectedContactId)] });
+      await qc.invalidateQueries({ queryKey: ["contact-timeline", String(selectedContactId)] });
+      await qc.invalidateQueries({ queryKey: ["/api/contacts"] });
 
       debriefStore.clear();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      if (selectedContactId) {
-        router.replace(`/contact/${selectedContactId}` as any);
-      } else {
-        router.replace("/(tabs)" as any);
-      }
+      router.replace(`/contact/${selectedContactId}` as any);
     } catch (err: any) {
       Alert.alert("Save failed", err?.message || "Could not save. Please try again.");
     } finally {
