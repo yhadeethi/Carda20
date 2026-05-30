@@ -296,6 +296,27 @@ export async function registerRoutes(
     }
   });
 
+  app.patch('/api/auth/user', async (req: any, res) => {
+    try {
+      const devUserId = (req.session as any)?.devUserId;
+      let userId: number | undefined;
+      if (devUserId) {
+        const user = await storage.getUserByAuthId("dev-test-user");
+        userId = user?.id;
+      } else if (req.isAuthenticated() && req.user?.claims?.sub) {
+        const user = await storage.getUserByAuthId(req.user.claims.sub);
+        userId = user?.id;
+      }
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const { fullName, jobTitle, companyName, email, phone, linkedinUrl } = req.body;
+      const updated = await storage.updateUser(userId, { fullName, jobTitle, companyName, email, phone, linkedinUrl });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
   app.post("/api/dev-login", async (req: Request, res: Response) => {
     const { code } = req.body;
     if (code !== "0707") {

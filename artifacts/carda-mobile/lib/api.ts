@@ -353,6 +353,19 @@ export const api = {
     }),
 
 
+  updateUserProfile: (data: {
+    fullName?: string;
+    jobTitle?: string;
+    companyName?: string;
+    email?: string;
+    phone?: string;
+    linkedinUrl?: string;
+  }): Promise<unknown> =>
+    apiFetch("/api/auth/user", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
   getHubSpotStatus: (): Promise<{ connected: boolean }> =>
     apiFetch("/api/hubspot/status"),
 

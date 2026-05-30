@@ -107,7 +107,7 @@ const THEME_LABELS: Record<ThemeMode, string> = {
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, logout, checkAuth } = useAuth();
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const qc = useQueryClient();
   const scrollRef = useRef<ScrollView>(null);
@@ -138,9 +138,16 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     setSaving(true);
-    await saveProfile(formData);
-    setSaving(false);
-    setEditing(false);
+    try {
+      await api.updateUserProfile(formData);
+      await saveProfile(formData);
+      await checkAuth();
+      setEditing(false);
+    } catch (err: any) {
+      Alert.alert("Save failed", err?.message || "Could not save profile. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleField = (field: keyof MyProfile, value: string) => {
