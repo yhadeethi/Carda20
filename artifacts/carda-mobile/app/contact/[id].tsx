@@ -1,4 +1,6 @@
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { LinearGradient } from "expo-linear-gradient";
@@ -225,6 +227,8 @@ export default function ContactDetailScreen() {
     const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d;
   });
   const [savingReminder, setSavingReminder] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const [showFollowUp, setShowFollowUp] = useState(false);
   const [followUpTone, setFollowUpTone] = useState<"Friendly" | "Professional" | "Brief">("Friendly");
@@ -546,6 +550,8 @@ export default function ContactDetailScreen() {
         Professional: "formal",
         Brief: "direct",
       };
+      const isSMS = followUpMedium === "SMS";
+      const smsPrefix = isSMS ? "Write a short SMS message (under 160 characters). " : "";
       const result = await api.generateFollowUp({
         contact: {
           name: contact.fullName || contact.email || "Contact",
@@ -556,8 +562,9 @@ export default function ContactDetailScreen() {
         request: {
           mode: "email_followup",
           tone: toneMap[followUpTone],
-          length: followUpTone === "Brief" ? "short" : "medium",
-          context: followUpContext.trim() || undefined,
+          length: isSMS || followUpTone === "Brief" ? "short" : "medium",
+          context: smsPrefix + (followUpContext.trim() || ""),
+          goal: isSMS ? "Send a brief SMS follow-up" : undefined,
         },
       });
       setFollowUpResult(result);
@@ -1450,7 +1457,7 @@ export default function ContactDetailScreen() {
                   return (
                     <TouchableOpacity
                       key={preset.label}
-                      onPress={() => setReminderDate(presetDate)}
+                      onPress={() => { setReminderDate(presetDate); setShowDatePicker(false); setShowTimePicker(false); }}
                       style={[
                         styles.presetPill,
                         {
@@ -1468,38 +1475,52 @@ export default function ContactDetailScreen() {
               </View>
             </ScrollView>
 
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 8 }]}>TIME</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
-              <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
-                {[
-                  { label: "8:00 AM", h: 8 }, { label: "9:00 AM", h: 9 }, { label: "12:00 PM", h: 12 },
-                  { label: "2:00 PM", h: 14 }, { label: "5:00 PM", h: 17 }, { label: "8:00 PM", h: 20 },
-                ].map((t) => {
-                  const isActive = reminderDate.getHours() === t.h;
-                  return (
-                    <TouchableOpacity
-                      key={t.label}
-                      onPress={() => {
-                        const d = new Date(reminderDate);
-                        d.setHours(t.h, 0, 0, 0);
-                        setReminderDate(d);
-                      }}
-                      style={[
-                        styles.presetPill,
-                        {
-                          backgroundColor: isActive ? "#F59E0B" : colors.secondary,
-                          borderColor: isActive ? "#F59E0B" : colors.border,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.presetPillText, { color: isActive ? "#fff" : colors.mutedForeground }]}>
-                        {t.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 8 }]}>CUSTOM DATE & TIME</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 4 }}>
+              <TouchableOpacity
+                onPress={() => { setShowDatePicker(true); setShowTimePicker(false); }}
+                style={[styles.presetPill, {
+                  backgroundColor: showDatePicker ? "#F59E0B" : colors.secondary,
+                  borderColor: showDatePicker ? "#F59E0B" : colors.border,
+                  flex: 1,
+                }]}
+              >
+                <Feather name="calendar" size={13} color={showDatePicker ? "#fff" : colors.mutedForeground} />
+                <Text style={[styles.presetPillText, { color: showDatePicker ? "#fff" : colors.mutedForeground }]}>
+                  {reminderDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setShowTimePicker(true); setShowDatePicker(false); }}
+                style={[styles.presetPill, {
+                  backgroundColor: showTimePicker ? "#F59E0B" : colors.secondary,
+                  borderColor: showTimePicker ? "#F59E0B" : colors.border,
+                  flex: 1,
+                }]}
+              >
+                <Feather name="clock" size={13} color={showTimePicker ? "#fff" : colors.mutedForeground} />
+                <Text style={[styles.presetPillText, { color: showTimePicker ? "#fff" : colors.mutedForeground }]}>
+                  {reminderDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {(showDatePicker || showTimePicker) && (
+              <DateTimePicker
+                value={reminderDate}
+                mode={showDatePicker ? "date" : "time"}
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                minimumDate={new Date()}
+                onChange={(event: DateTimePickerEvent, selected?: Date) => {
+                  if (Platform.OS === "android") {
+                    setShowDatePicker(false);
+                    setShowTimePicker(false);
+                  }
+                  if (selected) setReminderDate(selected);
+                }}
+                style={{ marginBottom: 4 }}
+              />
+            )}
 
             <View style={[styles.reminderPreview, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
               <Feather name="bell" size={14} color="#D97706" />
@@ -1574,9 +1595,10 @@ export default function ContactDetailScreen() {
                 )}
                 <View style={{ flexDirection: "row", gap: 10, marginTop: 8, marginBottom: 16 }}>
                   <TouchableOpacity
-                    onPress={() => {
+                    onPress={async () => {
                       const text = (followUpResult.subject ? `Subject: ${followUpResult.subject}\n\n` : "") + followUpResult.body;
-                      Share.share({ message: text, title: "Copy" });
+                      await Clipboard.setStringAsync(text);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     }}
                     style={[styles.fuActionBtn, { backgroundColor: colors.secondary, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
                   >
