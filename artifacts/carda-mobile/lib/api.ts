@@ -16,6 +16,10 @@ export interface Contact {
   companyId?: number;
   notes?: string;
   orgRelationshipStrength?: string;
+  orgDepartment?: string | null;
+  orgRole?: string | null;
+  orgReportsToId?: number | null;
+  orgInfluence?: string | null;
   createdAt?: string;
 }
 

@@ -6,10 +6,29 @@ import type { Contact } from "@/lib/api";
 
 export type StripeStatus = "new" | "overdue" | "due-today" | "default";
 
+const DEPT_CHIP_COLORS: Record<string, { bg: string; text: string }> = {
+  EXEC: { bg: "#EDE9FE", text: "#5856D6" },
+  SALES: { bg: "#FFE4E1", text: "#FF3B30" },
+  OPS: { bg: "#DCFCE7", text: "#16A34A" },
+  FINANCE: { bg: "#FEF3C7", text: "#D97706" },
+  LEGAL: { bg: "#E0E7FF", text: "#6366F1" },
+  PROJECT_DELIVERY: { bg: "#CCFBF1", text: "#0D9488" },
+};
+
+const DEPT_LABELS: Record<string, string> = {
+  EXEC: "Exec",
+  SALES: "Sales",
+  OPS: "Ops",
+  FINANCE: "Finance",
+  LEGAL: "Legal",
+  PROJECT_DELIVERY: "Delivery",
+};
+
 interface ContactCardProps {
   contact: Contact;
   onPress: () => void;
   stripeStatus?: StripeStatus;
+  showDepartment?: boolean;
 }
 
 function deriveStripe(contact: Contact): StripeStatus {
@@ -29,10 +48,13 @@ function stripeColor(status: StripeStatus): string {
   }
 }
 
-export function ContactCard({ contact, onPress, stripeStatus }: ContactCardProps) {
+export function ContactCard({ contact, onPress, stripeStatus, showDepartment }: ContactCardProps) {
   const displayName = contact.fullName || contact.email || "No name";
   const status = stripeStatus ?? deriveStripe(contact);
   const stripe = stripeColor(status);
+  const dept = contact.orgDepartment?.toUpperCase();
+  const deptChip = showDepartment && dept && dept !== "UNKNOWN" && DEPT_CHIP_COLORS[dept];
+  const deptLabel = dept ? DEPT_LABELS[dept] : null;
 
   return (
     <TouchableOpacity
@@ -44,7 +66,14 @@ export function ContactCard({ contact, onPress, stripeStatus }: ContactCardProps
       <View style={styles.inner}>
         <Avatar name={displayName} size={40} />
         <View style={styles.content}>
-          <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+          <View style={styles.nameRow}>
+            <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{displayName}</Text>
+            {deptChip && deptLabel ? (
+              <View style={[styles.deptChip, { backgroundColor: deptChip.bg }]}>
+                <Text style={[styles.deptChipText, { color: deptChip.text }]}>{deptLabel}</Text>
+              </View>
+            ) : null}
+          </View>
           {(contact.jobTitle || contact.companyName) ? (
             <Text style={styles.subtitle} numberOfLines={1}>
               {[contact.jobTitle, contact.companyName].filter(Boolean).join(" · ")}
@@ -101,5 +130,21 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 12,
     color: colors.primary,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 1,
+  },
+  deptChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    flexShrink: 0,
+  },
+  deptChipText: {
+    fontSize: 10,
+    fontWeight: "600" as const,
   },
 });
