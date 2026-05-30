@@ -201,6 +201,12 @@ export const api = {
   getEventContacts: (id: number): Promise<Contact[]> =>
     apiFetch(`/api/user-events/${id}/contacts`),
 
+  attachContactsToEvent: (eventId: number, contactIds: number[]): Promise<void> =>
+    apiFetch(`/api/user-events/${eventId}/attach-contacts`, {
+      method: "POST",
+      body: JSON.stringify({ contactIds }),
+    }),
+
   getContactTasks: (contactId: number): Promise<ContactTask[]> =>
     apiFetch(`/api/contacts/${contactId}/tasks`),
 

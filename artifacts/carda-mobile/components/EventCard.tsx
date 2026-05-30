@@ -7,6 +7,7 @@ import type { UserEvent } from "@/lib/api";
 interface EventCardProps {
   event: UserEvent;
   onPress: () => void;
+  attendeeCount?: number;
 }
 
 function formatDate(dateStr?: string) {
@@ -16,7 +17,7 @@ function formatDate(dateStr?: string) {
   });
 }
 
-export function EventCard({ event, onPress }: EventCardProps) {
+export function EventCard({ event, onPress, attendeeCount }: EventCardProps) {
   const isActive = !!event.isActive;
 
   return (
@@ -33,18 +34,28 @@ export function EventCard({ event, onPress }: EventCardProps) {
             </View>
           )}
         </View>
-        {event.locationLabel ? (
-          <View style={styles.metaRow}>
-            <Feather name="map-pin" size={11} color={colors.mutedForeground} />
-            <Text style={styles.meta} numberOfLines={1}>{event.locationLabel}</Text>
-          </View>
-        ) : null}
-        {event.startedAt ? (
-          <View style={styles.metaRow}>
-            <Feather name="clock" size={11} color={colors.mutedForeground} />
-            <Text style={styles.meta}>{formatDate(event.startedAt)}</Text>
-          </View>
-        ) : null}
+        <View style={styles.metaGroup}>
+          {event.locationLabel ? (
+            <View style={styles.metaRow}>
+              <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+              <Text style={styles.meta} numberOfLines={1}>{event.locationLabel}</Text>
+            </View>
+          ) : null}
+          {event.startedAt ? (
+            <View style={styles.metaRow}>
+              <Feather name="clock" size={11} color={colors.mutedForeground} />
+              <Text style={styles.meta}>{formatDate(event.startedAt)}</Text>
+            </View>
+          ) : null}
+          {attendeeCount !== undefined ? (
+            <View style={styles.metaRow}>
+              <Feather name="users" size={11} color={colors.primary} />
+              <Text style={[styles.meta, { color: colors.primary }]}>
+                {attendeeCount} {attendeeCount === 1 ? "attendee" : "attendees"}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </View>
       <Feather name="chevron-right" size={16} color="rgba(0,0,0,0.25)" />
     </TouchableOpacity>
@@ -108,6 +119,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700" as const,
   },
+  metaGroup: { gap: 2 },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",

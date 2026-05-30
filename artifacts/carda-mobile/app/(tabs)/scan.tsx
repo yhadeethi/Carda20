@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -28,6 +28,8 @@ export default function ScanScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const insets = useSafeAreaInsets();
+  const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
+  const eventId = eventIdParam ? Number(eventIdParam) : null;
 
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -87,11 +89,23 @@ export default function ScanScreen() {
   const saveContact = async () => {
     setScanState("saving");
     try {
-      await api.createContact(form);
+      const saved = await api.createContact(form);
+      if (eventId && saved.id) {
+        try {
+          await api.attachContactsToEvent(eventId, [saved.id]);
+          await qc.invalidateQueries({ queryKey: ["event-contacts", String(eventId)] });
+        } catch {
+          // non-fatal — contact saved, attach failed silently
+        }
+      }
       await qc.invalidateQueries({ queryKey: ["contacts"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       reset();
-      router.push("/(tabs)");
+      if (eventId) {
+        router.push(`/event/${eventId}` as any);
+      } else {
+        router.push("/(tabs)");
+      }
     } catch (err: any) {
       setScanState("review");
       Alert.alert("Save failed", err?.message || "Could not save contact.");
@@ -189,9 +203,14 @@ export default function ScanScreen() {
           <TouchableOpacity onPress={reset} style={styles.backButton}>
             <Feather name="arrow-left" size={22} color={colors.foreground} />
           </TouchableOpacity>
-          <Text style={[styles.reviewTitle, { color: colors.foreground }]}>
-            Review Contact
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.reviewTitle, { color: colors.foreground }]}>
+              Review Contact
+            </Text>
+            {eventId ? (
+              <Text style={[styles.reviewSub, { color: colors.mutedForeground }]}>Will attach to event</Text>
+            ) : null}
+          </View>
           <TouchableOpacity
             onPress={saveContact}
             disabled={scanState === "saving"}
@@ -262,9 +281,16 @@ export default function ScanScreen() {
           <Text style={[styles.idleTitle, { color: colors.foreground }]}>
             Scan Card
           </Text>
-          <Text style={[styles.idleSubtitle, { color: colors.mutedForeground }]}>
-            Take a photo or choose from your library
-          </Text>
+          {eventId ? (
+            <View style={[styles.eventBanner, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40" }]}>
+              <Feather name="calendar" size={13} color={colors.primary} />
+              <Text style={[styles.eventBannerText, { color: colors.primary }]}>Scanning for event</Text>
+            </View>
+          ) : (
+            <Text style={[styles.idleSubtitle, { color: colors.mutedForeground }]}>
+              Take a photo or choose from your library
+            </Text>
+          )}
         </View>
 
         <LinearGradient
@@ -353,7 +379,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backButton: { padding: 4, marginRight: 8 },
-  reviewTitle: { flex: 1, fontSize: 18, fontWeight: "600" as const },
+  reviewTitle: { fontSize: 18, fontWeight: "600" as const },
+  reviewSub: { fontSize: 12, marginTop: 1 },
+  eventBanner: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  eventBannerText: { fontSize: 13, fontWeight: "600" as const },
   saveButton: { paddingHorizontal: 16, paddingVertical: 8 },
   saveButtonText: { color: "#fff", fontWeight: "600" as const, fontSize: 14 },
   reviewImage: {
