@@ -29,8 +29,9 @@ const HERO_BG2 = "#1E293B";
 const RELATIONSHIP_OPTIONS = ["Casual", "Normal", "Close"] as const;
 type RelStrength = (typeof RELATIONSHIP_OPTIONS)[number];
 
-const ACTIVITY_FILTERS = ["All", "Notes", "Calls", "Meetings"] as const;
+const ACTIVITY_FILTERS = ["All", "Meetings", "Calls", "Emails"] as const;
 type ActivityFilter = (typeof ACTIVITY_FILTERS)[number];
+type ActivityView = "list" | "calendar";
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return "";
@@ -187,9 +188,12 @@ export default function ContactDetailScreen() {
 
   const [activities, setActivities] = useState<ContactActivity[]>([]);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("All");
+  const [activityView, setActivityView] = useState<ActivityView>("list");
   const [noteText, setNoteText] = useState("");
   const [addingNote, setAddingNote] = useState(false);
-  const [logType, setLogType] = useState<"Call" | "Meeting" | null>(null);
+  const [logType, setLogType] = useState<"Call" | "Meeting" | "Email" | null>(null);
+  const [logText, setLogText] = useState("");
+  const [savingLog, setSavingLog] = useState(false);
 
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -297,30 +301,30 @@ export default function ContactDetailScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleLogActivity = (type: "Call" | "Meeting") => {
-    if (!contact) return;
-    Alert.prompt(
-      `Log ${type}`,
-      `Add a note about this ${type.toLowerCase()} with ${contact.fullName ?? "this contact"}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Log",
-          onPress: (text: string | undefined) => {
-            if (!text?.trim()) return;
-            const newActivity: ContactActivity = {
-              id: `${Date.now()}`,
-              type: type === "Call" ? "call" : "meeting",
-              text: text.trim(),
-              createdAt: new Date().toISOString(),
-            };
-            setActivities((prev) => [newActivity, ...prev]);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ],
-      "plain-text"
-    );
+  const handleOpenLog = (type: "Call" | "Meeting" | "Email") => {
+    setLogType(type);
+    setLogText("");
+  };
+
+  const handleSaveLog = async () => {
+    if (!logType || !logText.trim()) return;
+    setSavingLog(true);
+    const typeMap: Record<"Call" | "Meeting" | "Email", ContactActivity["type"]> = {
+      Call: "call",
+      Meeting: "meeting",
+      Email: "email",
+    };
+    const newActivity: ContactActivity = {
+      id: `${Date.now()}`,
+      type: typeMap[logType],
+      text: logText.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    setActivities((prev) => [newActivity, ...prev]);
+    setLogType(null);
+    setLogText("");
+    setSavingLog(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleSaveToPhone = async () => {
@@ -436,9 +440,9 @@ export default function ContactDetailScreen() {
 
   const filteredActivities = activities.filter((a) => {
     if (activityFilter === "All") return true;
-    if (activityFilter === "Notes") return a.type === "note";
-    if (activityFilter === "Calls") return a.type === "call";
     if (activityFilter === "Meetings") return a.type === "meeting";
+    if (activityFilter === "Calls") return a.type === "call";
+    if (activityFilter === "Emails") return a.type === "email";
     return true;
   });
 
@@ -687,22 +691,22 @@ export default function ContactDetailScreen() {
               <Text style={[styles.actionTitle, { color: colors.foreground }]}>Log</Text>
               <View style={styles.actionSubBtns}>
                 <TouchableOpacity
-                  onPress={() => Platform.OS === "ios" ? handleLogActivity("Call") : Alert.alert("Log Call", "Call logging coming soon.")}
+                  onPress={() => handleOpenLog("Call")}
                   style={[styles.actionSubBtn, { backgroundColor: colors.secondary }]}
                 >
                   <Text style={[styles.actionSubBtnText, { color: colors.primary }]}>Call</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => Platform.OS === "ios" ? handleLogActivity("Meeting") : Alert.alert("Log Meeting", "Meeting logging coming soon.")}
+                  onPress={() => handleOpenLog("Meeting")}
                   style={[styles.actionSubBtn, { backgroundColor: colors.secondary }]}
                 >
                   <Text style={[styles.actionSubBtnText, { color: colors.primary }]}>Meet</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setShowAddTask(true)}
+                  onPress={() => handleOpenLog("Email")}
                   style={[styles.actionSubBtn, { backgroundColor: colors.secondary }]}
                 >
-                  <Text style={[styles.actionSubBtnText, { color: colors.primary }]}>Note</Text>
+                  <Text style={[styles.actionSubBtnText, { color: colors.primary }]}>Email</Text>
                 </TouchableOpacity>
               </View>
             </GlassCard>
@@ -806,9 +810,30 @@ export default function ContactDetailScreen() {
 
         {/* ── ACTIVITY ── */}
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-            ACTIVITY
-          </Text>
+          <View style={styles.activitySectionHeader}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>
+              ACTIVITY
+            </Text>
+            {/* List / Calendar toggle */}
+            <View style={[styles.viewToggle, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+              {(["list", "calendar"] as ActivityView[]).map((v) => (
+                <TouchableOpacity
+                  key={v}
+                  onPress={() => setActivityView(v)}
+                  style={[
+                    styles.viewToggleBtn,
+                    activityView === v && { backgroundColor: colors.card },
+                  ]}
+                >
+                  <Feather
+                    name={v === "list" ? "list" : "calendar"}
+                    size={13}
+                    color={activityView === v ? colors.primary : colors.mutedForeground}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
           <GlassCard style={{ padding: 12 }}>
             {/* Filter pills */}
             <ScrollView
@@ -971,6 +996,67 @@ export default function ContactDetailScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Log Activity Modal */}
+      <Modal
+        visible={logType !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLogType(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.card, borderRadius: colors.radius * 1.5 },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                Log {logType}
+              </Text>
+              <TouchableOpacity onPress={() => setLogType(null)}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              value={logText}
+              onChangeText={setLogText}
+              placeholder={`Notes about this ${logType?.toLowerCase()}…`}
+              placeholderTextColor={colors.mutedForeground}
+              autoFocus
+              multiline
+              style={[
+                styles.modalInput,
+                styles.multilineInput,
+                {
+                  color: colors.foreground,
+                  backgroundColor: colors.secondary,
+                  borderColor: colors.border,
+                  borderRadius: colors.radius,
+                },
+              ]}
+            />
+            <TouchableOpacity
+              onPress={handleSaveLog}
+              disabled={!logText.trim() || savingLog}
+              style={[
+                styles.modalButton,
+                {
+                  backgroundColor: logText.trim() ? colors.primary : colors.muted,
+                  borderRadius: colors.radius,
+                },
+              ]}
+            >
+              {savingLog ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.modalButtonText}>Save Log</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Add Task Modal */}
       <Modal
@@ -1242,6 +1328,26 @@ const styles = StyleSheet.create({
   },
   activityText: { fontSize: 13, lineHeight: 18 },
   activityTime: { fontSize: 11, marginTop: 2 },
+
+  activitySectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  viewToggle: {
+    flexDirection: "row",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 2,
+    gap: 2,
+  },
+  viewToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   emptyActivity: {
     alignItems: "center",
