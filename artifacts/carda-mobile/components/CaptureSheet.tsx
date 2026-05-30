@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
+import { debriefStore } from "@/lib/debriefStore";
 import {
   ActivityIndicator,
   Alert,
@@ -257,10 +258,24 @@ export function CaptureSheet({ visible, onClose, initialMode = "menu" }: Props) 
                 <View style={[s.voiceIconWrap, { backgroundColor: "#EEF2FF" }]}>
                   <Feather name="mic" size={32} color="#6366F1" />
                 </View>
-                <Text style={s.voiceTitle}>Coming soon</Text>
+                <Text style={s.voiceTitle}>Voice Debrief</Text>
                 <Text style={s.voiceBody}>
-                  Voice debriefs let you record a quick note after a meeting and automatically attach it to a contact. This feature is coming soon.
+                  Record a quick note after a meeting. We'll extract tasks, reminders, and a summary automatically.
                 </Text>
+                <TouchableOpacity
+                  style={[s.primaryBtn, { backgroundColor: "#6366F1" }]}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    debriefStore.setContactId(null);
+                    handleClose();
+                    setTimeout(() => {
+                      router.push("/voice-debrief" as any);
+                    }, 300);
+                  }}
+                >
+                  <Text style={s.primaryBtnText}>Start Recording</Text>
+                </TouchableOpacity>
               </View>
             </>
           )}

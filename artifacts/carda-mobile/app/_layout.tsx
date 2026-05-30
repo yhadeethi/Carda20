@@ -64,6 +64,14 @@ function RootLayoutNav() {
         name="event/[id]"
         options={{ title: "Event", headerBackTitle: "Back" }}
       />
+      <Stack.Screen
+        name="voice-debrief"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="voice-debrief-review"
+        options={{ headerShown: false }}
+      />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

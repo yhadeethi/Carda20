@@ -22,6 +22,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { api, Contact, ContactActivity, ContactTask } from "@/lib/api";
+import { debriefStore } from "@/lib/debriefStore";
 import { useColors } from "@/hooks/useColors";
 
 const HERO_BG = "#0F172A";
@@ -650,13 +651,11 @@ export default function ContactDetailScreen() {
 
           {/* Voice Debrief — full width prominent */}
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert(
-                "Voice Debrief",
-                "Voice debrief recording is coming soon. You can log a meeting note in the Activity section below.",
-                [{ text: "OK" }]
-              )
-            }
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              debriefStore.setContactId(contact.id);
+              router.push("/voice-debrief" as any);
+            }}
             style={styles.debriefBtn}
             activeOpacity={0.85}
           >
