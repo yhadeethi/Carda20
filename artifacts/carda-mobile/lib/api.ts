@@ -273,6 +273,53 @@ export const api = {
       method: "DELETE",
     }),
 
+  autoGroupCompanyContacts: async (
+    contacts: Contact[]
+  ): Promise<{ changed: number }> => {
+    function guessDept(title?: string | null): string {
+      if (!title) return "UNKNOWN";
+      const t = title.toUpperCase();
+      if (
+        /\bCEO\b|\bCFO\b|\bCOO\b|\bCTO\b|\bCMO\b|\bCPO\b|CHIEF\s|PRESIDENT\b|FOUNDER\b|\bPARTNER\b|\bVP\s|SVP\b|EVP\b/.test(t)
+      )
+        return "EXEC";
+      if (
+        /\bSALES\b|ACCOUNT\s+EXEC|BUSINESS\s+DEV|BDR\b|SDR\b|\bAE\b|REVENUE\b|COMMERCIAL/.test(t)
+      )
+        return "SALES";
+      if (/LEGAL\b|COUNSEL\b|ATTORNEY\b|COMPLIANCE\b|REGULATORY/.test(t))
+        return "LEGAL";
+      if (/FINANC|ACCOUNTANT|ACCOUNTING|CONTROLLER\b|TREASURY|TAX\b/.test(t))
+        return "FINANCE";
+      if (
+        /OPERAT|SUPPLY\s+CHAIN|LOGISTIC|PROCUREMENT|FACILITIES|ADMIN\b|OFFICE\s+MANAGER/.test(t)
+      )
+        return "OPS";
+      if (
+        /ENGINEER|DEVELOP|SOFTWARE|PRODUCT\s|DESIGN|DATA\s|TECH|ARCHITECT|DELIVERY|PROJECT\s|PROGRAM\s/.test(t)
+      )
+        return "PROJECT_DELIVERY";
+      return "UNKNOWN";
+    }
+
+    const toUpdate = contacts.filter(
+      (c) => !c.orgDepartment || c.orgDepartment.toUpperCase() === "UNKNOWN"
+    );
+    let changed = 0;
+    await Promise.all(
+      toUpdate.map((c) => {
+        const dept = guessDept(c.jobTitle);
+        if (dept === "UNKNOWN") return Promise.resolve();
+        changed++;
+        return apiFetch<Contact>(`/api/contacts/${c.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ orgDepartment: dept }),
+        });
+      })
+    );
+    return { changed };
+  },
+
   generateFollowUp: (data: {
     contact: { name: string; company?: string; title?: string; email?: string };
     request: {

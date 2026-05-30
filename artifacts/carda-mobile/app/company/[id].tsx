@@ -24,14 +24,7 @@ import { useColors } from "@/hooks/useColors";
 
 type TabId = "people" | "org" | "brief";
 
-type Department =
-  | "EXEC"
-  | "SALES"
-  | "OPS"
-  | "FINANCE"
-  | "LEGAL"
-  | "PROJECT_DELIVERY"
-  | "UNKNOWN";
+type Department = "EXEC" | "SALES" | "OPS" | "FINANCE" | "LEGAL" | "PROJECT_DELIVERY" | "UNKNOWN";
 
 const DEPT_ORDER: Department[] = [
   "EXEC",
@@ -62,32 +55,6 @@ const DEPT_COLORS: Record<Department, { bar: string; bg: string; text: string }>
   LEGAL: { bar: "#6366F1", bg: "#E0E7FF", text: "#6366F1" },
   UNKNOWN: { bar: "#8E8E93", bg: "#F3F4F6", text: "#6B7280" },
 };
-
-function guessDepartment(title?: string | null): Department {
-  if (!title) return "UNKNOWN";
-  const t = title.toUpperCase();
-  if (
-    /\bCEO\b|\bCFO\b|\bCOO\b|\bCTO\b|\bCMO\b|\bCPO\b|CHIEF\s|PRESIDENT\b|FOUNDER\b|\bPARTNER\b|\bVP\s|SVP\b|EVP\b/.test(t)
-  )
-    return "EXEC";
-  if (
-    /\bSALES\b|ACCOUNT\s+EXEC|BUSINESS\s+DEV|BDR\b|SDR\b|\bAE\b|REVENUE\b|COMMERCIAL/.test(t)
-  )
-    return "SALES";
-  if (/LEGAL\b|COUNSEL\b|ATTORNEY\b|COMPLIANCE\b|REGULATORY/.test(t))
-    return "LEGAL";
-  if (/FINANC|ACCOUNTANT|ACCOUNTING|CONTROLLER\b|TREASURY|TAX\b/.test(t))
-    return "FINANCE";
-  if (
-    /OPERAT|SUPPLY\s+CHAIN|LOGISTIC|PROCUREMENT|FACILITIES|ADMIN\b|OFFICE\s+MANAGER/.test(t)
-  )
-    return "OPS";
-  if (
-    /ENGINEER|DEVELOP|SOFTWARE|PRODUCT\s|DESIGN|DATA\s|TECH|ARCHITECT|DELIVERY|PROJECT\s|PROGRAM\s/.test(t)
-  )
-    return "PROJECT_DELIVERY";
-  return "UNKNOWN";
-}
 
 export default function CompanyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -169,26 +136,21 @@ export default function CompanyDetailScreen() {
   };
 
   const handleAutoGroup = async () => {
-    const toGroup = companyContacts.filter(
-      (c) => !c.orgDepartment || c.orgDepartment.toUpperCase() === "UNKNOWN"
-    );
-    if (toGroup.length === 0) {
+    if (ungroupedCount === 0) {
       Alert.alert("No changes", "All contacts already have departments assigned.");
       return;
     }
     setAutoGrouping(true);
     try {
-      await Promise.all(
-        toGroup.map((c) => {
-          const dept = guessDepartment(c.jobTitle);
-          if (dept === "UNKNOWN") return Promise.resolve();
-          return api.updateContact(c.id, { orgDepartment: dept });
-        })
-      );
+      const { changed } = await api.autoGroupCompanyContacts(companyContacts);
       await qc.invalidateQueries({ queryKey: ["contacts"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const changed = toGroup.filter((c) => guessDepartment(c.jobTitle) !== "UNKNOWN").length;
-      Alert.alert("Auto-group complete", `Grouped ${changed} contact${changed !== 1 ? "s" : ""} by department.`);
+      Alert.alert(
+        "Auto-group complete",
+        changed > 0
+          ? `Grouped ${changed} contact${changed !== 1 ? "s" : ""} by department.`
+          : "No contacts could be matched to a department by title."
+      );
     } catch {
       Alert.alert("Error", "Could not auto-group contacts.");
     } finally {
@@ -417,7 +379,7 @@ export default function CompanyDetailScreen() {
                       key={c.id}
                       contact={c}
                       onPress={() => router.push(`/contact/${c.id}`)}
-                      showDepartment={false}
+                      showDepartment={true}
                     />
                   ))}
                 </View>

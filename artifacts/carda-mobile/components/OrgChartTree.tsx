@@ -1,16 +1,14 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Dimensions } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
 } from "react-native-reanimated";
 import {
   GestureDetector,
   Gesture,
-  ScrollView,
 } from "react-native-gesture-handler";
-import Svg, { Line, Path, Rect, Circle, Text as SvgText } from "react-native-svg";
+import Svg, { Path, Rect, Circle, Text as SvgText } from "react-native-svg";
 import type { Contact } from "@/lib/api";
 
 const NODE_W = 168;
@@ -20,15 +18,6 @@ const V_GAP = 56;
 const AVATAR_R = 18;
 const DEPT_BAR_H = 4;
 const PADDING = 24;
-
-type Department =
-  | "EXEC"
-  | "SALES"
-  | "OPS"
-  | "FINANCE"
-  | "LEGAL"
-  | "PROJECT_DELIVERY"
-  | "UNKNOWN";
 
 const DEPT_COLOR: Record<string, string> = {
   EXEC: "#5856D6",
@@ -156,11 +145,6 @@ export function OrgChartTree({ contacts, onNodePress }: OrgChartTreeProps) {
     [contacts]
   );
 
-  const byId = useMemo(
-    () => new Map(contacts.map((c) => [c.id, c])),
-    [contacts]
-  );
-
   const contactIds = useMemo(
     () => new Set(contacts.map((c) => c.id)),
     [contacts]
@@ -249,7 +233,6 @@ export function OrgChartTree({ contacts, onNodePress }: OrgChartTreeProps) {
               const displayName = c.fullName || c.email || "Unknown";
               const initials = getInitials(displayName);
               const { x, y } = pos;
-              const cx = x + NODE_W / 2;
               const avatarCX = x + AVATAR_R + 10;
               const avatarCY = y + NODE_H / 2;
 
