@@ -124,6 +124,12 @@ export const api = {
   scanCard: (formData: FormData): Promise<ScanResult> =>
     apiFetch("/api/scan-ai", { method: "POST", body: formData }),
 
+  parseText: (text: string): Promise<{ contact: Partial<Contact> }> =>
+    apiFetch("/api/parse-ai", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
   getCompanies: (): Promise<Company[]> => apiFetch("/api/companies"),
 
   getIntel: (companyName: string, domain?: string): Promise<IntelResult> =>
