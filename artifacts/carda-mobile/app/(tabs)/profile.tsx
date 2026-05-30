@@ -238,6 +238,49 @@ export default function ProfileScreen() {
       </GlassCard>
 
       <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+        Data
+      </Text>
+      <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+        <TouchableOpacity
+          onPress={() =>
+            Alert.alert(
+              "Import contacts",
+              "Import from .vcf file is coming soon.",
+              [{ text: "OK" }]
+            )
+          }
+          style={[styles.menuRow, { borderBottomColor: "transparent" }]}
+        >
+          <View
+            style={[
+              styles.menuIcon,
+              {
+                backgroundColor: colors.primary + "1A",
+                borderRadius: colors.radius - 4,
+              },
+            ]}
+          >
+            <Feather name="upload" size={16} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.menuText, { color: colors.foreground }]}>
+              Import contacts (.vcf)
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.comingSoonBadge,
+              { backgroundColor: colors.secondary, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.comingSoonText, { color: colors.mutedForeground }]}>
+              Soon
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </GlassCard>
+
+      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
         Account
       </Text>
       <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
@@ -359,4 +402,11 @@ const styles = StyleSheet.create({
     marginTop: 32,
     marginBottom: 8,
   },
+  comingSoonBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+  },
+  comingSoonText: { fontSize: 11, fontWeight: "600" as const },
 });

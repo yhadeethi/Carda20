@@ -31,10 +31,18 @@ interface Props {
 
 const MENU_ITEMS = [
   {
+    id: "voice" as const,
+    icon: "mic" as const,
+    label: "Voice Debrief",
+    subtitle: "After a meeting",
+    color: "#6366F1",
+    bg: "#EEF2FF",
+  },
+  {
     id: "scan" as const,
     icon: "camera" as const,
     label: "Scan Card",
-    subtitle: "Take a photo or pick from library",
+    subtitle: "Photo of a business card",
     color: "#3B82F6",
     bg: "#EFF6FF",
   },
@@ -42,23 +50,15 @@ const MENU_ITEMS = [
     id: "paste" as const,
     icon: "clipboard" as const,
     label: "Paste Signature",
-    subtitle: "Extract contact from email text",
+    subtitle: "Extract from email text",
     color: "#8B5CF6",
     bg: "#F5F3FF",
   },
   {
-    id: "voice" as const,
-    icon: "mic" as const,
-    label: "Voice Debrief",
-    subtitle: "Record notes about a conversation",
-    color: "#F59E0B",
-    bg: "#FFFBEB",
-  },
-  {
     id: "qr" as const,
     icon: "maximize" as const,
-    label: "My QR Code",
-    subtitle: "Share your contact details",
+    label: "Share My QR",
+    subtitle: "Let them scan your card",
     color: "#10B981",
     bg: "#ECFDF5",
   },
@@ -247,8 +247,8 @@ export function CaptureSheet({ visible, onClose }: Props) {
                 <View style={{ width: 20 }} />
               </View>
               <View style={s.centeredSection}>
-                <View style={s.voiceIconWrap}>
-                  <Feather name="mic" size={32} color="#F59E0B" />
+                <View style={[s.voiceIconWrap, { backgroundColor: "#EEF2FF" }]}>
+                  <Feather name="mic" size={32} color="#6366F1" />
                 </View>
                 <Text style={s.voiceTitle}>Coming soon</Text>
                 <Text style={s.voiceBody}>
@@ -258,14 +258,14 @@ export function CaptureSheet({ visible, onClose }: Props) {
             </>
           )}
 
-          {/* ── My QR Code ────────────────────────────────────────── */}
+          {/* ── Share My QR ───────────────────────────────────────── */}
           {mode === "qr" && (
             <>
               <View style={s.subHeader}>
                 <TouchableOpacity onPress={() => setMode("menu")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Feather name="arrow-left" size={20} color={colors.foreground} />
                 </TouchableOpacity>
-                <Text style={s.subTitle}>My QR Code</Text>
+                <Text style={s.subTitle}>Share My QR</Text>
                 <View style={{ width: 20 }} />
               </View>
               <View style={s.centeredSection}>
@@ -396,7 +396,6 @@ function makeStyles(
       width: 72,
       height: 72,
       borderRadius: 36,
-      backgroundColor: "#FFFBEB",
       alignItems: "center",
       justifyContent: "center",
     },

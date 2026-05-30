@@ -70,10 +70,25 @@ export default function NetworkScreen() {
   const peopleLabel = contacts.length > 0 ? `People · ${contacts.length}` : "People";
   const companiesLabel = companies.length > 0 ? `Companies · ${companies.length}` : "Companies";
 
+  const subheading =
+    contacts.length > 0 || companies.length > 0
+      ? `${contacts.length} ${contacts.length === 1 ? "person" : "people"} · ${companies.length} ${companies.length === 1 ? "company" : "companies"}`
+      : null;
+
   return (
     <SafeAreaView style={s.bg} edges={["top"]}>
       {/* ── Fixed header ─────────────────────────────────────── */}
       <View style={s.header}>
+        {/* Title */}
+        <View style={s.titleRow}>
+          <Text style={[s.screenTitle, { color: colors.foreground }]}>Network</Text>
+          {subheading ? (
+            <Text style={[s.screenSubtitle, { color: colors.mutedForeground }]}>
+              {subheading}
+            </Text>
+          ) : null}
+        </View>
+
         {/* Segment control */}
         <View style={s.segWrap}>
           <TouchableOpacity
@@ -198,6 +213,10 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
       paddingBottom: 4,
       backgroundColor: colors.background,
     },
+
+    titleRow: { marginBottom: 12 },
+    screenTitle: { fontSize: 28, fontWeight: "700" as const, letterSpacing: -0.3 },
+    screenSubtitle: { fontSize: 13, marginTop: 2 },
 
     segWrap: {
       flexDirection: "row",

@@ -50,11 +50,11 @@ function TabLayout() {
             ) : null,
         }}
       >
-        {/* ── Home ────────────────────────────────────────────────── */}
+        {/* ── Scoreboard ──────────────────────────────────────────── */}
         <Tabs.Screen
           name="index"
           options={{
-            title: "Home",
+            title: "Scoreboard",
             tabBarIcon: ({ color }) =>
               isIOS ? (
                 <SymbolView name="house" tintColor={color} size={22} />
@@ -87,12 +87,20 @@ function TabLayout() {
               <TouchableOpacity
                 style={fabStyles.wrapper}
                 onPress={() => {
-                  setCaptureOpen(true);
+                  if (captureOpen) {
+                    setCaptureOpen(false);
+                  } else {
+                    setCaptureOpen(true);
+                  }
                 }}
                 activeOpacity={0.85}
               >
                 <View style={fabStyles.circle}>
-                  <Feather name="plus" size={26} color="#fff" />
+                  {captureOpen ? (
+                    <Feather name="x" size={26} color="#fff" />
+                  ) : (
+                    <Feather name="plus" size={26} color="#fff" />
+                  )}
                 </View>
               </TouchableOpacity>
             ),
