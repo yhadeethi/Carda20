@@ -16,7 +16,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { ContactCard } from "@/components/ContactCard";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { api, Contact, ContactReminder } from "@/lib/api";
@@ -372,7 +371,7 @@ export default function HomeScreen() {
       [...contacts]
         .filter((c) => !!c.createdAt)
         .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
-        .slice(0, 5),
+        .slice(0, 3),
     [contacts]
   );
 
@@ -464,49 +463,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── Weekly captures chart ──────────────────────────────── */}
-        <View style={s.section}>
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Weekly captures</Text>
-            {scanned7d > 0 && (
-              <View style={s.badge}>
-                <Text style={s.badgeText}>🔥 {scanned7d} this week</Text>
-              </View>
-            )}
-          </View>
-          <View style={s.chartCard}>
-            <View style={s.chart}>
-              {chartData.map((d) => (
-                <View key={d.iso} style={s.chartCol}>
-                  <View style={s.barTrack}>
-                    <View
-                      style={[
-                        s.bar,
-                        {
-                          height: Math.max(4, (d.count / maxCount) * 72),
-                          backgroundColor: d.isToday ? colors.primary : colors.border,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      s.chartDayLabel,
-                      {
-                        color: d.isToday ? colors.primary : colors.mutedForeground,
-                        fontWeight: d.isToday ? "700" : "500",
-                      },
-                    ]}
-                  >
-                    {d.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Text style={s.chartSubtitle}>Tap + below to keep the streak going.</Text>
-          </View>
-        </View>
-
         {/* ── Needs Attention ────────────────────────────────────── */}
         {needsAttention.length > 0 && (
           <View style={s.section}>
@@ -594,28 +550,139 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* ── This week chart (below Up Next) ────────────────────── */}
+        {isLoading ? (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <View style={[s.skeletonLine, { width: 70, height: 13 }]} />
+            </View>
+            <View style={[s.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={s.chart}>
+                {[0.45, 0.7, 0.3, 0.85, 0.55, 0.65, 0.9].map((h, i) => (
+                  <View key={i} style={s.chartCol}>
+                    <View style={[s.skeletonLine, { width: "100%", height: 11, marginBottom: 3 }]} />
+                    <View style={s.barTrack}>
+                      <View style={[s.bar, { height: Math.max(4, h * 72), backgroundColor: colors.border }]} />
+                    </View>
+                    <View style={[s.skeletonLine, { width: 14, height: 10 }]} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        ) : contacts.length > 0 ? (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>This week</Text>
+              {scanned7d > 0 && (
+                <View style={s.badge}>
+                  <Text style={s.badgeText}>🔥 {scanned7d} scanned</Text>
+                </View>
+              )}
+            </View>
+            <View style={[s.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={s.chart}>
+                {chartData.map((d) => (
+                  <View key={d.iso} style={s.chartCol}>
+                    <Text
+                      style={[
+                        s.chartCount,
+                        {
+                          color: d.isToday ? colors.primary : colors.mutedForeground,
+                          opacity: d.count > 0 ? 1 : 0,
+                        },
+                      ]}
+                    >
+                      {d.count || " "}
+                    </Text>
+                    <View style={s.barTrack}>
+                      <View
+                        style={[
+                          s.bar,
+                          {
+                            height: Math.max(4, (d.count / maxCount) * 72),
+                            backgroundColor: d.isToday ? colors.primary : colors.border,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        s.chartDayLabel,
+                        {
+                          color: d.isToday ? colors.primary : colors.mutedForeground,
+                          fontWeight: (d.isToday ? "700" : "500") as "700" | "500",
+                        },
+                      ]}
+                    >
+                      {d.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={s.chartSubtitle}>Tap + below to keep the streak going.</Text>
+            </View>
+          </View>
+        ) : null}
+
         {/* ── Recent captures ────────────────────────────────────── */}
         {isLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <View style={[s.skeletonLine, { width: 110, height: 13 }]} />
+            </View>
+            <GlassCard padding={0} style={{ overflow: "hidden" } as any}>
+              {[1, 2, 3].map((i) => (
+                <View
+                  key={i}
+                  style={[
+                    s.captureRow,
+                    i > 1 && { borderTopWidth: 1, borderTopColor: colors.border },
+                  ]}
+                >
+                  <View style={[s.skeletonCircle, { width: 36, height: 36 }]} />
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <View style={[s.skeletonLine, { width: "55%", height: 12 }]} />
+                    <View style={[s.skeletonLine, { width: "38%", height: 10 }]} />
+                  </View>
+                </View>
+              ))}
+            </GlassCard>
+          </View>
         ) : recentCaptures.length > 0 ? (
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>Recent captures</Text>
-              {contacts.length > 5 && (
+              {contacts.length > 3 && (
                 <TouchableOpacity onPress={() => router.push("/(tabs)/network" as any)}>
                   <Text style={[s.viewAll, { color: colors.primary }]}>View all</Text>
                 </TouchableOpacity>
               )}
             </View>
-            <View style={s.list}>
-              {recentCaptures.map((c) => (
-                <ContactCard
+            <GlassCard padding={0} style={{ overflow: "hidden" } as any}>
+              {recentCaptures.map((c, idx) => (
+                <TouchableOpacity
                   key={c.id}
-                  contact={c}
                   onPress={() => router.push(`/contact/${c.id}` as any)}
-                />
+                  style={[
+                    s.captureRow,
+                    idx > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+                  ]}
+                  activeOpacity={0.75}
+                >
+                  <Avatar name={c.fullName || c.email} size={36} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.captureName, { color: colors.foreground }]} numberOfLines={1}>
+                      {c.fullName || c.email || "Unknown"}
+                    </Text>
+                    <Text style={[s.captureMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {c.companyName || c.jobTitle || "No company"}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+                </TouchableOpacity>
               ))}
-            </View>
+            </GlassCard>
           </View>
         ) : (
           <View style={s.empty}>
@@ -754,12 +821,26 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
       shadowRadius: 6,
       elevation: 1,
     },
-    chart: { flexDirection: "row", alignItems: "flex-end", height: 96, gap: 5 },
-    chartCol: { flex: 1, alignItems: "center", gap: 5 },
+    chart: { flexDirection: "row", alignItems: "flex-end", height: 106, gap: 5 },
+    chartCol: { flex: 1, alignItems: "center", gap: 4 },
     barTrack: { flex: 1, justifyContent: "flex-end", width: "100%" },
     bar: { width: "100%", borderRadius: 6 },
+    chartCount: { fontSize: 11, fontWeight: "700" as const, textAlign: "center" as const },
     chartDayLabel: { fontSize: 11 },
     chartSubtitle: { fontSize: 11, color: colors.mutedForeground, opacity: 0.55, marginTop: 10 },
+
+    captureRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+    },
+    captureName: { fontSize: 14, fontWeight: "600" as const },
+    captureMeta: { fontSize: 12, marginTop: 2 },
+
+    skeletonLine: { backgroundColor: colors.border, borderRadius: 4, opacity: 0.6 },
+    skeletonCircle: { borderRadius: 18, backgroundColor: colors.border, opacity: 0.6 },
 
     calTeaser: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 } as any,
     calIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
