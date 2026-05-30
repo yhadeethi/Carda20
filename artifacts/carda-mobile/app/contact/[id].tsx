@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
-import { api, Contact, ContactActivity, ContactTask } from "@/lib/api";
+import { api, Contact, ContactActivity, ContactTask, TimelineEvent } from "@/lib/api";
 import { debriefStore } from "@/lib/debriefStore";
 import { useColors } from "@/hooks/useColors";
 
@@ -139,29 +139,49 @@ function TaskRow({
   );
 }
 
-function ActivityRow({ item }: { item: ContactActivity }) {
+interface DisplayActivity {
+  id: string;
+  type: string;
+  text: string;
+  createdAt: string;
+  isDebrief?: boolean;
+}
+
+function ActivityRow({ item }: { item: DisplayActivity }) {
   const colors = useColors();
-  const iconMap: Record<ContactActivity["type"], string> = {
+  const iconMap: Record<string, string> = {
     note: "file-text",
     call: "phone",
     meeting: "users",
     email: "mail",
+    voice_debrief: "mic",
   };
+  const icon = iconMap[item.type] ?? "activity";
+  const isDebrief = item.isDebrief;
+
   return (
     <View style={[styles.activityRow, { borderBottomColor: colors.border }]}>
       <View
         style={[
           styles.activityIcon,
-          { backgroundColor: colors.primary + "18", borderRadius: 8 },
+          {
+            backgroundColor: isDebrief ? "#6366F1" + "1A" : colors.primary + "18",
+            borderRadius: 8,
+          },
         ]}
       >
         <Feather
-          name={iconMap[item.type] as any}
+          name={icon as any}
           size={14}
-          color={colors.primary}
+          color={isDebrief ? "#6366F1" : colors.primary}
         />
       </View>
       <View style={{ flex: 1 }}>
+        {isDebrief && (
+          <Text style={[styles.activityLabel, { color: "#6366F1" }]}>
+            Voice Debrief
+          </Text>
+        )}
         <Text style={[styles.activityText, { color: colors.foreground }]}>
           {item.text}
         </Text>
@@ -216,6 +236,12 @@ export default function ContactDetailScreen() {
   const { data: tasks } = useQuery<ContactTask[]>({
     queryKey: ["contact-tasks", id],
     queryFn: () => api.getContactTasks(Number(id)),
+    enabled: !!id,
+  });
+
+  const { data: timelineEvents = [] } = useQuery<TimelineEvent[]>({
+    queryKey: ["contact-timeline", id],
+    queryFn: () => api.getContactTimeline(Number(id)),
     enabled: !!id,
   });
 
@@ -439,7 +465,26 @@ export default function ContactDetailScreen() {
   const displayName = contact?.fullName || contact?.email || "Contact";
   const paddingBottom = Platform.OS === "web" ? 34 : insets.bottom + 20;
 
-  const filteredActivities = activities.filter((a) => {
+  const allActivities: DisplayActivity[] = [
+    ...activities.map((a) => ({
+      id: a.id,
+      type: a.type,
+      text: a.text,
+      createdAt: a.createdAt,
+      isDebrief: false,
+    })),
+    ...timelineEvents.map((e) => ({
+      id: String(e.id),
+      type: e.type,
+      text: e.summary,
+      createdAt: e.eventAt,
+      isDebrief: e.type === "voice_debrief",
+    })),
+  ].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  const filteredActivities = allActivities.filter((a) => {
     if (activityFilter === "All") return true;
     if (activityFilter === "Meetings") return a.type === "meeting";
     if (activityFilter === "Calls") return a.type === "call";
@@ -1325,6 +1370,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  activityLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5, marginBottom: 2 },
   activityText: { fontSize: 13, lineHeight: 18 },
   activityTime: { fontSize: 11, marginTop: 2 },
 

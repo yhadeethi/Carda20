@@ -226,6 +226,7 @@ export default function VoiceDebriefReviewScreen() {
         }
 
         await qc.invalidateQueries({ queryKey: ["contact-tasks", String(selectedContactId)] });
+        await qc.invalidateQueries({ queryKey: ["contact-timeline", String(selectedContactId)] });
         await qc.invalidateQueries({ queryKey: ["/api/contacts"] });
       }
 

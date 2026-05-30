@@ -68,6 +68,18 @@ export interface ContactTask {
   createdAt?: string;
 }
 
+export interface TimelineEvent {
+  id: number;
+  contactId: number;
+  userId: number;
+  clientId: string;
+  type: string;
+  summary: string;
+  meta?: Record<string, unknown> | null;
+  eventAt: string;
+  createdAt?: string;
+}
+
 export interface IntelResult {
   companyName?: string;
   domain?: string;
@@ -199,6 +211,9 @@ export const api = {
     apiFetch(`/api/contacts/${contactId}/tasks/${taskId}`, {
       method: "DELETE",
     }),
+
+  getContactTimeline: (contactId: number): Promise<TimelineEvent[]> =>
+    apiFetch(`/api/contacts/${contactId}/timeline`),
 
   createTimelineEvent: (
     contactId: number,
