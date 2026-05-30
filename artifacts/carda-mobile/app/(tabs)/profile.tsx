@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
-import React from "react";
+import * as DocumentPicker from "expo-document-picker";
+import React, { useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { useAuth } from "@/context/AuthContext";
@@ -121,8 +122,11 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
+  const qc = useQueryClient();
+  const scrollRef = useRef<ScrollView>(null);
   const [syncing, setSyncing] = React.useState<string | null>(null);
   const [connecting, setConnecting] = React.useState<string | null>(null);
+  const [importing, setImporting] = React.useState(false);
 
   const hubspotQ = useQuery({
     queryKey: ["hubspot-status"],
@@ -171,6 +175,48 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleImportVcf = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["text/vcard", "text/x-vcard", "*/*"],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      if (!file) return;
+
+      setImporting(true);
+      const formData = new FormData();
+      formData.append("file", {
+        uri: file.uri,
+        name: file.name ?? "contacts.vcf",
+        type: file.mimeType ?? "text/vcard",
+      } as any);
+
+      const res = await fetch(`${BASE_URL}/api/contacts/import-vcf`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      if (res.status === 404) {
+        Alert.alert("Coming soon", "VCF import is not yet available. Check back in a future update.");
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      const count = body.imported ?? body.count ?? "some";
+      qc.invalidateQueries({ queryKey: ["/api/contacts"] });
+      Alert.alert("Import complete", `${count} contact${count === 1 ? "" : "s"} imported successfully.`);
+    } catch (e: any) {
+      if (!e?.message?.includes("coming soon") && !e?.message?.includes("canceled")) {
+        Alert.alert("Import failed", e?.message || "Could not import contacts. Please try again.");
+      }
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const fullName =
     [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
     user?.email ||
@@ -180,6 +226,7 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{
         paddingTop: Platform.OS === "web" ? 67 : 8,
@@ -208,6 +255,36 @@ export default function ProfileScreen() {
           ) : null}
         </LinearGradient>
       </View>
+
+      {/* ── My Profile row ────────────────────────────────────── */}
+      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+        My Profile
+      </Text>
+      <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+        <TouchableOpacity
+          onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          style={[styles.menuRow, { borderBottomColor: "transparent" }]}
+        >
+          <View
+            style={[
+              styles.menuIcon,
+              {
+                backgroundColor: colors.primary + "1A",
+                borderRadius: colors.radius - 4,
+              },
+            ]}
+          >
+            <Feather name="user" size={16} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.menuText, { color: colors.foreground }]}>My profile</Text>
+            <Text style={[styles.menuSubText, { color: colors.mutedForeground }]}>
+              {fullName}
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      </GlassCard>
 
       <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
         CRM Integrations
@@ -242,13 +319,8 @@ export default function ProfileScreen() {
       </Text>
       <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
         <TouchableOpacity
-          onPress={() =>
-            Alert.alert(
-              "Import contacts",
-              "Import from .vcf file is coming soon.",
-              [{ text: "OK" }]
-            )
-          }
+          onPress={handleImportVcf}
+          disabled={importing}
           style={[styles.menuRow, { borderBottomColor: "transparent" }]}
         >
           <View
@@ -260,23 +332,21 @@ export default function ProfileScreen() {
               },
             ]}
           >
-            <Feather name="upload" size={16} color={colors.primary} />
+            {importing ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Feather name="upload" size={16} color={colors.primary} />
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.menuText, { color: colors.foreground }]}>
               Import contacts (.vcf)
             </Text>
-          </View>
-          <View
-            style={[
-              styles.comingSoonBadge,
-              { backgroundColor: colors.secondary, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.comingSoonText, { color: colors.mutedForeground }]}>
-              Soon
+            <Text style={[styles.menuSubText, { color: colors.mutedForeground }]}>
+              From Google Contacts, LinkedIn export…
             </Text>
           </View>
+          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
         </TouchableOpacity>
       </GlassCard>
 
@@ -396,6 +466,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   menuText: { fontSize: 15, fontWeight: "500" as const },
+  menuSubText: { fontSize: 12, marginTop: 1 },
   footer: {
     textAlign: "center",
     fontSize: 12,

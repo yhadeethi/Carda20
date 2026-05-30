@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { CaptureProvider } from "@/context/CaptureContext";
 import colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
@@ -91,9 +92,11 @@ export default function RootLayout() {
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
+              <CaptureProvider>
+                <KeyboardProvider>
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </CaptureProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>
         </AuthProvider>

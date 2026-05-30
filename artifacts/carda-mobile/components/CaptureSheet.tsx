@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,7 @@ type SheetMode = "menu" | "paste" | "qr" | "voice";
 interface Props {
   visible: boolean;
   onClose: () => void;
+  initialMode?: SheetMode;
 }
 
 const MENU_ITEMS = [
@@ -64,16 +65,22 @@ const MENU_ITEMS = [
   },
 ];
 
-export function CaptureSheet({ visible, onClose }: Props) {
+export function CaptureSheet({ visible, onClose, initialMode = "menu" }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
   const { user } = useAuth();
 
-  const [mode, setMode] = useState<SheetMode>("menu");
+  const [mode, setMode] = useState<SheetMode>(initialMode);
   const [pasteText, setPasteText] = useState("");
   const [parsing, setParsing] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setMode(initialMode);
+    }
+  }, [visible, initialMode]);
 
   const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 

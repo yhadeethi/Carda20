@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
@@ -21,6 +21,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { api, Contact } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
+import { useCapture } from "@/context/CaptureContext";
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -54,6 +55,8 @@ function daysSince(dateStr?: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
 }
 
+// ── Create Contact Modal ──────────────────────────────────────────────────────
+
 interface CreateContactModalProps {
   visible: boolean;
   onClose: () => void;
@@ -71,6 +74,8 @@ function CreateContactModal({ visible, onClose, onCreated }: CreateContactModalP
   });
   const [saving, setSaving] = useState(false);
 
+  const reset = () => setForm({ fullName: "", email: "", phone: "", jobTitle: "", companyName: "" });
+
   const handleCreate = async () => {
     if (!form.fullName.trim() && !form.email.trim()) {
       Alert.alert("Name or email required", "Please enter at least a name or email.");
@@ -85,7 +90,7 @@ function CreateContactModal({ visible, onClose, onCreated }: CreateContactModalP
         jobTitle: form.jobTitle.trim() || undefined,
         companyName: form.companyName.trim() || undefined,
       });
-      setForm({ fullName: "", email: "", phone: "", jobTitle: "", companyName: "" });
+      reset();
       onCreated(saved.id);
     } catch (e: any) {
       Alert.alert("Error", e?.message || "Could not create contact.");
@@ -93,22 +98,6 @@ function CreateContactModal({ visible, onClose, onCreated }: CreateContactModalP
       setSaving(false);
     }
   };
-
-  const field = (label: string, key: keyof typeof form, opts?: { keyboard?: any }) => (
-    <View key={key} style={ccStyles.field}>
-      <Text style={[ccStyles.fieldLabel, { color: colors.mutedForeground }]}>{label}</Text>
-      <TextInput
-        value={form[key]}
-        onChangeText={(v) => setForm((p) => ({ ...p, [key]: v }))}
-        style={[ccStyles.fieldInput, { color: colors.foreground, backgroundColor: colors.secondary, borderColor: colors.border }]}
-        placeholderTextColor={colors.mutedForeground}
-        placeholder={`Enter ${label.toLowerCase()}`}
-        keyboardType={opts?.keyboard ?? "default"}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-    </View>
-  );
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -121,11 +110,48 @@ function CreateContactModal({ visible, onClose, onCreated }: CreateContactModalP
               <Feather name="x" size={20} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
-          {field("Full Name", "fullName")}
-          {field("Email", "email", { keyboard: "email-address" })}
-          {field("Phone", "phone", { keyboard: "phone-pad" })}
-          {field("Job Title", "jobTitle")}
-          {field("Company", "companyName")}
+
+          {(["fullName", "email", "phone", "jobTitle", "companyName"] as const).map((key) => {
+            const labels: Record<typeof key, string> = {
+              fullName: "Full Name",
+              email: "Email",
+              phone: "Phone",
+              jobTitle: "Job Title",
+              companyName: "Company",
+            };
+            const keyboards: Record<typeof key, any> = {
+              fullName: "default",
+              email: "email-address",
+              phone: "phone-pad",
+              jobTitle: "default",
+              companyName: "default",
+            };
+            return (
+              <View key={key} style={ccStyles.field}>
+                <Text style={[ccStyles.fieldLabel, { color: colors.mutedForeground }]}>
+                  {labels[key]}
+                </Text>
+                <TextInput
+                  value={form[key]}
+                  onChangeText={(v) => setForm((p) => ({ ...p, [key]: v }))}
+                  style={[
+                    ccStyles.fieldInput,
+                    {
+                      color: colors.foreground,
+                      backgroundColor: colors.secondary,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  placeholderTextColor={colors.mutedForeground}
+                  placeholder={`Enter ${labels[key].toLowerCase()}`}
+                  keyboardType={keyboards[key]}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            );
+          })}
+
           <TouchableOpacity
             onPress={handleCreate}
             disabled={saving}
@@ -150,8 +176,8 @@ const ccStyles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 32,
-    gap: 12,
+    paddingBottom: 36,
+    gap: 10,
   },
   handle: {
     width: 36, height: 4, borderRadius: 2,
@@ -168,15 +194,19 @@ const ccStyles = StyleSheet.create({
   saveBtnText: { color: "#fff", fontWeight: "700" as const, fontSize: 15 },
 });
 
-interface NeedsAttentionRowProps {
-  contact: Contact;
-  onDebrief: () => void;
-}
+// ── Needs Attention Row ────────────────────────────────────────────────────────
 
-function NeedsAttentionRow({ contact, onDebrief }: NeedsAttentionRowProps) {
+function NeedsAttentionRow({
+  contact,
+  daysSinceCreated,
+  onDebrief,
+}: {
+  contact: Contact;
+  daysSinceCreated: number;
+  onDebrief: () => void;
+}) {
   const colors = useColors();
   const router = useRouter();
-  const days = daysSince(contact.createdAt);
   const displayName = contact.fullName || contact.email || "Unknown";
 
   return (
@@ -194,15 +224,15 @@ function NeedsAttentionRow({ contact, onDebrief }: NeedsAttentionRowProps) {
           {contact.companyName || contact.jobTitle || "No company"}
         </Text>
       </View>
-      <View style={[naStyles.daysBadge, { backgroundColor: "#FEF3C7" }]}>
-        <Text style={naStyles.daysText}>{days}d</Text>
+      <View style={naStyles.daysBadge}>
+        <Text style={naStyles.daysText}>{daysSinceCreated}d ago</Text>
       </View>
       <TouchableOpacity
         onPress={onDebrief}
-        style={[naStyles.debriefBtn, { backgroundColor: colors.purple + "18", borderColor: colors.purple + "33" }]}
+        style={[naStyles.debriefBtn, { backgroundColor: "#EEF2FF", borderColor: "#C7D2FE" }]}
       >
-        <Feather name="mic" size={12} color={colors.purple} />
-        <Text style={[naStyles.debriefText, { color: colors.purple }]}>Debrief</Text>
+        <Feather name="mic" size={12} color="#6366F1" />
+        <Text style={[naStyles.debriefText, { color: "#6366F1" }]}>Debrief</Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -221,6 +251,7 @@ const naStyles = StyleSheet.create({
   name: { fontSize: 14, fontWeight: "600" as const },
   meta: { fontSize: 12, marginTop: 1 },
   daysBadge: {
+    backgroundColor: "#FEF3C7",
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 8,
@@ -238,22 +269,41 @@ const naStyles = StyleSheet.create({
   debriefText: { fontSize: 12, fontWeight: "600" as const },
 });
 
-interface HomeScreenProps {
-  onOpenCapture?: () => void;
-}
+// ── Home Screen ───────────────────────────────────────────────────────────────
 
-export default function HomeScreen({ onOpenCapture }: HomeScreenProps) {
+export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
+  const capture = useCapture();
   const [showCreate, setShowCreate] = useState(false);
 
+  // ── Contacts query ──────────────────────────────────────────────────────
   const { data: contacts = [], isLoading, refetch } = useQuery({
     queryKey: ["/api/contacts"],
     queryFn: () => api.getContacts(),
   });
 
+  // ── Batch-fetch tasks for all contacts to count open follow-ups ─────────
+  const taskQueries = useQueries({
+    queries: contacts.map((c) => ({
+      queryKey: ["contact-tasks", c.id],
+      queryFn: () => api.getContactTasks(c.id),
+      staleTime: 60_000,
+    })),
+  });
+
+  const followUps = useMemo(
+    () =>
+      taskQueries.reduce(
+        (sum, q) => sum + (q.data?.filter((t) => t.done === 0).length ?? 0),
+        0
+      ),
+    [taskQueries]
+  );
+
+  // ── Derived stats ────────────────────────────────────────────────────────
   const sevenDaysAgo = useMemo(() => {
     const d = new Date(); d.setDate(d.getDate() - 7); return d;
   }, []);
@@ -267,11 +317,7 @@ export default function HomeScreen({ onOpenCapture }: HomeScreenProps) {
     [contacts, sevenDaysAgo]
   );
 
-  const followUps = useMemo(
-    () => contacts.filter((c) => c.createdAt && new Date(c.createdAt) < sevenDaysAgo).length,
-    [contacts, sevenDaysAgo]
-  );
-
+  // Needs attention: contacts added > 14 days ago with no recorded notes
   const needsAttention = useMemo(
     () =>
       contacts
@@ -301,14 +347,17 @@ export default function HomeScreen({ onOpenCapture }: HomeScreenProps) {
   );
   const maxCount = useMemo(() => Math.max(...chartData.map((d) => d.count), 1), [chartData]);
 
-  const paddingBottom = insets.bottom + 100;
+  // Tab bar height for pinned buttons bottom padding
+  const TAB_BAR_HEIGHT = 56 + insets.bottom;
+
   const s = styles(colors);
 
   return (
     <SafeAreaView style={s.bg} edges={["top"]}>
+      {/* ── Scrollable content ─────────────────────────────────────── */}
       <ScrollView
         style={s.scroll}
-        contentContainerStyle={[s.content, { paddingBottom }]}
+        contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />
@@ -319,15 +368,13 @@ export default function HomeScreen({ onOpenCapture }: HomeScreenProps) {
           <View style={{ flex: 1 }}>
             <Text style={s.dateText}>{formatDate()}</Text>
             <Text style={s.greetingText}>{getGreeting()}</Text>
-            {(contacts.length > 0 || followUps > 0) && (
+            {(contacts.length > 0 || scanned7d > 0) && (
               <Text style={s.subtitleText}>
-                {followUps > 0 ? `${followUps} follow-ups · ` : ""}
                 {scanned7d > 0 ? `${scanned7d} scanned this week` : `${contacts.length} contacts`}
               </Text>
             )}
           </View>
-          {/* Bell icon (visual only) */}
-          <TouchableOpacity style={s.bellBtn}>
+          <TouchableOpacity style={s.bellBtn} activeOpacity={0.75}>
             <Feather name="bell" size={20} color={colors.mutedForeground} />
             {followUps > 0 && (
               <View style={[s.bellBadge, { backgroundColor: "#F59E0B" }]}>
@@ -427,7 +474,7 @@ export default function HomeScreen({ onOpenCapture }: HomeScreenProps) {
               <Text style={s.sectionTitle}>Needs attention</Text>
               <View style={[s.attentionBadge, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
                 <Text style={[s.attentionBadgeText, { color: "#D97706" }]}>
-                  {needsAttention.length} contacts
+                  {needsAttention.length} contact{needsAttention.length !== 1 ? "s" : ""}
                 </Text>
               </View>
             </View>
@@ -436,20 +483,15 @@ export default function HomeScreen({ onOpenCapture }: HomeScreenProps) {
                 <NeedsAttentionRow
                   key={c.id}
                   contact={c}
-                  onDebrief={() =>
-                    Alert.alert(
-                      "Voice Debrief",
-                      "Voice debriefs are coming soon. Log a note on the contact page in the meantime.",
-                      [{ text: "OK" }]
-                    )
-                  }
+                  daysSinceCreated={daysSince(c.createdAt)}
+                  onDebrief={() => capture.openCapture("voice")}
                 />
               ))}
             </GlassCard>
           </View>
         )}
 
-        {/* ── Calendar briefing teaser ────────────────────────────── */}
+        {/* ── Calendar teaser ─────────────────────────────────────── */}
         <View style={s.section}>
           <GlassCard style={s.calTeaser}>
             <View style={[s.calIcon, { backgroundColor: colors.primary + "18" }]}>
@@ -497,27 +539,27 @@ export default function HomeScreen({ onOpenCapture }: HomeScreenProps) {
             </Text>
           </View>
         )}
-
-        {/* ── Bottom action buttons ───────────────────────────────── */}
-        <View style={s.bottomActions}>
-          <TouchableOpacity
-            style={[s.scanBtn, { backgroundColor: colors.primary }]}
-            onPress={() => router.push("/(tabs)/scan" as any)}
-            activeOpacity={0.85}
-          >
-            <Feather name="camera" size={16} color="#fff" />
-            <Text style={s.scanBtnText}>Scan a business card</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.createBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-            onPress={() => setShowCreate(true)}
-            activeOpacity={0.75}
-          >
-            <Feather name="user-plus" size={16} color={colors.foreground} />
-            <Text style={[s.createBtnText, { color: colors.foreground }]}>Create contact</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
+
+      {/* ── Pinned bottom actions (above tab bar) ─────────────────── */}
+      <View style={[s.bottomActions, { paddingBottom: TAB_BAR_HEIGHT + 8 }]}>
+        <TouchableOpacity
+          style={[s.scanBtn, { backgroundColor: colors.primary }]}
+          onPress={() => router.push("/(tabs)/scan" as any)}
+          activeOpacity={0.85}
+        >
+          <Feather name="camera" size={16} color="#fff" />
+          <Text style={s.scanBtnText}>Scan a business card</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.createBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+          onPress={() => setShowCreate(true)}
+          activeOpacity={0.75}
+        >
+          <Feather name="user-plus" size={16} color={colors.foreground} />
+          <Text style={[s.createBtnText, { color: colors.foreground }]}>Create contact</Text>
+        </TouchableOpacity>
+      </View>
 
       <CreateContactModal
         visible={showCreate}
@@ -536,7 +578,7 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
   return StyleSheet.create({
     bg: { flex: 1, backgroundColor: colors.background },
     scroll: { flex: 1 },
-    content: { paddingHorizontal: 16, paddingTop: 6 },
+    content: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 16 },
 
     header: { flexDirection: "row", alignItems: "flex-start", marginBottom: 14 },
     dateText: { fontSize: 13, color: colors.mutedForeground, marginBottom: 2 },
@@ -610,12 +652,7 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
       borderColor: "#BBF7D0",
     },
     badgeText: { fontSize: 11, fontWeight: "700", color: "#059669" },
-    attentionBadge: {
-      borderRadius: 20,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-      borderWidth: 1,
-    },
+    attentionBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1 },
     attentionBadgeText: { fontSize: 11, fontWeight: "700" },
 
     chartCard: {
@@ -637,35 +674,27 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
     chartDayLabel: { fontSize: 11 },
     chartSubtitle: { fontSize: 11, color: colors.mutedForeground, opacity: 0.55, marginTop: 10 },
 
-    calTeaser: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      padding: 14,
-    } as any,
+    calTeaser: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 } as any,
     calIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
     calTitle: { fontSize: 14, fontWeight: "600" as const },
     calSub: { fontSize: 12, marginTop: 1 },
-    comingSoonBadge: {
-      borderRadius: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderWidth: 1,
-    },
+    comingSoonBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
     comingSoonText: { fontSize: 11, fontWeight: "600" as const },
 
     list: { gap: 8 },
 
     empty: { alignItems: "center", paddingVertical: 56, gap: 12 },
     emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.foreground },
-    emptyBody: {
-      fontSize: 14,
-      color: colors.mutedForeground,
-      textAlign: "center",
-      paddingHorizontal: 20,
-    },
+    emptyBody: { fontSize: 14, color: colors.mutedForeground, textAlign: "center", paddingHorizontal: 20 },
 
-    bottomActions: { gap: 10, marginTop: 4, marginBottom: 8 },
+    bottomActions: {
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      gap: 10,
+      backgroundColor: colors.background,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
     scanBtn: {
       flexDirection: "row",
       alignItems: "center",

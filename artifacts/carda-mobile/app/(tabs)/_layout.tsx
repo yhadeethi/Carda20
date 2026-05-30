@@ -2,17 +2,18 @@ import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CaptureSheet } from "@/components/CaptureSheet";
+import { useCapture } from "@/context/CaptureContext";
 import colors from "@/constants/colors";
 
 function TabLayout() {
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const insets = useSafeAreaInsets();
-  const [captureOpen, setCaptureOpen] = useState(false);
+  const capture = useCapture();
 
   const TAB_BAR_HEIGHT = 56 + insets.bottom;
 
@@ -87,16 +88,16 @@ function TabLayout() {
               <TouchableOpacity
                 style={fabStyles.wrapper}
                 onPress={() => {
-                  if (captureOpen) {
-                    setCaptureOpen(false);
+                  if (capture.isOpen) {
+                    capture.closeCapture();
                   } else {
-                    setCaptureOpen(true);
+                    capture.openCapture("menu");
                   }
                 }}
                 activeOpacity={0.85}
               >
                 <View style={fabStyles.circle}>
-                  {captureOpen ? (
+                  {capture.isOpen ? (
                     <Feather name="x" size={26} color="#fff" />
                   ) : (
                     <Feather name="plus" size={26} color="#fff" />
@@ -155,7 +156,11 @@ function TabLayout() {
       </Tabs>
 
       {/* ── Capture bottom sheet ─────────────────────────────────── */}
-      <CaptureSheet visible={captureOpen} onClose={() => setCaptureOpen(false)} />
+      <CaptureSheet
+        visible={capture.isOpen}
+        onClose={capture.closeCapture}
+        initialMode={capture.initialMode}
+      />
     </>
   );
 }
