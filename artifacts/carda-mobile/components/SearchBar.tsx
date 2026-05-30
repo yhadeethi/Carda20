@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, TextInput, View } from "react-native";
-import colors from "@/constants/colors";
+import { useColors } from "@/hooks/useColors";
 
 interface SearchBarProps {
   value: string;
@@ -10,8 +10,14 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ value, onChangeText, placeholder = "Search…" }: SearchBarProps) {
+  const colors = useColors();
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.card, borderColor: colors.cardBorder },
+      ]}
+    >
       <Feather name="search" size={16} color={colors.mutedForeground} style={styles.icon} />
       <TextInput
         value={value}
@@ -31,10 +37,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginHorizontal: 16,
@@ -46,10 +50,5 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   icon: { marginRight: 8 },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    padding: 0,
-    margin: 0,
-  },
+  input: { flex: 1, fontSize: 15, padding: 0, margin: 0 },
 });

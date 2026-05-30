@@ -2,14 +2,16 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
 import * as DocumentPicker from "expo-document-picker";
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -18,8 +20,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme, ThemeMode } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
+import { useMyProfile, MyProfile } from "@/hooks/useMyProfile";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -63,53 +67,29 @@ function IntegrationRow({
       <View
         style={[
           styles.integrationIcon,
-          {
-            backgroundColor: colors.primary + "1A",
-            borderRadius: colors.radius - 4,
-          },
+          { backgroundColor: colors.primary + "1A", borderRadius: colors.radius - 4 },
         ]}
       >
         <Feather name={icon as any} size={18} color={colors.primary} />
       </View>
       <View style={styles.integrationContent}>
-        <Text style={[styles.integrationName, { color: colors.foreground }]}>
-          {name}
-        </Text>
-        <Text
-          style={[
-            styles.integrationStatus,
-            { color: connected ? "#22C55E" : colors.mutedForeground },
-          ]}
-        >
+        <Text style={[styles.integrationName, { color: colors.foreground }]}>{name}</Text>
+        <Text style={[styles.integrationStatus, { color: connected ? "#22C55E" : colors.mutedForeground }]}>
           {connected ? "Connected" : "Not connected"}
         </Text>
       </View>
       {connected ? (
         <TouchableOpacity
           onPress={onSync}
-          style={[
-            styles.syncButton,
-            {
-              backgroundColor: colors.primary + "1A",
-              borderRadius: colors.radius - 4,
-            },
-          ]}
+          style={[styles.syncButton, { backgroundColor: colors.primary + "1A", borderRadius: colors.radius - 4 }]}
         >
           <Feather name="refresh-cw" size={14} color={colors.primary} />
-          <Text style={[styles.syncText, { color: colors.primary }]}>
-            Sync
-          </Text>
+          <Text style={[styles.syncText, { color: colors.primary }]}>Sync</Text>
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
           onPress={onConnect}
-          style={[
-            styles.connectButton,
-            {
-              backgroundColor: colors.primary,
-              borderRadius: colors.radius - 4,
-            },
-          ]}
+          style={[styles.connectButton, { backgroundColor: colors.primary, borderRadius: colors.radius - 4 }]}
         >
           <Text style={styles.connectText}>Connect</Text>
         </TouchableOpacity>
@@ -118,25 +98,57 @@ function IntegrationRow({
   );
 }
 
+const THEME_LABELS: Record<ThemeMode, string> = {
+  light: "Light",
+  dark: "Dark",
+  system: "System",
+};
+
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const qc = useQueryClient();
   const scrollRef = useRef<ScrollView>(null);
-  const [syncing, setSyncing] = React.useState<string | null>(null);
-  const [connecting, setConnecting] = React.useState<string | null>(null);
-  const [importing, setImporting] = React.useState(false);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const hubspotQ = useQuery({
-    queryKey: ["hubspot-status"],
-    queryFn: api.getHubSpotStatus,
+  const fullName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+    user?.email ||
+    "User";
+
+  const { profile, saveProfile, isLoaded } = useMyProfile({
+    name: fullName,
+    email: user?.email,
   });
 
-  const salesforceQ = useQuery({
-    queryKey: ["salesforce-status"],
-    queryFn: api.getSalesforceStatus,
-  });
+  const [formData, setFormData] = useState<MyProfile>(profile);
+
+  const startEdit = () => {
+    setFormData({ ...profile });
+    setEditing(true);
+  };
+
+  const cancelEdit = () => setEditing(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await saveProfile(formData);
+    setSaving(false);
+    setEditing(false);
+  };
+
+  const handleField = (field: keyof MyProfile, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const hubspotQ = useQuery({ queryKey: ["hubspot-status"], queryFn: api.getHubSpotStatus });
+  const salesforceQ = useQuery({ queryKey: ["salesforce-status"], queryFn: api.getSalesforceStatus });
 
   const handleLogout = () => {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
@@ -150,10 +162,7 @@ export default function ProfileScreen() {
     try {
       await openCrmConnect(crm);
     } catch (err: any) {
-      Alert.alert(
-        "Connection failed",
-        err?.message || "Could not start OAuth flow. Try again."
-      );
+      Alert.alert("Connection failed", err?.message || "Could not start OAuth flow. Try again.");
     } finally {
       setConnecting(null);
     }
@@ -164,10 +173,7 @@ export default function ProfileScreen() {
     try {
       if (crm === "hubspot") await api.syncHubSpot();
       else await api.syncSalesforce();
-      Alert.alert(
-        "Sync complete",
-        `All contacts synced to ${crm === "hubspot" ? "HubSpot" : "Salesforce"}.`
-      );
+      Alert.alert("Sync complete", `All contacts synced to ${crm === "hubspot" ? "HubSpot" : "Salesforce"}.`);
     } catch {
       Alert.alert("Sync failed", "Check your connection and try again.");
     } finally {
@@ -217,168 +223,294 @@ export default function ProfileScreen() {
     }
   };
 
-  const fullName =
-    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
-    user?.email ||
-    "User";
+  const handleThemePicker = () => {
+    Alert.alert(
+      "Choose theme",
+      undefined,
+      [
+        {
+          text: `${themeMode === "light" ? "✓ " : ""}Light`,
+          onPress: () => setThemeMode("light"),
+        },
+        {
+          text: `${themeMode === "dark" ? "✓ " : ""}Dark`,
+          onPress: () => setThemeMode("dark"),
+        },
+        {
+          text: `${themeMode === "system" ? "✓ " : ""}System`,
+          onPress: () => setThemeMode("system"),
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  };
 
   const paddingBottom = Platform.OS === "web" ? 84 + 34 : insets.bottom + 84;
 
+  const inputStyle = [
+    styles.editInput,
+    {
+      backgroundColor: colors.muted,
+      borderColor: colors.border,
+      color: colors.foreground,
+    },
+  ];
+
+  const displayName = isLoaded && (profile.fullName || profile.jobTitle || profile.companyName)
+    ? profile.fullName || fullName
+    : fullName;
+
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{
-        paddingTop: Platform.OS === "web" ? 67 : 8,
-        paddingBottom,
-      }}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Text
-        style={[styles.screenTitle, { color: colors.foreground, marginLeft: 16 }]}
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: Platform.OS === "web" ? 67 : 8,
+          paddingBottom,
+        }}
+        keyboardShouldPersistTaps="handled"
       >
-        Profile
-      </Text>
+        <Text style={[styles.screenTitle, { color: colors.foreground, marginLeft: 16 }]}>
+          Profile
+        </Text>
 
-      <View style={styles.profileSection}>
-        <LinearGradient
-          colors={[colors.primary + "22", colors.purple + "22"]}
-          style={[styles.profileBg, { borderRadius: colors.radius * 2 }]}
-        >
-          <Avatar name={fullName} size={72} />
-          <Text style={[styles.profileName, { color: colors.foreground }]}>
-            {fullName}
-          </Text>
-          {user?.email ? (
-            <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>
-              {user.email}
+        {/* ── Hero card ───────────────────────────────────────────── */}
+        <View style={styles.profileSection}>
+          {editing ? (
+            <GlassCard>
+              <Text style={[styles.editSectionTitle, { color: colors.foreground }]}>
+                Edit your card
+              </Text>
+
+              <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>Full name</Text>
+              <TextInput
+                style={inputStyle}
+                value={formData.fullName}
+                onChangeText={(v) => handleField("fullName", v)}
+                placeholder="Jane Smith"
+                placeholderTextColor={colors.mutedForeground}
+                returnKeyType="next"
+              />
+
+              <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>Job title</Text>
+              <TextInput
+                style={inputStyle}
+                value={formData.jobTitle}
+                onChangeText={(v) => handleField("jobTitle", v)}
+                placeholder="VP of Sales"
+                placeholderTextColor={colors.mutedForeground}
+                returnKeyType="next"
+              />
+
+              <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>Company</Text>
+              <TextInput
+                style={inputStyle}
+                value={formData.companyName}
+                onChangeText={(v) => handleField("companyName", v)}
+                placeholder="Acme Corp"
+                placeholderTextColor={colors.mutedForeground}
+                returnKeyType="next"
+              />
+
+              <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>Email</Text>
+              <TextInput
+                style={inputStyle}
+                value={formData.email}
+                onChangeText={(v) => handleField("email", v)}
+                placeholder="jane@acme.com"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                returnKeyType="next"
+              />
+
+              <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>Phone</Text>
+              <TextInput
+                style={inputStyle}
+                value={formData.phone}
+                onChangeText={(v) => handleField("phone", v)}
+                placeholder="+1 555 000 0000"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="phone-pad"
+                returnKeyType="next"
+              />
+
+              <Text style={[styles.editLabel, { color: colors.mutedForeground }]}>LinkedIn URL</Text>
+              <TextInput
+                style={inputStyle}
+                value={formData.linkedinUrl}
+                onChangeText={(v) => handleField("linkedinUrl", v)}
+                placeholder="linkedin.com/in/username"
+                placeholderTextColor={colors.mutedForeground}
+                autoCapitalize="none"
+                returnKeyType="done"
+              />
+
+              <View style={styles.editActions}>
+                <TouchableOpacity
+                  onPress={cancelEdit}
+                  style={[styles.cancelBtn, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSave}
+                  disabled={saving}
+                  style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Feather name="check" size={14} color="#fff" />
+                      <Text style={styles.saveBtnText}>Save</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </GlassCard>
+          ) : (
+            <LinearGradient
+              colors={[colors.primary + "22", colors.purple + "22"]}
+              style={[styles.profileBg, { borderRadius: colors.radius * 2 }]}
+            >
+              <Avatar name={displayName} size={72} />
+              <Text style={[styles.profileName, { color: colors.foreground }]}>
+                {displayName}
+              </Text>
+              {(isLoaded && profile.jobTitle) || (isLoaded && profile.companyName) ? (
+                <Text style={[styles.profileMeta, { color: colors.mutedForeground }]}>
+                  {[profile.jobTitle, profile.companyName].filter(Boolean).join(" · ")}
+                </Text>
+              ) : null}
+              {user?.email ? (
+                <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>
+                  {user.email}
+                </Text>
+              ) : null}
+              <TouchableOpacity
+                onPress={startEdit}
+                style={[styles.editBtn, { borderColor: colors.primary + "66", backgroundColor: colors.primary + "1A" }]}
+              >
+                <Feather name="edit-2" size={13} color={colors.primary} />
+                <Text style={[styles.editBtnText, { color: colors.primary }]}>Edit card</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          )}
+        </View>
+
+        {/* ── My Profile row ────────────────────────────────────── */}
+        {!editing && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>My Profile</Text>
+            <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+              <TouchableOpacity
+                onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+                style={[styles.menuRow, { borderBottomColor: "transparent" }]}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: colors.primary + "1A", borderRadius: colors.radius - 4 }]}>
+                  <Feather name="user" size={16} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.menuText, { color: colors.foreground }]}>My profile</Text>
+                  <Text style={[styles.menuSubText, { color: colors.mutedForeground }]}>
+                    {displayName}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </GlassCard>
+
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CRM Integrations</Text>
+            <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+              {(syncing || connecting) ? (
+                <View style={[styles.syncingOverlay, { backgroundColor: colors.background + "CC" }]}>
+                  <ActivityIndicator color={colors.primary} />
+                  <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 8 }}>
+                    {connecting ? "Connecting…" : "Syncing…"}
+                  </Text>
+                </View>
+              ) : null}
+              <IntegrationRow
+                name="HubSpot"
+                icon="database"
+                connected={hubspotQ.data?.connected ?? false}
+                onConnect={() => handleConnect("hubspot")}
+                onSync={() => handleSync("hubspot")}
+              />
+              <IntegrationRow
+                name="Salesforce"
+                icon="cloud"
+                connected={salesforceQ.data?.connected ?? false}
+                onConnect={() => handleConnect("salesforce")}
+                onSync={() => handleSync("salesforce")}
+              />
+            </GlassCard>
+
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Data</Text>
+            <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+              <TouchableOpacity
+                onPress={handleImportVcf}
+                disabled={importing}
+                style={[styles.menuRow, { borderBottomColor: "transparent" }]}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: colors.primary + "1A", borderRadius: colors.radius - 4 }]}>
+                  {importing ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Feather name="upload" size={16} color={colors.primary} />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.menuText, { color: colors.foreground }]}>Import contacts (.vcf)</Text>
+                  <Text style={[styles.menuSubText, { color: colors.mutedForeground }]}>
+                    From Google Contacts, LinkedIn export…
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </GlassCard>
+
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Account</Text>
+            <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+              <TouchableOpacity
+                onPress={handleThemePicker}
+                style={[styles.menuRow, { borderBottomColor: colors.border }]}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: colors.primary + "1A", borderRadius: colors.radius - 4 }]}>
+                  <Feather name="sun" size={16} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.menuText, { color: colors.foreground }]}>Theme</Text>
+                  <Text style={[styles.menuSubText, { color: colors.mutedForeground }]}>
+                    {THEME_LABELS[themeMode]}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleLogout}
+                style={[styles.menuRow, { borderBottomColor: "transparent" }]}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: colors.destructive + "1A", borderRadius: colors.radius - 4 }]}>
+                  <Feather name="log-out" size={16} color={colors.destructive} />
+                </View>
+                <Text style={[styles.menuText, { color: colors.destructive }]}>Sign Out</Text>
+              </TouchableOpacity>
+            </GlassCard>
+
+            <Text style={[styles.footer, { color: colors.mutedForeground }]}>
+              Carda 2.0 · Contact Intelligence
             </Text>
-          ) : null}
-        </LinearGradient>
-      </View>
-
-      {/* ── My Profile row ────────────────────────────────────── */}
-      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-        My Profile
-      </Text>
-      <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
-        <TouchableOpacity
-          onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
-          style={[styles.menuRow, { borderBottomColor: "transparent" }]}
-        >
-          <View
-            style={[
-              styles.menuIcon,
-              {
-                backgroundColor: colors.primary + "1A",
-                borderRadius: colors.radius - 4,
-              },
-            ]}
-          >
-            <Feather name="user" size={16} color={colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.menuText, { color: colors.foreground }]}>My profile</Text>
-            <Text style={[styles.menuSubText, { color: colors.mutedForeground }]}>
-              {fullName}
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </TouchableOpacity>
-      </GlassCard>
-
-      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-        CRM Integrations
-      </Text>
-      <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
-        {(syncing || connecting) ? (
-          <View style={styles.syncingOverlay}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 8 }}>
-              {connecting ? "Connecting…" : "Syncing…"}
-            </Text>
-          </View>
-        ) : null}
-        <IntegrationRow
-          name="HubSpot"
-          icon="database"
-          connected={hubspotQ.data?.connected ?? false}
-          onConnect={() => handleConnect("hubspot")}
-          onSync={() => handleSync("hubspot")}
-        />
-        <IntegrationRow
-          name="Salesforce"
-          icon="cloud"
-          connected={salesforceQ.data?.connected ?? false}
-          onConnect={() => handleConnect("salesforce")}
-          onSync={() => handleSync("salesforce")}
-        />
-      </GlassCard>
-
-      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-        Data
-      </Text>
-      <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
-        <TouchableOpacity
-          onPress={handleImportVcf}
-          disabled={importing}
-          style={[styles.menuRow, { borderBottomColor: "transparent" }]}
-        >
-          <View
-            style={[
-              styles.menuIcon,
-              {
-                backgroundColor: colors.primary + "1A",
-                borderRadius: colors.radius - 4,
-              },
-            ]}
-          >
-            {importing ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Feather name="upload" size={16} color={colors.primary} />
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.menuText, { color: colors.foreground }]}>
-              Import contacts (.vcf)
-            </Text>
-            <Text style={[styles.menuSubText, { color: colors.mutedForeground }]}>
-              From Google Contacts, LinkedIn export…
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </TouchableOpacity>
-      </GlassCard>
-
-      <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-        Account
-      </Text>
-      <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={[styles.menuRow, { borderBottomColor: "transparent" }]}
-        >
-          <View
-            style={[
-              styles.menuIcon,
-              {
-                backgroundColor: colors.destructive + "1A",
-                borderRadius: colors.radius - 4,
-              },
-            ]}
-          >
-            <Feather name="log-out" size={16} color={colors.destructive} />
-          </View>
-          <Text style={[styles.menuText, { color: colors.destructive }]}>
-            Sign Out
-          </Text>
-        </TouchableOpacity>
-      </GlassCard>
-
-      <Text style={[styles.footer, { color: colors.mutedForeground }]}>
-        Carda 2.0 · Contact Intelligence
-      </Text>
-    </ScrollView>
+          </>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -394,12 +526,70 @@ const styles = StyleSheet.create({
   profileBg: {
     alignItems: "center",
     paddingVertical: 28,
-    gap: 8,
+    gap: 6,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.06)",
   },
   profileName: { fontSize: 20, fontWeight: "700" as const, marginTop: 4 },
+  profileMeta: { fontSize: 13 },
   profileEmail: { fontSize: 14 },
+  editBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  editBtnText: { fontSize: 13, fontWeight: "600" as const },
+
+  editSectionTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    marginBottom: 16,
+  },
+  editLabel: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  editInput: {
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    marginBottom: 12,
+  },
+  editActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelBtnText: { fontSize: 15, fontWeight: "600" as const },
+  saveBtn: {
+    flex: 2,
+    height: 44,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" as const },
+
   sectionLabel: {
     fontSize: 12,
     fontWeight: "600" as const,
@@ -434,21 +624,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   syncText: { fontSize: 13, fontWeight: "500" as const },
-  connectButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
+  connectButton: { paddingHorizontal: 12, paddingVertical: 6 },
   connectText: { color: "#fff", fontSize: 13, fontWeight: "600" as const },
   syncingOverlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
-    backgroundColor: "rgba(0,0,0,0.3)",
     borderRadius: 12,
   },
   menuRow: {
@@ -459,25 +642,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 12,
   },
-  menuIcon: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  menuIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   menuText: { fontSize: 15, fontWeight: "500" as const },
   menuSubText: { fontSize: 12, marginTop: 1 },
-  footer: {
-    textAlign: "center",
-    fontSize: 12,
-    marginTop: 32,
-    marginBottom: 8,
-  },
-  comingSoonBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-  },
+  footer: { textAlign: "center", fontSize: 12, marginTop: 32, marginBottom: 8 },
+  comingSoonBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
   comingSoonText: { fontSize: 11, fontWeight: "600" as const },
 });

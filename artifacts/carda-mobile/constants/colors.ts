@@ -1,4 +1,4 @@
-const colors = {
+export const lightColors = {
   background: "#F5F6F8",
   foreground: "#0F172A",
   card: "#FFFFFF",
@@ -27,4 +27,35 @@ const colors = {
   radius: 12,
 };
 
-export default colors;
+export const darkColors = {
+  background: "#0F172A",
+  foreground: "#F1F5F9",
+  card: "#1E293B",
+  cardBorder: "rgba(255,255,255,0.06)",
+  primary: "#3B82F6",
+  primaryForeground: "#FFFFFF",
+  secondary: "#1E293B",
+  secondaryForeground: "#F1F5F9",
+  muted: "#1E293B",
+  mutedForeground: "#94A3B8",
+  accent: "#3B82F6",
+  accentForeground: "#FFFFFF",
+  destructive: "#EF4444",
+  destructiveForeground: "#FFFFFF",
+  border: "#334155",
+  input: "#334155",
+  glassBg: "rgba(15,23,42,0.9)",
+  glassBorder: "rgba(255,255,255,0.08)",
+  purple: "#6366F1",
+  gradientStart: "#3B82F6",
+  gradientEnd: "#6366F1",
+  stripeNew: "#3B82F6",
+  stripeOverdue: "#EF4444",
+  stripeDueToday: "#F59E0B",
+  stripeDefault: "rgba(255,255,255,0.06)",
+  radius: 12,
+};
+
+export type AppColors = typeof lightColors;
+
+export default lightColors;

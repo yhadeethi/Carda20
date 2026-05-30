@@ -17,7 +17,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { CaptureProvider } from "@/context/CaptureContext";
-import colors from "@/constants/colors";
+import { ThemeProvider, useTheme } from "@/context/ThemeContext";
+import { useColors } from "@/hooks/useColors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -26,6 +27,8 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
+  const colors = useColors();
+  const { resolvedTheme } = useTheme();
   const { user, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
@@ -42,38 +45,53 @@ function RootLayoutNav() {
   }, [user, loading, segments]);
 
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.background },
-        headerTintColor: colors.foreground,
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="contact/[id]"
-        options={{ title: "Contact", headerBackTitle: "Back" }}
+    <>
+      <StatusBar
+        style={resolvedTheme === "dark" ? "light" : "dark"}
+        backgroundColor={colors.background}
       />
-      <Stack.Screen
-        name="company/[id]"
-        options={{ title: "Company", headerBackTitle: "Back" }}
-      />
-      <Stack.Screen
-        name="event/[id]"
-        options={{ title: "Event", headerBackTitle: "Back" }}
-      />
-      <Stack.Screen
-        name="voice-debrief"
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="voice-debrief-review"
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="contact/[id]"
+          options={{ title: "Contact", headerBackTitle: "Back" }}
+        />
+        <Stack.Screen
+          name="company/[id]"
+          options={{ title: "Company", headerBackTitle: "Back" }}
+        />
+        <Stack.Screen
+          name="event/[id]"
+          options={{ title: "Event", headerBackTitle: "Back" }}
+        />
+        <Stack.Screen
+          name="voice-debrief"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="voice-debrief-review"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+    </>
+  );
+}
+
+function ThemedGestureRoot({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
+  return (
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+      {children}
+    </GestureHandlerRootView>
   );
 }
 
@@ -94,21 +112,22 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="dark" backgroundColor={colors.background} />
-      <ErrorBoundary>
-        <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
-              <CaptureProvider>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
-              </CaptureProvider>
-            </GestureHandlerRootView>
-          </QueryClientProvider>
-        </AuthProvider>
-      </ErrorBoundary>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <QueryClientProvider client={queryClient}>
+              <ThemedGestureRoot>
+                <CaptureProvider>
+                  <KeyboardProvider>
+                    <RootLayoutNav />
+                  </KeyboardProvider>
+                </CaptureProvider>
+              </ThemedGestureRoot>
+            </QueryClientProvider>
+          </AuthProvider>
+        </ErrorBoundary>
+      </SafeAreaProvider>
+    </ThemeProvider>
   );
 }

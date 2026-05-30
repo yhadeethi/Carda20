@@ -7,13 +7,16 @@ import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CaptureSheet } from "@/components/CaptureSheet";
 import { useCapture } from "@/context/CaptureContext";
-import colors from "@/constants/colors";
+import { useColors } from "@/hooks/useColors";
+import { useTheme } from "@/context/ThemeContext";
 
 function TabLayout() {
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const insets = useSafeAreaInsets();
   const capture = useCapture();
+  const colors = useColors();
+  const { resolvedTheme } = useTheme();
 
   const TAB_BAR_HEIGHT = 56 + insets.bottom;
 
@@ -45,13 +48,16 @@ function TabLayout() {
           },
           tabBarBackground: () =>
             isIOS ? (
-              <BlurView intensity={90} tint="light" style={StyleSheet.absoluteFill} />
+              <BlurView
+                intensity={90}
+                tint={resolvedTheme === "dark" ? "dark" : "light"}
+                style={StyleSheet.absoluteFill}
+              />
             ) : isWeb ? (
               <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
             ) : null,
         }}
       >
-        {/* ── Scoreboard ──────────────────────────────────────────── */}
         <Tabs.Screen
           name="index"
           options={{
@@ -65,7 +71,6 @@ function TabLayout() {
           }}
         />
 
-        {/* ── Network ─────────────────────────────────────────────── */}
         <Tabs.Screen
           name="network"
           options={{
@@ -79,14 +84,13 @@ function TabLayout() {
           }}
         />
 
-        {/* ── Centre Capture FAB ────────────────────────────────── */}
         <Tabs.Screen
           name="capture"
           options={{
             title: "",
             tabBarButton: () => (
               <TouchableOpacity
-                style={fabStyles.wrapper}
+                style={fabWrapper}
                 onPress={() => {
                   if (capture.isOpen) {
                     capture.closeCapture();
@@ -96,7 +100,15 @@ function TabLayout() {
                 }}
                 activeOpacity={0.85}
               >
-                <View style={fabStyles.circle}>
+                <View
+                  style={[
+                    fabCircle,
+                    {
+                      backgroundColor: colors.primary,
+                      shadowColor: colors.primary,
+                    },
+                  ]}
+                >
                   {capture.isOpen ? (
                     <Feather name="x" size={26} color="#fff" />
                   ) : (
@@ -108,7 +120,6 @@ function TabLayout() {
           }}
         />
 
-        {/* ── Events ──────────────────────────────────────────────── */}
         <Tabs.Screen
           name="events"
           options={{
@@ -122,7 +133,6 @@ function TabLayout() {
           }}
         />
 
-        {/* ── Profile ─────────────────────────────────────────────── */}
         <Tabs.Screen
           name="profile"
           options={{
@@ -136,7 +146,6 @@ function TabLayout() {
           }}
         />
 
-        {/* ── Hidden tabs (still routable) ────────────────────────── */}
         <Tabs.Screen
           name="scan"
           options={{
@@ -155,7 +164,6 @@ function TabLayout() {
         />
       </Tabs>
 
-      {/* ── Capture bottom sheet ─────────────────────────────────── */}
       <CaptureSheet
         visible={capture.isOpen}
         onClose={capture.closeCapture}
@@ -165,27 +173,24 @@ function TabLayout() {
   );
 }
 
-const fabStyles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingBottom: 6,
-  },
-  circle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
-    marginTop: -12,
-  },
-});
+const fabWrapper: object = {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+  paddingBottom: 6,
+};
+
+const fabCircle: object = {
+  width: 52,
+  height: 52,
+  borderRadius: 26,
+  alignItems: "center",
+  justifyContent: "center",
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.35,
+  shadowRadius: 8,
+  elevation: 6,
+  marginTop: -12,
+};
 
 export default TabLayout;

@@ -1,7 +1,8 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Avatar } from "./Avatar";
-import colors from "@/constants/colors";
+import { useColors } from "@/hooks/useColors";
+import type { AppColors } from "@/constants/colors";
 import type { Contact } from "@/lib/api";
 
 export type StripeStatus = "new" | "overdue" | "due-today" | "default";
@@ -39,7 +40,7 @@ function deriveStripe(contact: Contact): StripeStatus {
   return "default";
 }
 
-function stripeColor(status: StripeStatus): string {
+function stripeColor(status: StripeStatus, colors: AppColors): string {
   switch (status) {
     case "overdue": return colors.stripeOverdue;
     case "due-today": return colors.stripeDueToday;
@@ -49,9 +50,10 @@ function stripeColor(status: StripeStatus): string {
 }
 
 export function ContactCard({ contact, onPress, stripeStatus, showDepartment }: ContactCardProps) {
+  const colors = useColors();
   const displayName = contact.fullName || contact.email || "No name";
   const status = stripeStatus ?? deriveStripe(contact);
-  const stripe = stripeColor(status);
+  const stripe = stripeColor(status, colors);
   const dept = contact.orgDepartment?.toUpperCase();
   const deptChip = showDepartment && dept && dept !== "UNKNOWN" && DEPT_CHIP_COLORS[dept];
   const deptLabel = dept ? DEPT_LABELS[dept] : null;
@@ -60,14 +62,19 @@ export function ContactCard({ contact, onPress, stripeStatus, showDepartment }: 
     <TouchableOpacity
       activeOpacity={0.75}
       onPress={onPress}
-      style={styles.container}
+      style={[
+        styles.container,
+        { backgroundColor: colors.card, borderColor: colors.cardBorder },
+      ]}
     >
       <View style={[styles.stripe, { backgroundColor: stripe }]} />
       <View style={styles.inner}>
         <Avatar name={displayName} size={40} />
         <View style={styles.content}>
           <View style={styles.nameRow}>
-            <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{displayName}</Text>
+            <Text style={[styles.name, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>
+              {displayName}
+            </Text>
             {deptChip && deptLabel ? (
               <View style={[styles.deptChip, { backgroundColor: deptChip.bg }]}>
                 <Text style={[styles.deptChipText, { color: deptChip.text }]}>{deptLabel}</Text>
@@ -75,12 +82,14 @@ export function ContactCard({ contact, onPress, stripeStatus, showDepartment }: 
             ) : null}
           </View>
           {(contact.jobTitle || contact.companyName) ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
               {[contact.jobTitle, contact.companyName].filter(Boolean).join(" · ")}
             </Text>
           ) : null}
           {contact.email && !contact.jobTitle && !contact.companyName ? (
-            <Text style={styles.email} numberOfLines={1}>{contact.email}</Text>
+            <Text style={[styles.email, { color: colors.primary }]} numberOfLines={1}>
+              {contact.email}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -90,10 +99,8 @@ export function ContactCard({ contact, onPress, stripeStatus, showDepartment }: 
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
     marginHorizontal: 16,
     marginBottom: 8,
     shadowColor: "#000",
@@ -104,9 +111,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     flexDirection: "row",
   },
-  stripe: {
-    width: 3,
-  },
+  stripe: { width: 3 },
   inner: {
     flex: 1,
     flexDirection: "row",
@@ -116,21 +121,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   content: { flex: 1 },
-  name: {
-    fontSize: 14,
-    fontWeight: "700" as const,
-    color: colors.foreground,
-    marginBottom: 1,
-  },
-  subtitle: {
-    fontSize: 12,
-    fontWeight: "500" as const,
-    color: colors.mutedForeground,
-  },
-  email: {
-    fontSize: 12,
-    color: colors.primary,
-  },
+  name: { fontSize: 14, fontWeight: "700" as const, marginBottom: 1 },
+  subtitle: { fontSize: 12, fontWeight: "500" as const },
+  email: { fontSize: 12 },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -143,8 +136,5 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     flexShrink: 0,
   },
-  deptChipText: {
-    fontSize: 10,
-    fontWeight: "600" as const,
-  },
+  deptChipText: { fontSize: 10, fontWeight: "600" as const },
 });
