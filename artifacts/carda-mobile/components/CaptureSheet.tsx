@@ -37,32 +37,32 @@ const MENU_ITEMS = [
     icon: "mic" as const,
     label: "Voice Debrief",
     subtitle: "After a meeting",
-    color: "#6366F1",
-    bg: "#EEF2FF",
+    color: "#7B5CF0",
+    bg: "#7B5CF0" + "26",
   },
   {
     id: "scan" as const,
     icon: "camera" as const,
     label: "Scan Card",
     subtitle: "Photo of a business card",
-    color: "#3B82F6",
-    bg: "#EFF6FF",
+    color: "#4B68F5",
+    bg: "#4B68F5" + "26",
   },
   {
     id: "paste" as const,
     icon: "clipboard" as const,
     label: "Paste Signature",
     subtitle: "Extract from email text",
-    color: "#8B5CF6",
-    bg: "#F5F3FF",
+    color: "#34C759",
+    bg: "#34C759" + "26",
   },
   {
     id: "qr" as const,
-    icon: "maximize" as const,
+    icon: "grid" as const,
     label: "Share My QR",
     subtitle: "Let them scan your card",
-    color: "#10B981",
-    bg: "#ECFDF5",
+    color: "#4B68F5",
+    bg: "#4B68F5" + "26",
   },
 ];
 
@@ -151,7 +151,6 @@ export function CaptureSheet({ visible, onClose, initialMode = "menu" }: Props) 
 
   const s = makeStyles(colors, insets);
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Modal
       visible={visible}
@@ -177,10 +176,13 @@ export function CaptureSheet({ visible, onClose, initialMode = "menu" }: Props) 
             <>
               <Text style={s.sheetTitle}>Add to Network</Text>
               <View style={s.menuList}>
-                {MENU_ITEMS.map((item) => (
+                {MENU_ITEMS.map((item, index) => (
                   <TouchableOpacity
                     key={item.id}
-                    style={s.menuRow}
+                    style={[
+                      s.menuRow,
+                      index < MENU_ITEMS.length - 1 && s.menuRowBorder,
+                    ]}
                     activeOpacity={0.7}
                     onPress={() => {
                       if (item.id === "scan") handleScanCard();
@@ -188,7 +190,7 @@ export function CaptureSheet({ visible, onClose, initialMode = "menu" }: Props) 
                     }}
                   >
                     <View style={[s.menuIcon, { backgroundColor: item.bg }]}>
-                      <Feather name={item.icon} size={20} color={item.color} />
+                      <Feather name={item.icon} size={22} color={item.color} />
                     </View>
                     <View style={s.menuText}>
                       <Text style={s.menuLabel}>{item.label}</Text>
@@ -255,15 +257,15 @@ export function CaptureSheet({ visible, onClose, initialMode = "menu" }: Props) 
                 <View style={{ width: 20 }} />
               </View>
               <View style={s.centeredSection}>
-                <View style={[s.voiceIconWrap, { backgroundColor: "#EEF2FF" }]}>
-                  <Feather name="mic" size={32} color="#6366F1" />
+                <View style={[s.voiceIconWrap, { backgroundColor: "#7B5CF0" + "26" }]}>
+                  <Feather name="mic" size={32} color="#7B5CF0" />
                 </View>
                 <Text style={s.voiceTitle}>Voice Debrief</Text>
                 <Text style={s.voiceBody}>
                   Record a quick note after a meeting. We'll extract tasks, reminders, and a summary automatically.
                 </Text>
                 <TouchableOpacity
-                  style={[s.primaryBtn, { backgroundColor: "#6366F1" }]}
+                  style={[s.primaryBtn, { backgroundColor: "#7B5CF0" }]}
                   activeOpacity={0.85}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -325,7 +327,7 @@ function makeStyles(
   return StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.35)",
+      backgroundColor: "rgba(0,0,0,0.4)",
     },
     sheetOuter: {
       position: "absolute",
@@ -334,7 +336,7 @@ function makeStyles(
       right: 0,
     },
     sheet: {
-      backgroundColor: colors.card,
+      backgroundColor: "#FFFFFF",
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       paddingHorizontal: 20,
@@ -354,31 +356,34 @@ function makeStyles(
       marginBottom: 16,
     },
     sheetTitle: {
-      fontSize: 17,
+      fontSize: 18,
       fontWeight: "700",
       color: colors.foreground,
-      marginBottom: 16,
+      marginBottom: 12,
     },
 
-    menuList: { gap: 4 },
+    menuList: {},
     menuRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: 14,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      minHeight: 64,
+      paddingVertical: 8,
+    },
+    menuRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: "rgba(0,0,0,0.07)",
     },
     menuIcon: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
     },
     menuText: { flex: 1 },
-    menuLabel: { fontSize: 15, fontWeight: "600", color: colors.foreground },
-    menuSub: { fontSize: 12, color: colors.mutedForeground, marginTop: 1 },
+    menuLabel: { fontSize: 16, fontWeight: "600", color: colors.foreground },
+    menuSub: { fontSize: 13, color: colors.mutedForeground, marginTop: 2 },
 
     subHeader: {
       flexDirection: "row",
@@ -394,10 +399,8 @@ function makeStyles(
       marginBottom: 14,
     },
     textArea: {
-      backgroundColor: colors.background,
+      backgroundColor: colors.input,
       borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
       padding: 14,
       fontSize: 14,
       lineHeight: 20,

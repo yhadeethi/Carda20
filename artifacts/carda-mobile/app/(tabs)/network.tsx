@@ -649,9 +649,11 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
 
     segWrap: {
       flexDirection: "row",
-      backgroundColor: "rgba(0,0,0,0.05)",
-      borderRadius: 10,
-      padding: 3,
+      backgroundColor: "#F2F2F7",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "rgba(0,0,0,0.1)",
+      padding: 4,
       marginBottom: 10,
     },
     segBtn: {
@@ -659,10 +661,11 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 7,
-      borderRadius: 8,
+      borderRadius: 12,
     },
     segBtnActive: {
       backgroundColor: colors.card,
+      borderRadius: 12,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.07,
@@ -686,17 +689,10 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      backgroundColor: colors.card,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingHorizontal: 12,
-      paddingVertical: 9,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 3,
-      elevation: 1,
+      backgroundColor: colors.input,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
     },
     searchInput: { flex: 1, fontSize: 14, padding: 0, margin: 0 },
 
@@ -760,9 +756,9 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
     activePillText: { fontSize: 12, fontWeight: "600" as const },
     filteredCount: { fontSize: 12 },
 
-    listContent: { paddingHorizontal: 16, paddingBottom: 130, paddingTop: 4 },
+    listContent: { paddingBottom: 130, paddingTop: 4 },
     listContentCompanies: { paddingBottom: 130, paddingTop: 4 },
-    itemWrap: { marginBottom: 8 },
+    itemWrap: {},
 
     empty: {
       alignItems: "center",

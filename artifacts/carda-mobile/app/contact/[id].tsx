@@ -28,8 +28,8 @@ import { ContactActivityCalendar } from "@/components/ContactActivityCalendar";
 import { debriefStore } from "@/lib/debriefStore";
 import { useColors } from "@/hooks/useColors";
 
-const HERO_BG = "#0F172A";
-const HERO_BG2 = "#1E293B";
+const HERO_BG = "#1C1C1E";
+const HERO_BG2 = "#1C1C1E";
 const RELATIONSHIP_OPTIONS = ["Casual", "Normal", "Close"] as const;
 type RelStrength = (typeof RELATIONSHIP_OPTIONS)[number];
 
@@ -716,10 +716,7 @@ export default function ContactDetailScreen() {
         contentContainerStyle={{ paddingBottom }}
       >
         {/* ── DARK HERO CARD ── */}
-        <LinearGradient
-          colors={[HERO_BG, HERO_BG2]}
-          style={styles.heroCard}
-        >
+        <View style={[styles.heroCard, { backgroundColor: HERO_BG }]}>
           <View style={styles.heroTop}>
             <View style={styles.heroAvatar}>
               <Avatar name={displayName} size={72} />
@@ -763,7 +760,13 @@ export default function ContactDetailScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-        </LinearGradient>
+          {/* Staleness bar */}
+          {contact.createdAt ? (() => {
+            const days = Math.floor((Date.now() - new Date(contact.createdAt).getTime()) / 86400000);
+            const barColor = days < 14 ? "#34C759" : days < 30 ? "#F59E0B" : "#FF3B30";
+            return <View style={[styles.stalenessBar, { backgroundColor: barColor }]} />;
+          })() : null}
+        </View>
 
         {/* ── RELATIONSHIP ── */}
         <View style={styles.section}>
@@ -825,7 +828,7 @@ export default function ContactDetailScreen() {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={["#6366F1", "#8B5CF6"]}
+              colors={["#4B68F5", "#7B5CF0"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.debriefGradient}
@@ -1723,6 +1726,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    overflow: "hidden",
+  },
+  stalenessBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
   },
   heroTop: {
     flexDirection: "row",

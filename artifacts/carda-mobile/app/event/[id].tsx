@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { LinearGradient } from "expo-linear-gradient";
 import { ContactCard } from "@/components/ContactCard";
 import { GlassCard } from "@/components/GlassCard";
 import { api, Contact, UpdateUserEventPayload, UserEvent } from "@/lib/api";
@@ -227,28 +228,22 @@ export default function EventDetailScreen() {
         {/* ── Event Info Card ───────────────────────────────────────────── */}
         <GlassCard style={{ margin: 16 }}>
           <View style={styles.eventHeader}>
-            <View
-              style={[
-                styles.eventIconContainer,
-                {
-                  backgroundColor: event.isActive ? colors.primary + "22" : colors.secondary,
-                  borderRadius: colors.radius - 4,
-                },
-              ]}
-            >
-              <Feather
-                name="calendar"
-                size={28}
-                color={event.isActive ? colors.primary : colors.mutedForeground}
+            <View style={[styles.eventIconContainer, { borderRadius: colors.radius - 4, overflow: "hidden" }]}>
+              <LinearGradient
+                colors={["#4B68F5", "#7B5CF0"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
               />
+              <Feather name="calendar" size={26} color="#fff" />
             </View>
             <View style={styles.eventHeaderContent}>
               <Text style={[styles.eventName, { color: colors.foreground }]}>{event.title}</Text>
               <View style={styles.badgeRow}>
                 {event.isActive ? (
                   <View style={styles.activeBadge}>
-                    <View style={[styles.activeDot, { backgroundColor: "#22C55E" }]} />
-                    <Text style={[styles.activeText, { color: "#22C55E" }]}>Active</Text>
+                    <View style={[styles.activeDot, { backgroundColor: colors.success }]} />
+                    <Text style={[styles.activeText, { color: colors.success }]}>Active</Text>
                   </View>
                 ) : null}
                 {eventContacts.length > 0 && (

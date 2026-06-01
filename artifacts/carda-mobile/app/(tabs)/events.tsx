@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -15,9 +16,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EventCard } from "@/components/EventCard";
+import { GlassCard } from "@/components/GlassCard";
 import { api, Contact, UserEvent } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
 
@@ -45,6 +47,7 @@ export default function EventsScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newLocation, setNewLocation] = useState("");
+  const [newNotes, setNewNotes] = useState("");
   const [creating, setCreating] = useState(false);
 
   const { data, isLoading, isRefetching, error } = useQuery<UserEvent[]>({
@@ -59,12 +62,14 @@ export default function EventsScreen() {
       await api.createUserEvent({
         title: newTitle.trim(),
         locationLabel: newLocation.trim() || undefined,
+        notes: newNotes.trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: ["user-events"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCreate(false);
       setNewTitle("");
       setNewLocation("");
+      setNewNotes("");
     } catch (err: any) {
       Alert.alert("Error", err?.message || "Failed to create event.");
     } finally {
@@ -74,25 +79,24 @@ export default function EventsScreen() {
 
   const paddingBottom = Platform.OS === "web" ? 84 + 34 : insets.bottom + 84;
 
+  const activeEvent = data?.find((e) => e.isActive);
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          { paddingTop: Platform.OS === "web" ? 67 : 8 },
-        ]}
-      >
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
+      <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
           Events
         </Text>
-        <TouchableOpacity
-          onPress={() => setShowCreate(true)}
-          style={[
-            styles.addButton,
-            { backgroundColor: colors.primary, borderRadius: colors.radius },
-          ]}
-        >
-          <Feather name="plus" size={18} color="#fff" />
+        <TouchableOpacity onPress={() => setShowCreate(true)} activeOpacity={0.82}>
+          <LinearGradient
+            colors={["#4B68F5", "#7B5CF0"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.addButton}
+          >
+            <Feather name="plus" size={16} color="#fff" />
+            <Text style={styles.addButtonText}>Start Event</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -125,7 +129,21 @@ export default function EventsScreen() {
               tintColor={colors.primary}
             />
           }
-          scrollEnabled={!!(data?.length)}
+          ListHeaderComponent={
+            activeEvent ? (
+              <TouchableOpacity
+                onPress={() => router.push(`/event/${activeEvent.id}`)}
+                activeOpacity={0.82}
+                style={[styles.activeBanner, { borderLeftColor: colors.success, backgroundColor: colors.card }]}
+              >
+                <View style={[styles.activeDot, { backgroundColor: colors.success }]} />
+                <Text style={[styles.activeBannerText, { color: colors.foreground }]} numberOfLines={1}>
+                  Active: {activeEvent.title}
+                </Text>
+                <Text style={[styles.activeContinue, { color: colors.primary }]}>Continue</Text>
+              </TouchableOpacity>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <Feather name="calendar" size={40} color={colors.border} />
@@ -135,17 +153,15 @@ export default function EventsScreen() {
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
                 Create an event to group contacts from a conference or meeting
               </Text>
-              <TouchableOpacity
-                onPress={() => setShowCreate(true)}
-                style={[
-                  styles.emptyButton,
-                  {
-                    backgroundColor: colors.primary,
-                    borderRadius: colors.radius,
-                  },
-                ]}
-              >
-                <Text style={styles.emptyButtonText}>Create Event</Text>
+              <TouchableOpacity onPress={() => setShowCreate(true)} activeOpacity={0.82}>
+                <LinearGradient
+                  colors={["#4B68F5", "#7B5CF0"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.emptyButton}
+                >
+                  <Text style={styles.emptyButtonText}>Start Event</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           }
@@ -201,9 +217,26 @@ export default function EventsScreen() {
                 styles.modalInput,
                 {
                   color: colors.foreground,
-                  backgroundColor: colors.secondary,
-                  borderColor: colors.border,
-                  borderRadius: colors.radius,
+                  backgroundColor: colors.input,
+                  borderRadius: 10,
+                },
+              ]}
+            />
+            <TextInput
+              placeholder="Notes (optional)"
+              placeholderTextColor={colors.mutedForeground}
+              value={newNotes}
+              onChangeText={setNewNotes}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              style={[
+                styles.modalInput,
+                styles.notesInput,
+                {
+                  color: colors.foreground,
+                  backgroundColor: colors.input,
+                  borderRadius: 10,
                 },
               ]}
             />
@@ -211,25 +244,25 @@ export default function EventsScreen() {
             <TouchableOpacity
               onPress={handleCreate}
               disabled={!newTitle.trim() || creating}
-              style={[
-                styles.createButton,
-                {
-                  backgroundColor:
-                    newTitle.trim() ? colors.primary : colors.muted,
-                  borderRadius: colors.radius,
-                },
-              ]}
+              activeOpacity={0.85}
             >
-              {creating ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.createButtonText}>Create</Text>
-              )}
+              <LinearGradient
+                colors={newTitle.trim() ? ["#4B68F5", "#7B5CF0"] : [colors.muted, colors.muted]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.createButton}
+              >
+                {creating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.createButtonText}>Start Event</Text>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -239,6 +272,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 12,
   },
   headerTitle: {
@@ -247,13 +281,46 @@ const styles = StyleSheet.create({
     fontWeight: "700" as const,
     letterSpacing: -0.3,
   },
-  addButton: { padding: 8 },
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+  },
+  addButtonText: { color: "#fff", fontSize: 14, fontWeight: "600" as const },
+  activeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderLeftWidth: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  activeDot: { width: 8, height: 8, borderRadius: 4 },
+  activeBannerText: { flex: 1, fontSize: 14, fontWeight: "600" as const },
+  activeContinue: { fontSize: 13, fontWeight: "600" as const },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   errorText: { fontSize: 14 },
   empty: { alignItems: "center", paddingTop: 80, gap: 10, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 17, fontWeight: "600" as const, marginTop: 8 },
   emptyText: { fontSize: 14, textAlign: "center" },
-  emptyButton: { paddingHorizontal: 24, paddingVertical: 12, marginTop: 8 },
+  emptyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    marginTop: 8,
+    borderRadius: 20,
+  },
   emptyButtonText: { color: "#fff", fontWeight: "600" as const, fontSize: 15 },
   modalOverlay: {
     flex: 1,
@@ -265,6 +332,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     padding: 20,
     gap: 14,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   modalHeader: {
     flexDirection: "row",
@@ -276,11 +345,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    borderWidth: 1,
   },
+  notesInput: { minHeight: 72 },
   createButton: {
     paddingVertical: 14,
     alignItems: "center",
+    borderRadius: 12,
     marginTop: 4,
   },
   createButtonText: {

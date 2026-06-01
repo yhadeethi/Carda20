@@ -1,10 +1,15 @@
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
+
+const SIZE_MAP = { xs: 24, sm: 32, md: 40, lg: 52, xl: 68 } as const;
+type SizeName = keyof typeof SIZE_MAP;
 
 interface AvatarProps {
   name?: string;
-  size?: number;
+  size?: number | SizeName;
   square?: boolean;
+  imageUrl?: string;
 }
 
 export function getInitials(name?: string): string {
@@ -13,35 +18,47 @@ export function getInitials(name?: string): string {
   if (words.length >= 2) {
     return (words[0][0] + words[words.length - 1][0]).toUpperCase();
   }
-  return (words[0]?.slice(0, 2) ?? "?").toUpperCase();
+  return (words[0]?.[0] ?? "?").toUpperCase();
 }
 
-export function Avatar({ name, size = 44, square = false }: AvatarProps) {
+export function Avatar({ name, size = "md", square = false, imageUrl }: AvatarProps) {
+  const resolvedSize = typeof size === "string" ? SIZE_MAP[size] : size;
+  const fontSize = Math.round(resolvedSize * 0.38);
+  const borderRadius = square ? Math.round(resolvedSize * 0.28) : resolvedSize / 2;
   const initials = getInitials(name);
-  const fontSize = Math.round(size * 0.36);
-  const borderRadius = square ? Math.round(size * 0.28) : size / 2;
+
+  if (imageUrl) {
+    return (
+      <View style={{ width: resolvedSize, height: resolvedSize, borderRadius, overflow: "hidden" }}>
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ width: resolvedSize, height: resolvedSize }}
+          resizeMode="cover"
+        />
+      </View>
+    );
+  }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { width: size, height: size, borderRadius },
-      ]}
-    >
-      <Text style={[styles.initials, { fontSize }]}>{initials}</Text>
+    <View style={{ width: resolvedSize, height: resolvedSize, borderRadius, overflow: "hidden" }}>
+      <LinearGradient
+        colors={["#4B68F5", "#7B5CF0"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[StyleSheet.absoluteFill, styles.center]}
+      >
+        <Text style={[styles.initials, { fontSize, lineHeight: resolvedSize }]}>{initials}</Text>
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "rgba(0,0,0,0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  center: { alignItems: "center", justifyContent: "center" },
   initials: {
-    color: "#3A3A3F",
-    fontWeight: "800" as const,
+    color: "#FFFFFF",
+    fontWeight: "600",
     letterSpacing: 0.3,
+    textAlign: "center",
   },
 });

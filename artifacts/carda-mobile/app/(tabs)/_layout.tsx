@@ -1,4 +1,5 @@
 import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { Tabs } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
@@ -8,7 +9,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CaptureSheet } from "@/components/CaptureSheet";
 import { useCapture } from "@/context/CaptureContext";
 import { useColors } from "@/hooks/useColors";
-import { useTheme } from "@/context/ThemeContext";
 
 function TabLayout() {
   const isIOS = Platform.OS === "ios";
@@ -16,7 +16,6 @@ function TabLayout() {
   const insets = useSafeAreaInsets();
   const capture = useCapture();
   const colors = useColors();
-  const { resolvedTheme } = useTheme();
 
   const TAB_BAR_HEIGHT = 56 + insets.bottom;
 
@@ -25,7 +24,7 @@ function TabLayout() {
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.mutedForeground,
+          tabBarInactiveTintColor: colors.foreground + "66",
           headerShown: true,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
@@ -33,9 +32,8 @@ function TabLayout() {
           tabBarStyle: {
             position: "absolute",
             height: TAB_BAR_HEIGHT,
-            backgroundColor: isIOS ? "transparent" : colors.background,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
+            backgroundColor: isIOS ? "transparent" : colors.card,
+            borderTopWidth: 0,
             elevation: 0,
           },
           tabBarItemStyle: {
@@ -45,16 +43,17 @@ function TabLayout() {
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: "600",
+            letterSpacing: 0.1,
           },
           tabBarBackground: () =>
             isIOS ? (
               <BlurView
-                intensity={90}
-                tint={resolvedTheme === "dark" ? "dark" : "light"}
+                intensity={80}
+                tint="systemChromeMaterial"
                 style={StyleSheet.absoluteFill}
               />
             ) : isWeb ? (
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card }]} />
             ) : null,
         }}
       >
@@ -64,7 +63,7 @@ function TabLayout() {
             title: "Scoreboard",
             tabBarIcon: ({ color }) =>
               isIOS ? (
-                <SymbolView name="house" tintColor={color} size={22} />
+                <SymbolView name="house.fill" tintColor={color} size={22} />
               ) : (
                 <Feather name="home" size={21} color={color} />
               ),
@@ -77,7 +76,7 @@ function TabLayout() {
             title: "Network",
             tabBarIcon: ({ color }) =>
               isIOS ? (
-                <SymbolView name="person.2" tintColor={color} size={22} />
+                <SymbolView name="person.2.fill" tintColor={color} size={22} />
               ) : (
                 <Feather name="users" size={21} color={color} />
               ),
@@ -100,15 +99,13 @@ function TabLayout() {
                 }}
                 activeOpacity={0.85}
               >
-                <View
-                  style={[
-                    fabCircle,
-                    {
-                      backgroundColor: colors.primary,
-                      shadowColor: colors.primary,
-                    },
-                  ]}
-                >
+                <View style={fabCircle}>
+                  <LinearGradient
+                    colors={["#4B68F5", "#7B5CF0"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[StyleSheet.absoluteFill, { borderRadius: 27 }]}
+                  />
                   {capture.isOpen ? (
                     <Feather name="x" size={26} color="#fff" />
                   ) : (
@@ -139,7 +136,7 @@ function TabLayout() {
             title: "Profile",
             tabBarIcon: ({ color }) =>
               isIOS ? (
-                <SymbolView name="person" tintColor={color} size={22} />
+                <SymbolView name="person.fill" tintColor={color} size={22} />
               ) : (
                 <Feather name="user" size={21} color={color} />
               ),
@@ -152,14 +149,6 @@ function TabLayout() {
             tabBarButton: () => null,
             headerShown: true,
             title: "Scan Card",
-          }}
-        />
-        <Tabs.Screen
-          name="companies"
-          options={{
-            tabBarButton: () => null,
-            headerShown: true,
-            title: "Companies",
           }}
         />
       </Tabs>
@@ -181,15 +170,17 @@ const fabWrapper: object = {
 };
 
 const fabCircle: object = {
-  width: 52,
-  height: 52,
-  borderRadius: 26,
+  width: 54,
+  height: 54,
+  borderRadius: 27,
   alignItems: "center",
   justifyContent: "center",
+  overflow: "hidden",
+  shadowColor: "#4B68F5",
   shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.35,
-  shadowRadius: 8,
-  elevation: 6,
+  shadowOpacity: 0.4,
+  shadowRadius: 12,
+  elevation: 8,
   marginTop: -12,
 };
 
