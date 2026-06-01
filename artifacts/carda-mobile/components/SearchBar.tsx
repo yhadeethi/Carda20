@@ -12,12 +12,7 @@ interface SearchBarProps {
 export function SearchBar({ value, onChangeText, placeholder = "Search…" }: SearchBarProps) {
   const colors = useColors();
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.card, borderColor: colors.cardBorder },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: colors.input }]}>
       <Feather name="search" size={16} color={colors.mutedForeground} style={styles.icon} />
       <TextInput
         value={value}
@@ -37,17 +32,11 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     marginHorizontal: 16,
     marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
   },
   icon: { marginRight: 8 },
   input: { flex: 1, fontSize: 15, padding: 0, margin: 0 },

@@ -1,140 +1,93 @@
+import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Avatar } from "./Avatar";
 import { useColors } from "@/hooks/useColors";
-import type { AppColors } from "@/constants/colors";
 import type { Contact } from "@/lib/api";
 
 export type StripeStatus = "new" | "overdue" | "due-today" | "default";
-
-const DEPT_CHIP_COLORS: Record<string, { bg: string; text: string }> = {
-  EXEC: { bg: "#EDE9FE", text: "#5856D6" },
-  SALES: { bg: "#FFE4E1", text: "#FF3B30" },
-  OPS: { bg: "#DCFCE7", text: "#16A34A" },
-  FINANCE: { bg: "#FEF3C7", text: "#D97706" },
-  LEGAL: { bg: "#E0E7FF", text: "#6366F1" },
-  PROJECT_DELIVERY: { bg: "#CCFBF1", text: "#0D9488" },
-};
-
-const DEPT_LABELS: Record<string, string> = {
-  EXEC: "Exec",
-  SALES: "Sales",
-  OPS: "Ops",
-  FINANCE: "Finance",
-  LEGAL: "Legal",
-  PROJECT_DELIVERY: "Delivery",
-};
 
 interface ContactCardProps {
   contact: Contact;
   onPress: () => void;
   stripeStatus?: StripeStatus;
   showDepartment?: boolean;
+  isLast?: boolean;
 }
 
-function deriveStripe(contact: Contact): StripeStatus {
-  if (contact.createdAt) {
-    const days = (Date.now() - new Date(contact.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-    if (days <= 7) return "new";
-  }
-  return "default";
-}
-
-function stripeColor(status: StripeStatus, colors: AppColors): string {
-  switch (status) {
-    case "overdue": return colors.stripeOverdue;
-    case "due-today": return colors.stripeDueToday;
-    case "new": return colors.stripeNew;
-    default: return colors.stripeDefault;
-  }
-}
-
-export function ContactCard({ contact, onPress, stripeStatus, showDepartment }: ContactCardProps) {
+export function ContactCard({ contact, onPress, isLast = false }: ContactCardProps) {
   const colors = useColors();
-  const displayName = contact.fullName || contact.email || "No name";
-  const status = stripeStatus ?? deriveStripe(contact);
-  const stripe = stripeColor(status, colors);
-  const dept = contact.orgDepartment?.toUpperCase();
-  const deptChip = showDepartment && dept && dept !== "UNKNOWN" && DEPT_CHIP_COLORS[dept];
-  const deptLabel = dept ? DEPT_LABELS[dept] : null;
+
+  const displayName =
+    contact.fullName ||
+    ([contact.firstName, contact.lastName].filter(Boolean).join(" ")) ||
+    contact.email ||
+    "No name";
+
+  const subtitle = [contact.jobTitle, contact.companyName].filter(Boolean).join(" · ");
 
   return (
     <TouchableOpacity
-      activeOpacity={0.75}
+      activeOpacity={0.68}
       onPress={onPress}
-      style={[
-        styles.container,
-        { backgroundColor: colors.card, borderColor: colors.cardBorder },
-      ]}
+      style={styles.row}
     >
-      <View style={[styles.stripe, { backgroundColor: stripe }]} />
-      <View style={styles.inner}>
-        <Avatar name={displayName} size={40} />
-        <View style={styles.content}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.name, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>
-              {displayName}
-            </Text>
-            {deptChip && deptLabel ? (
-              <View style={[styles.deptChip, { backgroundColor: deptChip.bg }]}>
-                <Text style={[styles.deptChipText, { color: deptChip.text }]}>{deptLabel}</Text>
-              </View>
-            ) : null}
-          </View>
-          {(contact.jobTitle || contact.companyName) ? (
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-              {[contact.jobTitle, contact.companyName].filter(Boolean).join(" · ")}
-            </Text>
-          ) : null}
-          {contact.email && !contact.jobTitle && !contact.companyName ? (
-            <Text style={[styles.email, { color: colors.primary }]} numberOfLines={1}>
-              {contact.email}
-            </Text>
-          ) : null}
-        </View>
+      <Avatar name={displayName} size="md" />
+      <View style={styles.content}>
+        <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
+          {displayName}
+        </Text>
+        {subtitle ? (
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : contact.email && !contact.jobTitle && !contact.companyName ? (
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {contact.email}
+          </Text>
+        ) : null}
       </View>
+      <Feather name="chevron-right" size={16} color={colors.mutedForeground + "70"} />
+      {!isLast && (
+        <View
+          style={[
+            styles.separator,
+            { backgroundColor: colors.separator },
+          ]}
+        />
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    borderRadius: 12,
-    borderWidth: 1,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-    overflow: "hidden",
+  row: {
     flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 60,
+    backgroundColor: "transparent",
   },
-  stripe: { width: 3 },
-  inner: {
+  content: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    paddingLeft: 12,
-    gap: 12,
+    marginLeft: 12,
+    marginRight: 8,
   },
-  content: { flex: 1 },
-  name: { fontSize: 14, fontWeight: "700" as const, marginBottom: 1 },
-  subtitle: { fontSize: 12, fontWeight: "500" as const },
-  email: { fontSize: 12 },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+  name: {
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: -0.2,
     marginBottom: 1,
   },
-  deptChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    flexShrink: 0,
+  subtitle: {
+    fontSize: 13,
   },
-  deptChipText: { fontSize: 10, fontWeight: "600" as const },
+  separator: {
+    position: "absolute",
+    bottom: 0,
+    left: 68,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+  },
 });

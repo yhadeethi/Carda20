@@ -20,7 +20,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme, ThemeMode } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
 import { useMyProfile, MyProfile } from "@/hooks/useMyProfile";
@@ -98,17 +97,11 @@ function IntegrationRow({
   );
 }
 
-const THEME_LABELS: Record<ThemeMode, string> = {
-  light: "Light",
-  dark: "Dark",
-  system: "System",
-};
 
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, logout, checkAuth } = useAuth();
-  const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const qc = useQueryClient();
   const scrollRef = useRef<ScrollView>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
@@ -230,35 +223,13 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleThemePicker = () => {
-    Alert.alert(
-      "Choose theme",
-      undefined,
-      [
-        {
-          text: `${themeMode === "light" ? "✓ " : ""}Light`,
-          onPress: () => setThemeMode("light"),
-        },
-        {
-          text: `${themeMode === "dark" ? "✓ " : ""}Dark`,
-          onPress: () => setThemeMode("dark"),
-        },
-        {
-          text: `${themeMode === "system" ? "✓ " : ""}System`,
-          onPress: () => setThemeMode("system"),
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
-  };
 
   const paddingBottom = Platform.OS === "web" ? 84 + 34 : insets.bottom + 84;
 
   const inputStyle = [
     styles.editInput,
     {
-      backgroundColor: colors.muted,
-      borderColor: colors.border,
+      backgroundColor: colors.input,
       color: colors.foreground,
     },
   ];
@@ -381,11 +352,8 @@ export default function ProfileScreen() {
               </View>
             </GlassCard>
           ) : (
-            <LinearGradient
-              colors={[colors.primary + "22", colors.purple + "22"]}
-              style={[styles.profileBg, { borderRadius: colors.radius * 2 }]}
-            >
-              <Avatar name={displayName} size={72} />
+            <GlassCard style={styles.profileBg} radius={18} padding={20}>
+              <Avatar name={displayName} size="xl" />
               <Text style={[styles.profileName, { color: colors.foreground }]}>
                 {displayName}
               </Text>
@@ -406,20 +374,20 @@ export default function ProfileScreen() {
                 <Feather name="edit-2" size={13} color={colors.primary} />
                 <Text style={[styles.editBtnText, { color: colors.primary }]}>Edit card</Text>
               </TouchableOpacity>
-            </LinearGradient>
+            </GlassCard>
           )}
         </View>
 
         {/* ── My Profile row ────────────────────────────────────── */}
         {!editing && (
           <>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>My Profile</Text>
-            <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>MY PROFILE</Text>
+            <GlassCard style={{ marginHorizontal: 16, padding: 0 }} radius={14}>
               <TouchableOpacity
                 onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
                 style={[styles.menuRow, { borderBottomColor: "transparent" }]}
               >
-                <View style={[styles.menuIcon, { backgroundColor: colors.primary + "1A", borderRadius: colors.radius - 4 }]}>
+                <View style={[styles.menuIcon, { backgroundColor: colors.primary + "1A", borderRadius: colors.radiusSm }]}>
                   <Feather name="user" size={16} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -432,8 +400,8 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </GlassCard>
 
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CRM Integrations</Text>
-            <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>CRM INTEGRATIONS</Text>
+            <GlassCard style={{ marginHorizontal: 16, padding: 0 }} radius={14}>
               {(syncing || connecting) ? (
                 <View style={[styles.syncingOverlay, { backgroundColor: colors.background + "CC" }]}>
                   <ActivityIndicator color={colors.primary} />
@@ -458,8 +426,8 @@ export default function ProfileScreen() {
               />
             </GlassCard>
 
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Data</Text>
-            <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>DATA</Text>
+            <GlassCard style={{ marginHorizontal: 16, padding: 0 }} radius={14}>
               <TouchableOpacity
                 onPress={handleImportVcf}
                 disabled={importing}
@@ -485,26 +453,10 @@ export default function ProfileScreen() {
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Account</Text>
             <GlassCard style={{ marginHorizontal: 16, padding: 0 }}>
               <TouchableOpacity
-                onPress={handleThemePicker}
-                style={[styles.menuRow, { borderBottomColor: colors.border }]}
-              >
-                <View style={[styles.menuIcon, { backgroundColor: colors.primary + "1A", borderRadius: colors.radius - 4 }]}>
-                  <Feather name="sun" size={16} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.menuText, { color: colors.foreground }]}>Theme</Text>
-                  <Text style={[styles.menuSubText, { color: colors.mutedForeground }]}>
-                    {THEME_LABELS[themeMode]}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
                 onPress={handleLogout}
                 style={[styles.menuRow, { borderBottomColor: "transparent" }]}
               >
-                <View style={[styles.menuIcon, { backgroundColor: colors.destructive + "1A", borderRadius: colors.radius - 4 }]}>
+                <View style={[styles.menuIcon, { backgroundColor: colors.destructive + "1A", borderRadius: colors.radiusSm }]}>
                   <Feather name="log-out" size={16} color={colors.destructive} />
                 </View>
                 <Text style={[styles.menuText, { color: colors.destructive }]}>Sign Out</Text>
@@ -532,10 +484,7 @@ const styles = StyleSheet.create({
   profileSection: { paddingHorizontal: 16, marginBottom: 24 },
   profileBg: {
     alignItems: "center",
-    paddingVertical: 28,
     gap: 6,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
   },
   profileName: { fontSize: 20, fontWeight: "700" as const, marginTop: 4 },
   profileMeta: { fontSize: 13 },

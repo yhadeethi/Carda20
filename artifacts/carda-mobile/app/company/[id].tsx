@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
@@ -15,11 +16,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Avatar } from "@/components/Avatar";
 import { ContactCard } from "@/components/ContactCard";
 import { GlassCard } from "@/components/GlassCard";
+import { IntelCard } from "@/components/IntelCard";
 import { OrgChartTree } from "@/components/OrgChartTree";
-import { api, Company, Contact, IntelResult } from "@/lib/api";
+import { api, Company, Contact } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
 
 type TabId = "people" | "org" | "brief";
@@ -65,9 +66,6 @@ export default function CompanyDetailScreen() {
 
   const [activeTab, setActiveTab] = useState<TabId>("people");
   const [deptFilter, setDeptFilter] = useState<Department | "ALL">("ALL");
-  const [loadingIntel, setLoadingIntel] = useState(false);
-  const [intel, setIntel] = useState<IntelResult | null>(null);
-  const [intelError, setIntelError] = useState<string | null>(null);
   const [autoGrouping, setAutoGrouping] = useState(false);
 
   const { data: companies } = useQuery<Company[]>({
@@ -121,20 +119,6 @@ export default function CompanyDetailScreen() {
     (c) => !c.orgDepartment || c.orgDepartment.toUpperCase() === "UNKNOWN"
   ).length;
 
-  const fetchIntel = async () => {
-    if (!company) return;
-    setLoadingIntel(true);
-    setIntelError(null);
-    try {
-      const result = await api.getIntel(company.name, company.domain);
-      setIntel(result);
-    } catch {
-      setIntelError("Could not load company intelligence. Try again.");
-    } finally {
-      setLoadingIntel(false);
-    }
-  };
-
   const handleAutoGroup = async () => {
     if (ungroupedCount === 0) {
       Alert.alert("No changes", "All contacts already have departments assigned.");
@@ -185,7 +169,17 @@ export default function CompanyDetailScreen() {
             { backgroundColor: colors.card, borderBottomColor: colors.border },
           ]}
         >
-          <Avatar name={company.name} size={60} square />
+          <View style={styles.companyInitialSquare}>
+            <LinearGradient
+              colors={["#4B68F5", "#7B5CF0"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={styles.companyInitialText}>
+              {company.name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
           <View style={{ alignItems: "center", gap: 2 }}>
             <Text style={[styles.companyName, { color: colors.foreground }]}>
               {company.name}
@@ -440,221 +434,11 @@ export default function CompanyDetailScreen() {
             style={styles.tabContent}
             contentContainerStyle={{ paddingBottom }}
           >
-            {!intel && (
-              <TouchableOpacity
-                onPress={fetchIntel}
-                disabled={loadingIntel}
-                style={[
-                  styles.intelButton,
-                  {
-                    margin: 16,
-                    backgroundColor: colors.primary + "1A",
-                    borderColor: colors.primary + "44",
-                    borderRadius: colors.radius,
-                  },
-                ]}
-              >
-                {loadingIntel ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Feather name="zap" size={18} color={colors.primary} />
-                )}
-                <Text
-                  style={[styles.intelButtonText, { color: colors.primary }]}
-                >
-                  {loadingIntel
-                    ? "Generating company intelligence…"
-                    : "Get AI Company Intelligence"}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {intelError ? (
-              <Text
-                style={[
-                  styles.intelError,
-                  { color: colors.destructive, marginHorizontal: 16 },
-                ]}
-              >
-                {intelError}
-              </Text>
-            ) : null}
-
-            {intel ? (
-              <View style={{ marginHorizontal: 16 }}>
-                <GlassCard style={{ marginBottom: 12 }}>
-                  {intel.description ? (
-                    <>
-                      <Text
-                        style={[
-                          styles.intelSectionTitle,
-                          { color: colors.mutedForeground },
-                        ]}
-                      >
-                        About
-                      </Text>
-                      <Text
-                        style={[styles.intelText, { color: colors.foreground }]}
-                      >
-                        {intel.description}
-                      </Text>
-                    </>
-                  ) : null}
-                  {[
-                    { label: "Industry", value: intel.industry },
-                    { label: "Founded", value: intel.founded },
-                    { label: "Size", value: intel.size },
-                    { label: "Headquarters", value: intel.headquarters },
-                    { label: "Funding", value: intel.funding },
-                  ]
-                    .filter((i) => i.value)
-                    .map((item) => (
-                      <View
-                        key={item.label}
-                        style={[
-                          styles.intelRow,
-                          { borderTopColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.intelLabel,
-                            { color: colors.mutedForeground },
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.intelValue,
-                            { color: colors.foreground },
-                          ]}
-                        >
-                          {item.value}
-                        </Text>
-                      </View>
-                    ))}
-                </GlassCard>
-
-                {intel.recentNews?.length ? (
-                  <GlassCard style={{ marginBottom: 12, padding: 0 }}>
-                    <Text
-                      style={[
-                        styles.sectionHeader,
-                        { color: colors.foreground, padding: 14 },
-                      ]}
-                    >
-                      Recent News
-                    </Text>
-                    {intel.recentNews.map((item, i) => (
-                      <View
-                        key={i}
-                        style={[
-                          styles.newsItem,
-                          { borderTopColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.newsTitle,
-                            { color: colors.foreground },
-                          ]}
-                        >
-                          {item.title}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.newsSummary,
-                            { color: colors.mutedForeground },
-                          ]}
-                        >
-                          {item.summary}
-                        </Text>
-                      </View>
-                    ))}
-                  </GlassCard>
-                ) : null}
-
-                {intel.keyPeople?.length ? (
-                  <GlassCard style={{ marginBottom: 12 }}>
-                    <Text
-                      style={[
-                        styles.sectionHeader,
-                        { color: colors.foreground, marginBottom: 8 },
-                      ]}
-                    >
-                      Key People
-                    </Text>
-                    {intel.keyPeople.map((p, i) => (
-                      <Text
-                        key={i}
-                        style={[styles.bulletItem, { color: colors.foreground }]}
-                      >
-                        • {p}
-                      </Text>
-                    ))}
-                  </GlassCard>
-                ) : null}
-
-                {intel.products?.length ? (
-                  <GlassCard style={{ marginBottom: 12 }}>
-                    <Text
-                      style={[
-                        styles.sectionHeader,
-                        { color: colors.foreground, marginBottom: 8 },
-                      ]}
-                    >
-                      Products
-                    </Text>
-                    {intel.products.map((p, i) => (
-                      <Text
-                        key={i}
-                        style={[styles.bulletItem, { color: colors.foreground }]}
-                      >
-                        • {p}
-                      </Text>
-                    ))}
-                  </GlassCard>
-                ) : null}
-
-                {intel.competitors?.length ? (
-                  <GlassCard style={{ marginBottom: 12 }}>
-                    <Text
-                      style={[
-                        styles.sectionHeader,
-                        { color: colors.foreground, marginBottom: 8 },
-                      ]}
-                    >
-                      Competitors
-                    </Text>
-                    {intel.competitors.map((p, i) => (
-                      <Text
-                        key={i}
-                        style={[styles.bulletItem, { color: colors.foreground }]}
-                      >
-                        • {p}
-                      </Text>
-                    ))}
-                  </GlassCard>
-                ) : null}
-
-                <TouchableOpacity
-                  onPress={() => {
-                    setIntel(null);
-                    fetchIntel();
-                  }}
-                  style={[
-                    styles.refreshBtn,
-                    { borderColor: colors.border, borderRadius: colors.radius },
-                  ]}
-                >
-                  <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />
-                  <Text style={[styles.refreshBtnText, { color: colors.mutedForeground }]}>
-                    Refresh Intelligence
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
+            <IntelCard
+              companyId={parseInt(id)}
+              companyName={company.name}
+              domain={company.domain}
+            />
           </ScrollView>
         )}
       </View>
@@ -672,6 +456,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     gap: 4,
+  },
+  companyInitialSquare: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  companyInitialText: {
+    fontSize: 24,
+    fontWeight: "700" as const,
+    color: "#fff",
   },
   companyName: { fontSize: 20, fontWeight: "700" as const, letterSpacing: -0.3 },
   industry: { fontSize: 13 },
@@ -748,39 +545,4 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   orgHintText: { fontSize: 12, flex: 1 },
-  intelButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 16,
-    borderWidth: 1,
-  },
-  intelButtonText: { flex: 1, fontSize: 15, fontWeight: "500" as const },
-  intelError: { fontSize: 13, marginBottom: 12 },
-  intelSectionTitle: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  intelText: { fontSize: 14, lineHeight: 20 },
-  intelRow: { flexDirection: "row", paddingTop: 10, marginTop: 10, borderTopWidth: 1 },
-  intelLabel: { width: 100, fontSize: 13 },
-  intelValue: { flex: 1, fontSize: 13, fontWeight: "500" as const },
-  sectionHeader: { fontSize: 15, fontWeight: "600" as const },
-  newsItem: { padding: 14, borderTopWidth: 1 },
-  newsTitle: { fontSize: 14, fontWeight: "600" as const, marginBottom: 3 },
-  newsSummary: { fontSize: 13, lineHeight: 18 },
-  bulletItem: { fontSize: 14, lineHeight: 22 },
-  refreshBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 12,
-    borderWidth: 1,
-    marginBottom: 16,
-    justifyContent: "center",
-  },
-  refreshBtnText: { fontSize: 13 },
 });

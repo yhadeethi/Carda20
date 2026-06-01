@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Avatar } from "./Avatar";
 import { useColors } from "@/hooks/useColors";
 import type { Company } from "@/lib/api";
 
@@ -13,50 +13,98 @@ interface CompanyCardProps {
 
 export function CompanyCard({ company, contactCount, onPress }: CompanyCardProps) {
   const colors = useColors();
+  const initial = (company.name?.[0] ?? "?").toUpperCase();
+
   return (
     <TouchableOpacity
-      activeOpacity={0.75}
+      activeOpacity={0.82}
       onPress={onPress}
-      style={[styles.container, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.cardBorder,
+        },
+      ]}
     >
-      <Avatar name={company.name} size={42} square />
+      {/* Gradient initial square */}
+      <View style={styles.iconWrap}>
+        <LinearGradient
+          colors={colors.BRAND_GRADIENT}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFill, styles.center]}
+        />
+        <Text style={styles.initial}>{initial}</Text>
+      </View>
+
+      {/* Name + domain */}
       <View style={styles.content}>
         <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
           {company.name}
         </Text>
-        <Text style={[styles.meta, { color: colors.mutedForeground }]} numberOfLines={1}>
-          {contactCount !== undefined
-            ? `${contactCount} ${contactCount === 1 ? "contact" : "contacts"}`
-            : ""}
-          {company.domain
-            ? contactCount !== undefined
-              ? ` · ${company.domain}`
-              : company.domain
-            : ""}
-        </Text>
+        {company.domain ? (
+          <Text style={[styles.domain, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {company.domain}
+          </Text>
+        ) : null}
       </View>
-      <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+
+      {/* Count pill + chevron */}
+      <View style={styles.right}>
+        {contactCount !== undefined && contactCount > 0 ? (
+          <View style={[styles.countPill, { backgroundColor: colors.primary + "14" }]}>
+            <Text style={[styles.countText, { color: colors.primary }]}>
+              {contactCount} {contactCount === 1 ? "contact" : "contacts"}
+            </Text>
+          </View>
+        ) : null}
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground + "70"} style={styles.chevron} />
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     marginHorizontal: 16,
     marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    gap: 12,
+    padding: 14,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowRadius: 4,
     elevation: 1,
   },
-  content: { flex: 1 },
-  name: { fontSize: 14, fontWeight: "700" as const, marginBottom: 2 },
-  meta: { fontSize: 12, fontWeight: "500" as const },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  center: { alignItems: "center", justifyContent: "center" },
+  initial: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 44,
+    textAlign: "center",
+  },
+  content: { flex: 1, marginLeft: 12 },
+  name: { fontSize: 15, fontWeight: "600", marginBottom: 2 },
+  domain: { fontSize: 12 },
+  right: { flexDirection: "row", alignItems: "center", gap: 6 },
+  countPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  countText: { fontSize: 11, fontWeight: "600" },
+  chevron: { marginLeft: 4 },
 });

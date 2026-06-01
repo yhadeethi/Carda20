@@ -1,6 +1,7 @@
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -226,12 +227,16 @@ function NeedsAttentionRow({
       <View style={naStyles.daysBadge}>
         <Text style={naStyles.daysText}>{daysSinceCreated}d ago</Text>
       </View>
-      <TouchableOpacity
-        onPress={onDebrief}
-        style={[naStyles.debriefBtn, { backgroundColor: "#EEF2FF", borderColor: "#C7D2FE" }]}
-      >
-        <Feather name="mic" size={12} color="#6366F1" />
-        <Text style={[naStyles.debriefText, { color: "#6366F1" }]}>Debrief</Text>
+      <TouchableOpacity onPress={onDebrief} activeOpacity={0.82}>
+        <LinearGradient
+          colors={["#4B68F5", "#7B5CF0"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={naStyles.debriefBtn}
+        >
+          <Feather name="mic" size={12} color="#fff" />
+          <Text style={naStyles.debriefText}>Debrief</Text>
+        </LinearGradient>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -263,9 +268,8 @@ const naStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    borderWidth: 1,
   },
-  debriefText: { fontSize: 12, fontWeight: "600" as const },
+  debriefText: { fontSize: 12, fontWeight: "600" as const, color: "#fff" },
 });
 
 // ── Home Screen ───────────────────────────────────────────────────────────────
@@ -347,8 +351,8 @@ export default function HomeScreen() {
     const d = new Date(); d.setDate(d.getDate() - 7); return d;
   }, []);
 
-  const fourteenDaysAgo = useMemo(() => {
-    const d = new Date(); d.setDate(d.getDate() - 14); return d;
+  const thirtyDaysAgo = useMemo(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d;
   }, []);
 
   const scanned7d = useMemo(
@@ -356,14 +360,14 @@ export default function HomeScreen() {
     [contacts, sevenDaysAgo]
   );
 
-  // Needs attention: contacts added > 14 days ago with no recorded notes
+  // Needs attention: contacts added > 30 days ago with no recorded notes
   const needsAttention = useMemo(
     () =>
       contacts
-        .filter((c) => c.createdAt && new Date(c.createdAt) < fourteenDaysAgo)
+        .filter((c) => c.createdAt && new Date(c.createdAt) < thirtyDaysAgo)
         .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime())
         .slice(0, 3),
-    [contacts, fourteenDaysAgo]
+    [contacts, thirtyDaysAgo]
   );
 
   const recentCaptures = useMemo(
@@ -407,20 +411,27 @@ export default function HomeScreen() {
           <View style={{ flex: 1 }}>
             <Text style={s.dateText}>{formatDate()}</Text>
             <Text style={s.greetingText}>{getGreeting()}</Text>
-            {(contacts.length > 0 || scanned7d > 0) && (
+            {contacts.length > 0 && (
               <Text style={s.subtitleText}>
-                {scanned7d > 0 ? `${scanned7d} scanned this week` : `${contacts.length} contacts`}
+                {[
+                  contacts.length > 0 ? `${contacts.length} contacts` : null,
+                  followUps > 0 ? `${followUps} follow-ups` : null,
+                  scanned7d > 0 ? `${scanned7d} scanned (7d)` : null,
+                ].filter(Boolean).join(" · ")}
               </Text>
             )}
           </View>
-          <TouchableOpacity style={s.bellBtn} activeOpacity={0.75}>
-            <Feather name="bell" size={20} color={colors.mutedForeground} />
-            {followUps > 0 && (
-              <View style={[s.bellBadge, { backgroundColor: "#F59E0B" }]}>
-                <Text style={s.bellBadgeText}>{followUps > 9 ? "9+" : followUps}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={s.headerRight}>
+            <TouchableOpacity style={s.bellBtn} activeOpacity={0.75}>
+              <Feather name="bell" size={20} color={colors.mutedForeground} />
+              {followUps > 0 && (
+                <View style={[s.bellBadge, { backgroundColor: colors.amber }]}>
+                  <Text style={s.bellBadgeText}>{followUps > 9 ? "9+" : followUps}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <Avatar size="sm" />
+          </View>
         </View>
 
         {/* ── Search bar ──────────────────────────────────────────── */}
@@ -455,7 +466,7 @@ export default function HomeScreen() {
             <Text
               style={[
                 s.statValue,
-                scanned7d > 0 ? { color: "#10B981" } : { color: colors.mutedForeground, opacity: 0.35 },
+                scanned7d > 0 ? { color: colors.success } : { color: colors.mutedForeground, opacity: 0.35 },
               ]}
             >
               {scanned7d}
@@ -693,10 +704,16 @@ export default function HomeScreen() {
       {/* ── Pinned bottom actions (above tab bar) ─────────────────── */}
       <View style={[s.bottomActions, { paddingBottom: TAB_BAR_HEIGHT + 8 }]}>
         <TouchableOpacity
-          style={[s.scanBtn, { backgroundColor: colors.primary }]}
+          style={s.scanBtn}
           onPress={() => router.push("/(tabs)/scan" as any)}
           activeOpacity={0.85}
         >
+          <LinearGradient
+            colors={["#4B68F5", "#7B5CF0"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
+          />
           <Feather name="camera" size={16} color="#fff" />
           <Text style={s.scanBtnText}>Scan a business card</Text>
         </TouchableOpacity>
@@ -730,10 +747,11 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
     content: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 16 },
 
     header: { flexDirection: "row", alignItems: "flex-start", marginBottom: 14 },
+    headerRight: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
     dateText: { fontSize: 13, color: colors.mutedForeground, marginBottom: 2 },
-    greetingText: { fontSize: 26, fontWeight: "700", color: colors.foreground, letterSpacing: -0.4 },
-    subtitleText: { fontSize: 13, color: colors.mutedForeground, marginTop: 3, opacity: 0.7 },
-    bellBtn: { marginTop: 6, padding: 4, position: "relative" },
+    greetingText: { fontSize: 28, fontWeight: "700", color: colors.foreground, letterSpacing: -0.5 },
+    subtitleText: { fontSize: 13, color: colors.mutedForeground, marginTop: 3 },
+    bellBtn: { padding: 4, position: "relative" },
     bellBadge: {
       position: "absolute",
       top: 2,
@@ -880,9 +898,10 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
       gap: 8,
       borderRadius: 14,
       paddingVertical: 15,
-      shadowColor: "#3B82F6",
+      overflow: "hidden",
+      shadowColor: "#4B68F5",
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.25,
+      shadowOpacity: 0.3,
       shadowRadius: 8,
       elevation: 4,
     },
