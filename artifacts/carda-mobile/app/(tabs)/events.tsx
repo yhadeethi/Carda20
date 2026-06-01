@@ -21,6 +21,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EventCard } from "@/components/EventCard";
 import { GlassCard } from "@/components/GlassCard";
 import { api, Contact, UserEvent } from "@/lib/api";
+import { Fonts } from "@/constants/fonts";
 import { useColors } from "@/hooks/useColors";
 
 function EventCardRow({ event, onPress }: { event: UserEvent; onPress: () => void }) {
@@ -279,6 +280,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 28,
     fontWeight: "700" as const,
+    fontFamily: Fonts.bold,
     letterSpacing: -0.3,
   },
   addButton: {

@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Fonts } from "@/constants/fonts";
 import { useColors } from "@/hooks/useColors";
 import type { Company } from "@/lib/api";
 
@@ -93,18 +94,19 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 20,
     fontWeight: "700",
+    fontFamily: Fonts.bold,
     lineHeight: 44,
     textAlign: "center",
   },
   content: { flex: 1, marginLeft: 12 },
-  name: { fontSize: 15, fontWeight: "600", marginBottom: 2 },
-  domain: { fontSize: 12 },
+  name: { fontSize: 15, fontWeight: "600", fontFamily: Fonts.semiBold, marginBottom: 2 },
+  domain: { fontSize: 12, fontFamily: Fonts.regular },
   right: { flexDirection: "row", alignItems: "center", gap: 6 },
   countPill: {
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  countText: { fontSize: 11, fontWeight: "600" },
+  countText: { fontSize: 11, fontWeight: "600", fontFamily: Fonts.semiBold },
   chevron: { marginLeft: 4 },
 });

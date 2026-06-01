@@ -20,6 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { api, Contact, ContactReminder } from "@/lib/api";
+import { Fonts } from "@/constants/fonts";
 import { useColors } from "@/hooks/useColors";
 import { useCapture } from "@/context/CaptureContext";
 
@@ -260,7 +261,7 @@ const naStyles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
   },
-  daysText: { fontSize: 11, fontWeight: "700" as const, color: "#D97706" },
+  daysText: { fontSize: 11, fontWeight: "700" as const, color: colors.amberText },
   debriefBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -479,8 +480,8 @@ export default function HomeScreen() {
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>Needs attention</Text>
-              <View style={[s.attentionBadge, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
-                <Text style={[s.attentionBadgeText, { color: "#D97706" }]}>
+              <View style={[s.attentionBadge, { backgroundColor: colors.amberBg, borderColor: colors.amberBorder }]}>
+                <Text style={[s.attentionBadgeText, { color: colors.amberText }]}>
                   {needsAttention.length} contact{needsAttention.length !== 1 ? "s" : ""}
                 </Text>
               </View>
@@ -503,8 +504,8 @@ export default function HomeScreen() {
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>Up next</Text>
-              <View style={[s.badge, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
-                <Text style={[s.badgeText, { color: "#D97706" }]}>
+              <View style={[s.badge, { backgroundColor: colors.amberBg, borderColor: colors.amberBorder }]}>
+                <Text style={[s.badgeText, { color: colors.amberText }]}>
                   🔔 {upNextItems.length} reminder{upNextItems.length !== 1 ? "s" : ""}
                 </Text>
               </View>
@@ -669,25 +670,33 @@ export default function HomeScreen() {
               )}
             </View>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              {recentCaptures.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  onPress={() => router.push(`/contact/${c.id}` as any)}
-                  style={[
-                    s.captureCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                  activeOpacity={0.75}
-                >
-                  <Avatar name={c.fullName || c.email} size={40} />
-                  <Text style={[s.captureName, { color: colors.foreground }]} numberOfLines={2}>
-                    {c.fullName || c.email || "Unknown"}
-                  </Text>
-                  <Text style={[s.captureMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
-                    {c.companyName || c.jobTitle || "No company"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {recentCaptures.map((c) => {
+                const isNew = c.createdAt && (Date.now() - new Date(c.createdAt).getTime()) < 7 * 86400000;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    onPress={() => router.push(`/contact/${c.id}` as any)}
+                    style={[
+                      s.captureCard,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    activeOpacity={0.75}
+                  >
+                    <Avatar name={c.fullName || c.email} size={40} />
+                    {isNew && (
+                      <View style={[s.captureNewBadge, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "30" }]}>
+                        <Text style={[s.captureNewText, { color: colors.primary }]}>New</Text>
+                      </View>
+                    )}
+                    <Text style={[s.captureName, { color: colors.foreground }]} numberOfLines={2}>
+                      {c.fullName || c.email || "Unknown"}
+                    </Text>
+                    <Text style={[s.captureMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {c.companyName || c.jobTitle || "No company"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         ) : (
@@ -749,8 +758,8 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
     header: { flexDirection: "row", alignItems: "flex-start", marginBottom: 14 },
     headerRight: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
     dateText: { fontSize: 13, color: colors.mutedForeground, marginBottom: 2 },
-    greetingText: { fontSize: 28, fontWeight: "700", color: colors.foreground, letterSpacing: -0.5 },
-    subtitleText: { fontSize: 13, color: colors.mutedForeground, marginTop: 3 },
+    greetingText: { fontSize: 28, fontWeight: "700", fontFamily: Fonts.bold, color: colors.foreground, letterSpacing: -0.5 },
+    subtitleText: { fontSize: 13, fontFamily: Fonts.regular, color: colors.mutedForeground, marginTop: 3 },
     bellBtn: { padding: 4, position: "relative" },
     bellBadge: {
       position: "absolute",
@@ -797,8 +806,8 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
       shadowRadius: 4,
       elevation: 1,
     },
-    statLabel: { fontSize: 11, fontWeight: "600", color: colors.mutedForeground, marginBottom: 4 },
-    statValue: { fontSize: 22, fontWeight: "700" },
+    statLabel: { fontSize: 11, fontWeight: "600", fontFamily: Fonts.semiBold, color: colors.mutedForeground, marginBottom: 4 },
+    statValue: { fontSize: 22, fontWeight: "700", fontFamily: Fonts.bold },
 
     section: { marginBottom: 20 },
     sectionHeader: {
@@ -808,17 +817,17 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
       marginBottom: 10,
       paddingHorizontal: 2,
     },
-    sectionTitle: { fontSize: 13, fontWeight: "600", color: colors.mutedForeground },
+    sectionTitle: { fontSize: 13, fontWeight: "600", fontFamily: Fonts.semiBold, color: colors.mutedForeground },
     viewAll: { fontSize: 12, fontWeight: "600" },
     badge: {
-      backgroundColor: "#F0FDF4",
+      backgroundColor: colors.successBg,
       borderRadius: 20,
       paddingHorizontal: 10,
       paddingVertical: 3,
       borderWidth: 1,
-      borderColor: "#BBF7D0",
+      borderColor: colors.successBorder,
     },
-    badgeText: { fontSize: 11, fontWeight: "700", color: "#059669" },
+    badgeText: { fontSize: 11, fontWeight: "700", fontFamily: Fonts.bold, color: colors.successText },
     attentionBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1 },
     attentionBadgeText: { fontSize: 11, fontWeight: "700" },
 
@@ -850,8 +859,18 @@ function styles(colors: ReturnType<typeof import("@/hooks/useColors").useColors>
       alignItems: "center" as const,
       gap: 6,
     },
-    captureName: { fontSize: 12, fontWeight: "600" as const, textAlign: "center" as const },
-    captureMeta: { fontSize: 11, textAlign: "center" as const },
+    captureName: { fontSize: 12, fontWeight: "600" as const, fontFamily: Fonts.semiBold, textAlign: "center" as const },
+    captureMeta: { fontSize: 11, fontFamily: Fonts.regular, textAlign: "center" as const },
+    captureNewBadge: {
+      position: "absolute" as const,
+      top: 6,
+      right: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 99,
+      borderWidth: 1,
+    },
+    captureNewText: { fontSize: 9, fontWeight: "700" as const, fontFamily: Fonts.bold },
 
     skeletonLine: { backgroundColor: colors.border, borderRadius: 4, opacity: 0.6 },
     skeletonCircle: { borderRadius: 18, backgroundColor: colors.border, opacity: 0.6 },

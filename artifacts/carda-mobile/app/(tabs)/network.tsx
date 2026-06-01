@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ContactCard } from "@/components/ContactCard";
 import { CompanyCard } from "@/components/CompanyCard";
 import { api, Contact } from "@/lib/api";
+import { Fonts } from "@/constants/fonts";
 import { useColors } from "@/hooks/useColors";
 
 type SegTab = "people" | "companies";
@@ -640,8 +641,8 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
       alignItems: "flex-start",
       marginBottom: 12,
     },
-    screenTitle: { fontSize: 28, fontWeight: "700" as const, letterSpacing: -0.3 },
-    screenSubtitle: { fontSize: 13, marginTop: 2 },
+    screenTitle: { fontSize: 28, fontWeight: "700" as const, fontFamily: Fonts.bold, letterSpacing: -0.3 },
+    screenSubtitle: { fontSize: 13, fontFamily: Fonts.regular, marginTop: 2 },
     searchIconBtn: {
       paddingTop: 4,
       paddingLeft: 12,
@@ -675,6 +676,7 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
     segText: {
       fontSize: 13,
       fontWeight: "600",
+      fontFamily: Fonts.semiBold,
       color: colors.mutedForeground,
     },
     segTextActive: { color: colors.foreground },

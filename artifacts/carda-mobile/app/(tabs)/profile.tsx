@@ -21,6 +21,7 @@ import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { Fonts } from "@/constants/fonts";
 import { useColors } from "@/hooks/useColors";
 import { useMyProfile, MyProfile } from "@/hooks/useMyProfile";
 
@@ -478,6 +479,7 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: 28,
     fontWeight: "700" as const,
+    fontFamily: Fonts.bold,
     letterSpacing: -0.3,
     marginBottom: 16,
   },
@@ -486,9 +488,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  profileName: { fontSize: 20, fontWeight: "700" as const, marginTop: 4 },
-  profileMeta: { fontSize: 13 },
-  profileEmail: { fontSize: 14 },
+  profileName: { fontSize: 20, fontWeight: "700" as const, fontFamily: Fonts.bold, marginTop: 4 },
+  profileMeta: { fontSize: 13, fontFamily: Fonts.regular },
+  profileEmail: { fontSize: 14, fontFamily: Fonts.regular },
   editBtn: {
     flexDirection: "row",
     alignItems: "center",

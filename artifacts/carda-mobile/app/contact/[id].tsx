@@ -26,6 +26,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { api, Contact, ContactActivity, ContactTask, TimelineEvent, ContactReminder } from "@/lib/api";
 import { ContactActivityCalendar } from "@/components/ContactActivityCalendar";
 import { debriefStore } from "@/lib/debriefStore";
+import { Fonts } from "@/constants/fonts";
 import { useColors } from "@/hooks/useColors";
 
 const HERO_BG = "#1C1C1E";
@@ -717,6 +718,18 @@ export default function ContactDetailScreen() {
       >
         {/* ── DARK HERO CARD ── */}
         <View style={[styles.heroCard, { backgroundColor: HERO_BG }]}>
+          {/* Decorative background circles */}
+          <View style={styles.heroDeco1} />
+          <View style={styles.heroDeco2} />
+
+          {/* Company pill badge */}
+          {contact.companyName ? (
+            <View style={styles.companyBadge}>
+              <Feather name="briefcase" size={10} color="rgba(255,255,255,0.65)" />
+              <Text style={styles.companyBadgeText} numberOfLines={1}>{contact.companyName}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.heroTop}>
             <View style={styles.heroAvatar}>
               <Avatar name={displayName} size={72} />
@@ -731,10 +744,10 @@ export default function ContactDetailScreen() {
             ) : null}
           </View>
           <Text style={styles.heroName}>{displayName}</Text>
-          {(contact.jobTitle || contact.companyName) ? (
-            <Text style={styles.heroMeta}>
-              {[contact.jobTitle, contact.companyName].filter(Boolean).join(" · ")}
-            </Text>
+          {contact.jobTitle ? (
+            <Text style={styles.heroMeta}>{contact.jobTitle}</Text>
+          ) : contact.companyName && !contact.jobTitle ? (
+            <Text style={styles.heroMeta}>{contact.companyName}</Text>
           ) : null}
           <View style={styles.heroContactRow}>
             {contact.phone ? (
@@ -1728,6 +1741,41 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 24,
     overflow: "hidden",
   },
+  heroDeco1: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    bottom: -70,
+    right: -60,
+  },
+  heroDeco2: {
+    position: "absolute",
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    top: -40,
+    left: -40,
+  },
+  companyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderRadius: 99,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 12,
+  },
+  companyBadgeText: {
+    color: "rgba(255,255,255,0.80)",
+    fontSize: 11,
+    fontFamily: Fonts.semiBold,
+    fontWeight: "600" as const,
+  },
   stalenessBar: {
     position: "absolute",
     bottom: 0,
@@ -1768,12 +1816,14 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 24,
     fontWeight: "700" as const,
+    fontFamily: Fonts.bold,
     letterSpacing: -0.4,
     marginBottom: 4,
   },
   heroMeta: {
     color: "rgba(255,255,255,0.65)",
     fontSize: 14,
+    fontFamily: Fonts.medium,
     marginBottom: 12,
   },
   heroContactRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
