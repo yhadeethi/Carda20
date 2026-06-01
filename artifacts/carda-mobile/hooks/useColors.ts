@@ -1,5 +1,7 @@
-import { lightColors } from "@/constants/colors";
+import { darkColors, lightColors } from "@/constants/colors";
+import { useTheme } from "@/context/ThemeContext";
 
 export function useColors() {
-  return lightColors;
+  const { resolvedTheme } = useTheme();
+  return resolvedTheme === "dark" ? darkColors : lightColors;
 }
