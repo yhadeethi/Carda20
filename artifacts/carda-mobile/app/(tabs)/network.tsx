@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
+  Animated,
   FlatList,
   Modal,
   RefreshControl,
@@ -102,6 +103,8 @@ export default function NetworkScreen() {
   const [query, setQuery] = useState("");
   const [deptFilter, setDeptFilter] = useState<DeptFilter>("ALL");
   const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [pillWidth, setPillWidth] = useState(0);
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const {
     data: contacts = [],
@@ -158,6 +161,16 @@ export default function NetworkScreen() {
   const s = makeStyles(colors);
   const filterActive = deptFilter !== "ALL";
 
+  const handleTabChange = (next: SegTab) => {
+    setTab(next);
+    Animated.spring(slideAnim, {
+      toValue: next === "people" ? 0 : 1,
+      useNativeDriver: true,
+      tension: 68,
+      friction: 12,
+    }).start();
+  };
+
   const peopleLabel =
     contacts.length > 0 ? `People · ${contacts.length}` : "People";
   const companiesLabel =
@@ -194,26 +207,42 @@ export default function NetworkScreen() {
         </View>
 
         {/* Segment control */}
-        <View style={s.segWrap}>
+        <View
+          style={s.segWrap}
+          onLayout={(e) => setPillWidth((e.nativeEvent.layout.width - 8) / 2)}
+        >
+          {/* Animated sliding pill */}
+          {pillWidth > 0 && (
+            <Animated.View
+              style={[
+                s.segPill,
+                {
+                  width: pillWidth,
+                  transform: [{
+                    translateX: slideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, pillWidth],
+                    }),
+                  }],
+                },
+              ]}
+            />
+          )}
           <TouchableOpacity
-            style={[s.segBtn, tab === "people" && s.segBtnActive]}
-            onPress={() => setTab("people")}
-            activeOpacity={0.75}
+            style={s.segBtn}
+            onPress={() => handleTabChange("people")}
+            activeOpacity={0.8}
           >
-            <Text
-              style={[s.segText, tab === "people" && s.segTextActive]}
-            >
+            <Text style={[s.segText, tab === "people" && s.segTextActive]}>
               {peopleLabel}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[s.segBtn, tab === "companies" && s.segBtnActive]}
-            onPress={() => setTab("companies")}
-            activeOpacity={0.75}
+            style={s.segBtn}
+            onPress={() => handleTabChange("companies")}
+            activeOpacity={0.8}
           >
-            <Text
-              style={[s.segText, tab === "companies" && s.segTextActive]}
-            >
+            <Text style={[s.segText, tab === "companies" && s.segTextActive]}>
               {companiesLabel}
             </Text>
           </TouchableOpacity>
@@ -295,18 +324,18 @@ export default function NetworkScreen() {
           style={[
             s.dupBanner,
             {
-              backgroundColor: "#FEF3C7",
-              borderColor: "#FDE68A",
+              backgroundColor: colors.amberBg,
+              borderColor: colors.amberBorder,
             },
           ]}
           activeOpacity={0.8}
         >
-          <Feather name="copy" size={14} color="#D97706" />
+          <Feather name="copy" size={14} color={colors.amberText} />
           <Text style={s.dupBannerText}>
             {duplicateGroups.length} possible duplicate
             {duplicateGroups.length !== 1 ? "s" : ""} detected
           </Text>
-          <Feather name="chevron-right" size={14} color="#D97706" />
+          <Feather name="chevron-right" size={14} color={colors.amberText} />
         </TouchableOpacity>
       )}
 
@@ -656,6 +685,20 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
       borderColor: "rgba(0,0,0,0.1)",
       padding: 4,
       marginBottom: 10,
+      overflow: "hidden",
+    },
+    segPill: {
+      position: "absolute",
+      top: 4,
+      bottom: 4,
+      left: 4,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.07,
+      shadowRadius: 3,
+      elevation: 2,
     },
     segBtn: {
       flex: 1,
@@ -663,15 +706,6 @@ function makeStyles(colors: ReturnType<typeof import("@/hooks/useColors").useCol
       justifyContent: "center",
       paddingVertical: 7,
       borderRadius: 12,
-    },
-    segBtnActive: {
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.07,
-      shadowRadius: 3,
-      elevation: 2,
     },
     segText: {
       fontSize: 13,

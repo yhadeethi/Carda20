@@ -165,8 +165,8 @@ function ActivityRow({ item }: { item: DisplayActivity }) {
   const isDebrief = item.isDebrief;
   const isReminder = item.type === "reminder";
 
-  const iconColor = isDebrief ? "#6366F1" : isReminder ? "#F59E0B" : colors.primary;
-  const iconBg = isDebrief ? "#6366F11A" : isReminder ? "#FEF3C7" : colors.primary + "18";
+  const iconColor = isDebrief ? colors.primary : isReminder ? colors.amberText : colors.primary;
+  const iconBg = isDebrief ? colors.primary + "18" : isReminder ? colors.amberBg : colors.primary + "18";
 
   return (
     <View style={[styles.activityRow, { borderBottomColor: colors.border }]}>
@@ -175,12 +175,12 @@ function ActivityRow({ item }: { item: DisplayActivity }) {
       </View>
       <View style={{ flex: 1 }}>
         {isDebrief && (
-          <Text style={[styles.activityLabel, { color: "#6366F1" }]}>
+          <Text style={[styles.activityLabel, { color: colors.primary }]}>
             Voice Debrief
           </Text>
         )}
         {isReminder && (
-          <Text style={[styles.activityLabel, { color: "#F59E0B" }]}>
+          <Text style={[styles.activityLabel, { color: colors.amberText }]}>
             Reminder
           </Text>
         )}
@@ -776,7 +776,7 @@ export default function ContactDetailScreen() {
           {/* Staleness bar */}
           {contact.createdAt ? (() => {
             const days = Math.floor((Date.now() - new Date(contact.createdAt).getTime()) / 86400000);
-            const barColor = days < 14 ? "#34C759" : days < 30 ? "#F59E0B" : "#FF3B30";
+            const barColor = days < 14 ? colors.success : days < 30 ? colors.amberText : colors.destructive;
             return <View style={[styles.stalenessBar, { backgroundColor: barColor }]} />;
           })() : null}
         </View>
@@ -791,9 +791,9 @@ export default function ContactDetailScreen() {
               {RELATIONSHIP_OPTIONS.map((opt) => {
                 const active = relationship === opt;
                 const relColors: Record<RelStrength, string> = {
-                  Casual: "#F59E0B",
+                  Casual: colors.amberText,
                   Normal: colors.primary,
-                  Close: "#22C55E",
+                  Close: colors.success,
                 };
                 return (
                   <TouchableOpacity
@@ -1193,7 +1193,7 @@ export default function ContactDetailScreen() {
             </Text>
             <TouchableOpacity
               onPress={() => setShowReminderModal(true)}
-              style={[styles.addTaskBtn, { backgroundColor: "#F59E0B", borderRadius: colors.radius - 4 }]}
+              style={[styles.addTaskBtn, { backgroundColor: colors.amberText, borderRadius: colors.radius - 4 }]}
             >
               <Feather name="plus" size={14} color="#fff" />
             </TouchableOpacity>
@@ -1216,8 +1216,8 @@ export default function ContactDetailScreen() {
                       <View style={[
                         styles.checkbox,
                         {
-                          borderColor: isDone ? "#F59E0B" : isPast ? "#EF4444" : "#F59E0B",
-                          backgroundColor: isDone ? "#F59E0B" : "transparent",
+                          borderColor: isDone ? colors.amberText : isPast ? colors.destructive : colors.amberText,
+                          backgroundColor: isDone ? colors.amberText : "transparent",
                           borderRadius: 4,
                         },
                       ]}>
@@ -1234,7 +1234,7 @@ export default function ContactDetailScreen() {
                       ]} numberOfLines={2}>
                         {r.label}
                       </Text>
-                      <Text style={[{ fontSize: 11, marginTop: 2, color: isPast && !isDone ? "#EF4444" : colors.mutedForeground }]}>
+                      <Text style={[{ fontSize: 11, marginTop: 2, color: isPast && !isDone ? colors.destructive : colors.mutedForeground }]}>
                         {remindDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         {" · "}
                         {remindDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
@@ -1315,6 +1315,7 @@ export default function ContactDetailScreen() {
               { backgroundColor: colors.card, borderRadius: colors.radius * 1.5 },
             ]}
           >
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.foreground }]}>
                 Log {logType}
@@ -1376,6 +1377,7 @@ export default function ContactDetailScreen() {
               { backgroundColor: colors.card, borderRadius: colors.radius * 1.5 },
             ]}
           >
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.foreground }]}>
                 New Task
@@ -1668,8 +1670,8 @@ export default function ContactDetailScreen() {
                       key={opt}
                       onPress={() => setFollowUpTone(opt)}
                       style={[styles.fuPill, {
-                        backgroundColor: followUpTone === opt ? "#6366F1" : colors.secondary,
-                        borderColor: followUpTone === opt ? "#6366F1" : colors.border,
+                        backgroundColor: followUpTone === opt ? colors.primary : colors.secondary,
+                        borderColor: followUpTone === opt ? colors.primary : colors.border,
                       }]}
                     >
                       <Text style={[styles.fuPillText, { color: followUpTone === opt ? "#fff" : colors.mutedForeground }]}>
@@ -1698,19 +1700,27 @@ export default function ContactDetailScreen() {
                 <TouchableOpacity
                   onPress={handleGenerateFollowUp}
                   disabled={generatingFollowUp}
-                  style={[styles.modalButton, { backgroundColor: "#6366F1", borderRadius: colors.radius, marginBottom: 16 }]}
+                  activeOpacity={0.85}
+                  style={{ borderRadius: colors.radius, overflow: "hidden", marginBottom: 16 }}
                 >
-                  {generatingFollowUp ? (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <ActivityIndicator size="small" color="#fff" />
-                      <Text style={styles.modalButtonText}>Generating…</Text>
-                    </View>
-                  ) : (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Feather name="zap" size={16} color="#fff" />
-                      <Text style={styles.modalButtonText}>Generate Draft</Text>
-                    </View>
-                  )}
+                  <LinearGradient
+                    colors={["#4B68F5", "#7B5CF0"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.modalButton, { borderRadius: colors.radius }]}
+                  >
+                    {generatingFollowUp ? (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={styles.modalButtonText}>Generating…</Text>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Feather name="zap" size={16} color="#fff" />
+                        <Text style={styles.modalButtonText}>Generate Draft</Text>
+                      </View>
+                    )}
+                  </LinearGradient>
                 </TouchableOpacity>
               </ScrollView>
             )}
